@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 const Sidebar = () => {
   const location = useLocation();
 
-  // Lista exacta del Figma
+
   const menuItems = [
     { name: 'Inicio', path: '/' },
     { name: 'Sellers', path: '/sellers' },
@@ -17,7 +17,6 @@ const Sidebar = () => {
   ];
 
   return (
-    // El amarillo característico de PacKen (tipo Mercado Libre)
     <aside className="w-64 bg-[#FDE047] h-screen fixed left-0 top-0 overflow-y-auto shadow-lg">
       <div className="p-6">
         <h1 className="text-2xl font-bold text-gray-800 mb-8 flex items-center gap-2">
@@ -31,7 +30,7 @@ const Sidebar = () => {
                   to={item.path}
                   className={`block px-4 py-2 rounded-md transition-colors ${
                     location.pathname === item.path
-                      ? 'bg-white shadow-sm font-bold' // Estilo cuando está seleccionado
+                      ? 'bg-white shadow-sm font-bold'
                       : 'hover:bg-yellow-300'
                   }`}
                 >
