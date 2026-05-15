@@ -1,49 +1,24 @@
-# 📦 PacKen
-> **Control total, sin complicaciones.**
+# 📦 pacKen - Sistema de Gestión Logística (Envíos Flex)
 
-PacKen es una plataforma SaaS (Software as a Service) B2B diseñada específicamente para empoderar a las PyMEs de logística y distribución de última milla, con un enfoque principal en los operadores de **Mercado Envío Flex**. 
+**pacKen** es una plataforma de cross-docking enfocada en agilizar el ingreso y ruteo de paquetes para logística de envíos en el mismo día (Flex). 
 
-Nuestro objetivo es eliminar el cuello de botella administrativo mediante la automatización de procesos operativos, la clasificación rápida de paquetes y la liquidación automática de transportistas.
+## 🎯 Foco del MVP (Fase 1)
+El objetivo central de esta primera versión es **automatizar el escaneo y clasificación de paquetes en el depósito**. A través de la lectura de códigos QR/barras (como los de Mercado Libre), el sistema identifica el paquete, cruza los datos del Seller y mapea automáticamente el código postal a una zona de ruteo específica, ingresándolo a la base de datos en tiempo real y eliminando la carga manual.
 
----
-
-## 🚀 Características Principales (MVP)
-
-* **⚡ Clasificación Rápida (Smart Sorting):** Escaneo de códigos QR/Barras de etiquetas de Mercado Libre para identificar instantáneamente la zona de entrega, agilizando el proceso de cross-docking en el depósito.
-* **💸 Liquidación Automática:** Motor de cálculo que cruza las zonas de entrega con listas de precios personalizadas por *Seller* y *Transportista*, generando los pagos y cobros de forma automática sin cruzar Excels manualmente.
-* **🗺️ Trazabilidad y Mapas:** Seguimiento del estado del paquete y geolocalización de las entregas para garantizar la transparencia frente al cliente final y la plataforma de e-commerce.
-* **📊 Dashboard Operativo:** Panel de control para la administración que muestra en tiempo real la utilidad del día, paquetes entregados, demorados y rendimiento general de los repartidores.
-
----
+## 🚀 Características Principales
+* **Escáner Inteligente:** Lector de etiquetas integrado en el navegador para uso inmediato con la cámara de cualquier celular, tablet o PC.
+* **Mapeo Automático de Zonas:** Lógica de asignación de paquetes (ej. CABA Sur, GBA Norte) basada en el origen y destino escaneado.
+* **Dashboard Operativo en Vivo:** Seguimiento del flujo de paquetes (Ingresado, En Camino, Entregado, Atrasado).
+* **Gestión Base:** Administración de Sellers, Transportistas y Listas de Precios.
 
 ## 🛠️ Stack Tecnológico
+Elegimos una arquitectura moderna y serverless para garantizar velocidad en el escaneo y sincronización en tiempo real:
 
-El proyecto está construido bajo una arquitectura robusta y escalable, orientada a un alto volumen de transacciones de datos logísticos:
+* **Frontend:** React + Vite + Tailwind CSS (Interfaces rápidas, modulares y pensadas para la operativa en depósito).
+* **Base de Datos & Backend (BaaS):** Supabase (PostgreSQL). Utilizado para el almacenamiento relacional de los paquetes, reglas de negocio y sistema de autenticación, permitiendo lecturas/escrituras ultrarrápidas desde el cliente.
 
-* **Backend:** C# / ASP.NET Core
-* **Frontend:** HTML5, CSS3, JavaScript (Diseño responsivo para móviles y tablets en depósitos)
-* **Base de Datos:** Microsoft SQL Server (Diseño relacional optimizado)
-* **Integraciones:** Lector de QR web, API de Geolocalización.
-* **Prototipado UI/UX:** Figma
+## 💻 Instalación y Uso (Entorno de Desarrollo)
 
----
-
-## 🗄️ Arquitectura de Datos
-
-La base de datos está diseñada bajo un modelo relacional (DER) que soporta multi-tenancy y listas de precios dinámicas. Las entidades principales incluyen:
-* `Empresa` (Administrador del sistema)
-* `Paquetes` (Vinculados a un ID de Mercado Libre)
-* `Transportistas` (Asignación de zonas y recorridos)
-* `Sellers` (Clientes B2B con puntos de retiro)
-* `Zonas` y `Listas de Precios` (Motor de facturación)
-
----
-
-## 👥 Equipo de Desarrollo
-
-Este proyecto está siendo desarrollado como trabajo final (Promoción 2026) por:
-
-* **Tobías Epsztein** * **Tobias Nul** * **Martín Ku** ---
-
-## 📌 Estado del Proyecto
-🚧 **Fase actual:** Desarrollo del MVP (Producto Mínimo Viable).
+1. Cloná este repositorio:
+   ```bash
+   git clone [https://github.com/Martinkuu953/PacKen.git](https://github.com/Martinkuu953/PacKen.git)
