@@ -17,8 +17,3 @@ Elegimos una arquitectura moderna y serverless para garantizar velocidad en el e
 * **Frontend:** React + Vite + Tailwind CSS (Interfaces rápidas, modulares y pensadas para la operativa en depósito).
 * **Base de Datos & Backend (BaaS):** Supabase (PostgreSQL). Utilizado para el almacenamiento relacional de los paquetes, reglas de negocio y sistema de autenticación, permitiendo lecturas/escrituras ultrarrápidas desde el cliente.
 
-## 💻 Instalación y Uso (Entorno de Desarrollo)
-
-1. Cloná este repositorio:
-   ```bash
-   git clone [https://github.com/Martinkuu953/PacKen.git](https://github.com/Martinkuu953/PacKen.git)
