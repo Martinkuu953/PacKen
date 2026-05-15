@@ -1,16 +1,49 @@
-# React + Vite
+# 📦 PacKen
+> **Control total, sin complicaciones.**
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+PacKen es una plataforma SaaS (Software as a Service) B2B diseñada específicamente para empoderar a las PyMEs de logística y distribución de última milla, con un enfoque principal en los operadores de **Mercado Envío Flex**. 
 
-Currently, two official plugins are available:
+Nuestro objetivo es eliminar el cuello de botella administrativo mediante la automatización de procesos operativos, la clasificación rápida de paquetes y la liquidación automática de transportistas.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## 🚀 Características Principales (MVP)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+* **⚡ Clasificación Rápida (Smart Sorting):** Escaneo de códigos QR/Barras de etiquetas de Mercado Libre para identificar instantáneamente la zona de entrega, agilizando el proceso de cross-docking en el depósito.
+* **💸 Liquidación Automática:** Motor de cálculo que cruza las zonas de entrega con listas de precios personalizadas por *Seller* y *Transportista*, generando los pagos y cobros de forma automática sin cruzar Excels manualmente.
+* **🗺️ Trazabilidad y Mapas:** Seguimiento del estado del paquete y geolocalización de las entregas para garantizar la transparencia frente al cliente final y la plataforma de e-commerce.
+* **📊 Dashboard Operativo:** Panel de control para la administración que muestra en tiempo real la utilidad del día, paquetes entregados, demorados y rendimiento general de los repartidores.
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 🛠️ Stack Tecnológico
+
+El proyecto está construido bajo una arquitectura robusta y escalable, orientada a un alto volumen de transacciones de datos logísticos:
+
+* **Backend:** C# / ASP.NET Core
+* **Frontend:** HTML5, CSS3, JavaScript (Diseño responsivo para móviles y tablets en depósitos)
+* **Base de Datos:** Microsoft SQL Server (Diseño relacional optimizado)
+* **Integraciones:** Lector de QR web, API de Geolocalización.
+* **Prototipado UI/UX:** Figma
+
+---
+
+## 🗄️ Arquitectura de Datos
+
+La base de datos está diseñada bajo un modelo relacional (DER) que soporta multi-tenancy y listas de precios dinámicas. Las entidades principales incluyen:
+* `Empresa` (Administrador del sistema)
+* `Paquetes` (Vinculados a un ID de Mercado Libre)
+* `Transportistas` (Asignación de zonas y recorridos)
+* `Sellers` (Clientes B2B con puntos de retiro)
+* `Zonas` y `Listas de Precios` (Motor de facturación)
+
+---
+
+## 👥 Equipo de Desarrollo
+
+Este proyecto está siendo desarrollado como trabajo final (Promoción 2026) por:
+
+* **Tobías Epsztein** * **Tobias Nul** * **Martín Ku** ---
+
+## 📌 Estado del Proyecto
+🚧 **Fase actual:** Desarrollo del MVP (Producto Mínimo Viable).
