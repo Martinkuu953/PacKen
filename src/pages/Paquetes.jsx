@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from '../supabaseClient';
 
-// Escudo protector de React contra crashes de renderizado
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -46,62 +45,37 @@ const PaquetesLogica = () => {
     pasoRef.current = paso;
   }, [paso]);
 
-  // 1. EXTRACTOR DE ID DEL PACK (Sin usar Regex, iterando caracteres)
+  // Extractor de ID por bloques numéricos
   const extraerIdPaquete = (texto) => {
     if (!texto) return '';
     let str = String(texto).trim();
-
-    // Recorremos la cadena buscando el bloque numérico continuo más largo
-    // Las etiquetas de ML contienen el ID de envío como una cadena pura de 10 a 15 dígitos
     let bloqueMaximo = '';
     let bloqueActual = '';
     
     for (let i = 0; i < str.length; i++) {
       const ascii = str.charCodeAt(i);
-      
-      // Verificamos si el carácter actual es un número (0 al 9 en ASCII)
       if (ascii >= 48 && ascii <= 57) {
         bloqueActual += str[i];
       } else {
-        // Al encontrar un quiebre (letra, barra, símbolo), comparamos longitudes
         if (bloqueActual.length > bloqueMaximo.length) {
           bloqueMaximo = bloqueActual;
         }
-        bloqueActual = ''; // Reiniciamos el acumulador
+        bloqueActual = '';
       }
     }
-    // Verificación final por si la cadena terminaba en número
     if (bloqueActual.length > bloqueMaximo.length) {
       bloqueMaximo = bloqueActual;
     }
-
-    // Si encontramos un bloque numérico largo y consistente, ese es el ID del pack
     if (bloqueMaximo.length >= 9) {
       return bloqueMaximo;
     }
-
-    // Si por alguna razón no hay un bloque numérico largo, buscamos un parámetro 'id=' por descarte
-    const posId = str.indexOf('id=');
-    if (posId !== -1) {
-      let extraido = '';
-      for (let i = posId + 3; i < str.length; i++) {
-        const c = str[i];
-        if (c === '&' || c === ' ' || c === '#' || c === '"' || c === '/' || c === ',') break;
-        extraido += c;
-      }
-      if (extraido) return extraido;
-    }
-
     return str; 
   };
 
-  // 2. VALIDACIÓN MANUAL DEL ID FILTRADO (Sin Regex)
   const validarCodigoManual = (codigo) => {
     try {
       const texto = String(codigo); 
-      // El ID limpio del paquete final debe tener una longitud lógica y caracteres seguros
       if (!texto || texto.length < 4 || texto.length > 40) return false;
-      
       for (let i = 0; i < texto.length; i++) {
         const ascii = texto.charCodeAt(i);
         if (ascii < 32 || ascii > 126) return false; 
@@ -112,23 +86,19 @@ const PaquetesLogica = () => {
     }
   };
 
-  // 3. PROCESAMIENTO DE LECTURA
   const procesarLectura = (textoDecodificado) => {
     setTimeout(() => {
       if (pasoRef.current !== 'escaneando') return;
-
       const textoSeguro = typeof textoDecodificado === 'object' ? JSON.stringify(textoDecodificado) : String(textoDecodificado);
-
-      // Extraemos exclusivamente el número de identificación del paquete
       const idLimpio = extraerIdPaquete(textoSeguro);
 
       if (validarCodigoManual(idLimpio)) {
-        setResultado(idLimpio); // Guardamos el ID numérico real
+        setResultado(idLimpio); 
         setPaso('confirmando'); 
         setMensajeError('');
         setCodigoManual(''); 
       } else {
-        setMensajeError('Formato de ID no reconocido en la etiqueta.');
+        setMensajeError('Formato de ID no reconocido.');
       }
     }, 10);
   };
@@ -141,7 +111,7 @@ const PaquetesLogica = () => {
     procesarLectura(codigoManual.trim());
   };
 
-  // 4. GUARDADO EN LA BASE DE DATOS
+  // LÓGICA DE GUARDADO CON DIAGNÓSTICO AVANZADO
   const confirmarYGuardar = async () => {
     setProcesando(true);
     setMensajeError('');
@@ -149,7 +119,7 @@ const PaquetesLogica = () => {
 
     try {
       const paqueteData = {
-        IdEnvioML: resultado, // Viaja el número puro aislado de la URL
+        IdEnvioML: resultado, 
         IdSeller: 1, 
         IdZona: 1,  
         Estado: modo === 'colecta' ? 'Ingresado' : 'En camino' 
@@ -158,13 +128,21 @@ const PaquetesLogica = () => {
       if (modo === 'reparto') paqueteData.IdTransportista = 1; 
 
       const { error } = await supabase.from('Paquete').insert([paqueteData]);
+      
+      // Si Supabase devuelve un error, lo enviamos directo al bloque catch
       if (error) throw error;
 
       setZonaAsignada("ZONA 1"); 
       setPaso('guardado');
     } catch (err) {
-      console.error("Error de inserción en Supabase:", err);
-      setMensajeError("Error al guardar. Comprobá que las columnas acepten este ID numérico.");
+      console.error("Error completo de Supabase:", err);
+      
+      // Aislamos los datos nativos del error de PostgreSQL
+      const codigoPostgres = err.code ? `[Código ${err.code}] ` : '';
+      const detallePostgres = err.message || 'Error desconocido en el servidor';
+      
+      // Imprimimos el diagnóstico en el banner rojo de la interfaz
+      setMensajeError(`${codigoPostgres}${detallePostgres}`);
     } finally {
       setProcesando(false);
     }
@@ -237,11 +215,7 @@ const PaquetesLogica = () => {
               <div className="w-8 h-8 border-4 border-gray-600 border-t-gray-300 rounded-full animate-spin mb-4"></div>
             </div>
           )}
-          <div 
-            id={readerId} 
-            className={`w-full bg-black rounded-3xl shadow-lg border-4 border-yellow-400 aspect-square overflow-hidden relative z-10 transition-opacity ${paso !== 'escaneando' ? 'opacity-30' : 'opacity-100'}`}
-          >
-          </div>
+          <div id={readerId} className={`w-full bg-black rounded-3xl shadow-lg border-4 border-yellow-400 aspect-square overflow-hidden relative z-10 transition-opacity ${paso !== 'escaneando' ? 'opacity-30' : 'opacity-100'}`}></div>
         </div>
 
         <div className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100 min-h-[250px] flex-1 flex flex-col">
@@ -249,19 +223,17 @@ const PaquetesLogica = () => {
             <div className="flex flex-col h-full justify-start items-center gap-4">
               <p className="text-sm font-medium text-gray-600 text-center">Enfocá el código QR, o ingresalo manual:</p>
               <div className="w-full flex gap-2">
-                <input type="text" placeholder="Escribí el ID numérico del paquete" value={codigoManual} onChange={(e) => setCodigoManual(e.target.value)} className="flex-1 bg-gray-100 border border-gray-200 text-gray-900 text-base rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-yellow-400 transition-all font-mono" />
+                <input type="text" placeholder="Escribí el ID del paquete" value={codigoManual} onChange={(e) => setCodigoManual(e.target.value)} className="flex-1 bg-gray-100 border border-gray-200 text-gray-900 text-base rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-yellow-400 transition-all font-mono" />
                 <button onClick={handleIngresoManual} className="bg-gray-900 text-white font-semibold px-5 rounded-2xl active:scale-95 transition-transform text-sm">Ingresar</button>
               </div>
             </div>
           )}
 
-          {/* PANEL DE CONFIRMACIÓN CON EL ID LIMPIO */}
           {paso === 'confirmando' && (
             <div className="flex flex-col h-full justify-center items-center gap-6 animate-fade-in-up">
               <div className="space-y-2 text-center w-full">
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">¿Confirmar ID del Paquete?</h3>
                 <div className="bg-gray-100 text-gray-900 p-4 rounded-xl border border-gray-200">
-                  {/* Se visualiza únicamente la secuencia numérica identificadora de la caja */}
                   <p className="font-mono text-2xl font-semibold break-all text-center text-gray-900 tracking-wider">{resultado}</p>
                 </div>
               </div>
@@ -284,7 +256,8 @@ const PaquetesLogica = () => {
 
           {mensajeError && (
             <div className="bg-red-100 text-red-700 p-4 mt-auto rounded-xl">
-              <p className="font-medium text-center text-sm">{mensajeError}</p>
+              {/* Aquí se imprimirá el código y mensaje real de Postgres */}
+              <p className="font-mono text-center text-xs break-words">{mensajeError}</p>
             </div>
           )}
         </div>
