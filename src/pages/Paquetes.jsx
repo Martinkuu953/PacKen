@@ -2,10 +2,6 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from '../supabaseClient';
 
-// ==========================================
-// 🛡️ EL ESCUDO DEFINITIVO DE REACT
-// Esto evita la pantalla blanca sí o sí.
-// ==========================================
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -19,7 +15,6 @@ class ErrorBoundary extends React.Component {
       return (
         <div className="min-h-screen bg-red-900 text-white p-8 flex flex-col items-center justify-center">
           <h1 className="text-4xl font-black mb-4 text-center">💥 CRASH ATRAPADO</h1>
-          <p className="mb-4 text-center">El escudo evitó la pantalla blanca. Pasame este error:</p>
           <div className="bg-black p-4 rounded-xl w-full text-xs font-mono text-red-400 break-words mb-8 shadow-xl">
             {this.state.errorMsg}
           </div>
@@ -33,9 +28,6 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// ==========================================
-// 📦 LÓGICA PRINCIPAL DE LA APP
-// ==========================================
 const PaquetesLogica = () => {
   const [modo, setModo] = useState(null); 
   const [resultado, setResultado] = useState(null);
@@ -68,8 +60,6 @@ const PaquetesLogica = () => {
   };
 
   const procesarLectura = (textoDecodificado) => {
-    // EL TRUCO MAGISTRAL: Usamos setTimeout para "escapar" del hilo de la cámara
-    // Esto evita que la librería colapse el navegador al cambiar la interfaz de golpe.
     setTimeout(() => {
       if (pasoRef.current !== 'escaneando') return;
 
@@ -80,8 +70,6 @@ const PaquetesLogica = () => {
         setPaso('confirmando');
         setMensajeError('');
         setCodigoManual(''); 
-        // 🚨 OJO ACÁ: Ya NO pausamos la cámara. Dejamos que siga corriendo de fondo 
-        // pero la ignoramos. Esto cura el 99% de los crasheos en celulares.
       } else {
         setMensajeError('Formato inválido.');
       }
@@ -153,7 +141,6 @@ const PaquetesLogica = () => {
     setPaso('escaneando');
   };
 
-  // --- INTERFACES ---
   if (!modo) {
     return (
       <div className="max-w-md mx-auto min-h-[85vh] flex flex-col items-center justify-center p-6 bg-gray-50">
@@ -185,18 +172,27 @@ const PaquetesLogica = () => {
       </div>
 
       <div className="flex-1 flex flex-col pt-24 pb-8 px-4">
+        
+        {/* LA CÁMARA (CORREGIDA) */}
         <div className="w-full flex justify-center mb-6 relative">
-          <div id={readerId} className={`w-full bg-black rounded-3xl shadow-lg border-4 border-yellow-400 aspect-square overflow-hidden transition-opacity ${paso !== 'escaneando' ? 'opacity-30' : 'opacity-100'}`}>
-             {paso === 'escaneando' && (
-              <div className="flex flex-col items-center justify-center p-12 text-gray-400 absolute inset-0 z-[-1]">
-                <div className="w-8 h-8 border-4 border-gray-600 border-t-gray-300 rounded-full animate-spin mb-4"></div>
-              </div>
-            )}
+          
+          {/* 1. El spinner ahora está AFUERA de la caja de la cámara, como un hermano */}
+          {paso === 'escaneando' && (
+            <div className="absolute inset-0 z-0 flex flex-col items-center justify-center p-12 text-gray-400">
+              <div className="w-8 h-8 border-4 border-gray-600 border-t-gray-300 rounded-full animate-spin mb-4"></div>
+            </div>
+          )}
+
+          {/* 2. La caja de la cámara ahora está 100% VACÍA para que React no pelee con ella */}
+          <div 
+            id={readerId} 
+            className={`w-full bg-black rounded-3xl shadow-lg border-4 border-yellow-400 aspect-square overflow-hidden relative z-10 transition-opacity ${paso !== 'escaneando' ? 'opacity-30' : 'opacity-100'}`}
+          >
           </div>
+          
         </div>
 
         <div className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100 min-h-[250px] flex-1 flex flex-col">
-          
           {paso === 'escaneando' && (
             <div className="flex flex-col h-full justify-start items-center gap-4">
               <p className="text-sm font-medium text-gray-600 text-center">Enfocá el código QR, o ingresalo manual:</p>
@@ -243,7 +239,6 @@ const PaquetesLogica = () => {
   );
 };
 
-// Exportamos el componente envuelto en el escudo protector
 export default function Paquetes() {
   return (
     <ErrorBoundary>
