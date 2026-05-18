@@ -1,15 +1,18 @@
-import { useEffect, useState } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { useEffect, useState, useRef } from 'react';
+// ¡Atención acá! Cambiamos la importación. Solo traemos el motor puro.
+import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from '../supabaseClient';
 
 const Paquetes = () => {
-  // Estado para saber en qué pantalla estamos: null | 'colecta' | 'reparto'
   const [modo, setModo] = useState(null); 
-  
   const [resultado, setResultado] = useState(null);
   const [zonaAsignada, setZonaAsignada] = useState(null);
   const [procesando, setProcesando] = useState(false);
   const [mensajeError, setMensajeError] = useState('');
+  const [paso, setPaso] = useState('escaneando'); 
+
+  const scannerRef = useRef(null);
+  const readerId = "lector-camara-fullscreen";
 
   // 1. Validación manual del código (sin Regex)
   const validarCodigoManual = (codigo) => {
@@ -25,111 +28,122 @@ const Paquetes = () => {
       }
       if (!esValido) return false; 
     }
-    return true;
+    return true; 
   };
 
-  // 2. Función que procesa la lectura y guarda en Supabase según el Modo
-  const procesarEscaneo = async (textoDecodificado, scannerInstance) => {
-    if (procesando) return;
-    if (scannerInstance) scannerInstance.pause();
-    
+  // 2. Función al detectar QR
+  const alEscanearQr = (textoDecodificado) => {
+    if (validarCodigoManual(textoDecodificado)) {
+      if (scannerRef.current) {
+        scannerRef.current.pause(true); // Congela la imagen
+      }
+      setResultado(textoDecodificado);
+      setPaso('confirmando');
+      setMensajeError('');
+    } else {
+      setMensajeError('Formato inválido. Volvé a apuntar.');
+    }
+  };
+
+  // 3. Función para guardar
+  const confirmarYGuardar = async () => {
     setProcesando(true);
     setMensajeError('');
     setZonaAsignada(null);
 
-    if (!validarCodigoManual(textoDecodificado)) {
-      setMensajeError('Formato inválido. Volvé a escanear.');
-      setProcesando(false);
-      return;
-    }
-
-    setResultado(textoDecodificado);
-
     try {
-      // Preparamos los datos base del paquete
       const paqueteData = {
-        IdEnvioML: textoDecodificado,
-        IdSeller: 1, // MVP: Dato fijo
-        IdZona: 1,   // MVP: Dato fijo
-        // Si es colecta, recién ingresa. Si es reparto, ya está en camino.
+        IdEnvioML: resultado,
+        IdSeller: 1, 
+        IdZona: 1,  
         Estado: modo === 'colecta' ? 'Ingresado' : 'En camino' 
       };
 
-      // LA MAGIA DE LA ASIGNACIÓN: 
-      // Solo le asignamos transportista si el usuario eligió "Reparto"
       if (modo === 'reparto') {
-        paqueteData.IdTransportista = 1; // MVP: ID fijo del transportista logueado
+        paqueteData.IdTransportista = 1; 
       }
 
-      const { error } = await supabase
-        .from('Paquete')
-        .insert([paqueteData]);
-
+      const { error } = await supabase.from('Paquete').insert([paqueteData]);
       if (error) throw error;
 
-      setZonaAsignada("ZONA 1");
-
+      setZonaAsignada("ZONA 1"); 
+      setPaso('guardado');
     } catch (err) {
       console.error("Error de Supabase:", err);
-      setMensajeError("Error al guardar. Revisá tu conexión.");
+      setMensajeError("Error al conectar con la base de datos.");
     } finally {
       setProcesando(false);
     }
   };
 
-  // 3. Control del Escáner (Se prende solo si hay un modo seleccionado)
+  // 4. Control del Escáner (Motor Puro - 100% Automático)
   useEffect(() => {
-    let scanner;
-    if (modo) {
-      scanner = new Html5QrcodeScanner(
-        "lector-camara",
-        { fps: 10, qrbox: { width: 250, height: 250 }, rememberLastUsedCamera: true },
-        false
-      );
-      
-      scanner.render(
-        (texto) => procesarEscaneo(texto, scanner), 
-        () => {} // Ignoramos fallos de enfoque
-      );
-    }
+    if (modo && paso === 'escaneando') {
+      // Usamos el motor puro, sin botones ni interfaz inyectada
+      const html5QrCode = new Html5Qrcode(readerId);
+      scannerRef.current = html5QrCode;
 
-    // Limpieza al desmontar o volver atrás
-    return () => {
-      if (scanner) {
-        scanner.clear().catch(console.error);
-      }
-    };
-  }, [modo]); // Se vuelve a ejecutar si cambia el modo
+      // Le decimos que inicie automáticamente con la cámara trasera
+      html5QrCode.start(
+        { facingMode: "environment" }, 
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0
+        },
+        alEscanearQr,
+        () => { /* Ignoramos los fallos de enfoque cuadro por cuadro */ }
+      ).catch((err) => {
+        console.error("Error al iniciar cámara:", err);
+        setMensajeError("No se pudo iniciar la cámara. Verificá los permisos del navegador.");
+      });
+
+      // Limpieza segura al desmontar
+      return () => {
+        if (scannerRef.current) {
+          try {
+            if (scannerRef.current.isScanning) {
+              scannerRef.current.stop()
+                .then(() => scannerRef.current.clear())
+                .catch(console.error);
+            } else {
+              scannerRef.current.clear();
+            }
+          } catch (e) {
+            console.error("Error en limpieza:", e);
+          }
+        }
+      };
+    }
+  }, [modo, paso]);
+
 
   const resetearEscaneo = () => {
     setResultado(null);
     setZonaAsignada(null);
     setMensajeError('');
-    // Al setear el modo de nuevo, el useEffect reinicia la cámara automáticamente
-    const modoActual = modo;
-    setModo(null);
-    setTimeout(() => setModo(modoActual), 50); 
+    setPaso('escaneando');
   };
 
-  // --- INTERFAZ 1: SELECCIÓN DE MODO (Mobile First) ---
+  // --- INTERFAZ 1: SELECCIÓN DE MODO ---
   if (!modo) {
     return (
-      <div className="max-w-md mx-auto min-h-[80vh] flex flex-col items-center justify-center p-4">
-        <h2 className="text-3xl font-bold text-gray-800 mb-10 text-center">
-          ¿Qué vas a escanear?
+      <div className="max-w-md mx-auto min-h-[85vh] flex flex-col items-center justify-center p-6 bg-gray-50">
+        <h2 className="text-2xl font-semibold text-gray-900 mb-10 text-center">
+          Iniciá el proceso
         </h2>
         
-        <div className="w-full space-y-6">
+        <div className="w-full space-y-5">
           <button 
             onClick={() => setModo('colecta')}
-            className="w-full bg-white border-2 border-gray-200 text-gray-800 text-2xl font-bold py-8 rounded-3xl shadow-sm hover:border-yellow-400 active:scale-95 transition-all"
+            className="w-full bg-white border border-gray-100 text-gray-900 text-2xl font-medium py-8 rounded-[24px] shadow-sm hover:border-yellow-400 active:scale-95 transition-all"
           >
             Colecta
           </button>
           
           <button 
             onClick={() => setModo('reparto')}
-            className="w-full bg-white border-2 border-gray-200 text-gray-800 text-2xl font-bold py-8 rounded-3xl shadow-sm hover:border-yellow-400 active:scale-95 transition-all"
+            className="w-full bg-white border border-gray-100 text-gray-900 text-2xl font-medium py-8 rounded-[24px] shadow-sm hover:border-yellow-400 active:scale-95 transition-all"
           >
             Reparto
           </button>
@@ -138,60 +152,109 @@ const Paquetes = () => {
     );
   }
 
-  // --- INTERFAZ 2: ESCÁNER ACTIVO ---
+  // --- INTERFAZ 2: ESCÁNER ---
   return (
-    <div className="max-w-md mx-auto p-4 flex flex-col min-h-screen">
-      {/* Botón Volver y Título */}
-      <div className="flex items-center gap-4 mb-6">
-        <button 
-          onClick={() => setModo(null)}
-          className="text-gray-600 font-bold p-2 text-xl"
-        >
-          ← 
-        </button>
-        <h2 className="text-xl font-bold text-gray-800 uppercase tracking-wide">
-          {modo === 'colecta' ? 'Modo Colecta' : 'Modo Reparto'}
-        </h2>
+    <div className="flex flex-col min-h-screen bg-gray-50 max-w-lg mx-auto">
+      
+      {/* CSS para forzar la visibilidad del video adaptado al móvil */}
+      <style>{`
+          #${readerId} video {
+              width: 100% !important;
+              height: 100% !important;
+              object-fit: cover !important;
+              border-radius: 1.5rem !important;
+          }
+      `}</style>
+
+      {/* Cabecera */}
+      <div className="fixed top-0 left-0 right-0 bg-white shadow-sm z-50 p-4 border-b border-gray-100">
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => { setModo(null); resetearEscaneo(); }}
+            className="text-gray-900 font-semibold p-2 text-2xl active:scale-90"
+          >
+            ← 
+          </button>
+          <h2 className="text-lg font-semibold text-gray-900 uppercase tracking-tight">
+            {modo === 'colecta' ? 'Modo Colecta' : 'Modo Reparto'}
+          </h2>
+        </div>
       </div>
 
-      {/* Contenedor de la Cámara */}
-      <div className="flex flex-col items-center mb-6">
-        <div id="lector-camara" className="w-full rounded-2xl overflow-hidden shadow-md bg-black border-4 border-yellow-400"></div>
-      </div>
+      <div className="flex-1 flex flex-col pt-24 pb-8 px-4">
+        
+        {/* LA CÁMARA */}
+        <div className="w-full flex justify-center mb-8 relative">
+          <div 
+            id={readerId} 
+            className={`w-full bg-black rounded-3xl shadow-lg border-4 border-yellow-400 aspect-square overflow-hidden ${paso !== 'escaneando' ? 'opacity-50' : ''}`}
+          >
+             {paso === 'escaneando' && (
+              <div className="flex flex-col items-center justify-center p-12 text-gray-400 absolute inset-0 z-[-1]">
+                <div className="w-8 h-8 border-4 border-gray-600 border-t-gray-300 rounded-full animate-spin mb-4"></div>
+                <p className="text-center text-sm">Iniciando cámara automáticamente...</p>
+              </div>
+            )}
+          </div>
+        </div>
 
-      {/* Panel de Resultados Integrado */}
-      <div className="flex-1 bg-white rounded-t-3xl shadow-[0_-4px_10px_rgba(0,0,0,0.05)] p-6 -mx-4 border-t border-gray-100 flex flex-col justify-center">
-        {procesando ? (
-          <div className="flex flex-col items-center justify-center text-yellow-600">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-yellow-500 mb-4"></div>
-            <p className="font-bold">Guardando en la nube...</p>
-          </div>
-        ) : zonaAsignada ? (
-          <div className="space-y-4 flex flex-col items-center animate-fade-in">
-            <div className="bg-green-500 text-white p-4 rounded-xl w-full text-center shadow-md">
-              <p className="text-xs font-bold uppercase mb-1 opacity-90">ID: {resultado}</p>
-              <p className="text-4xl font-black">{zonaAsignada}</p>
+        {/* PANEL INFERIOR */}
+        <div className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100 min-h-[300px] flex-1">
+          
+          {paso === 'escaneando' && !mensajeError && (
+            <div className="flex flex-col h-full justify-center items-center gap-6">
+              <p className="text-lg font-medium text-gray-800 text-center">Apuntá el código hacia la cámara</p>
             </div>
-            <p className="text-gray-600 text-sm font-medium">¡Guardado con éxito!</p>
-            <button 
-              onClick={resetearEscaneo}
-              className="w-full bg-yellow-400 text-gray-900 text-lg font-bold py-4 rounded-full shadow-sm active:scale-95 transition-all"
-            >
-              Escanear Próximo
-            </button>
-          </div>
-        ) : mensajeError ? (
-          <div className="space-y-4 flex flex-col items-center">
-            <div className="bg-red-100 text-red-700 p-4 rounded-xl w-full text-center">
-              <p className="font-bold">{mensajeError}</p>
+          )}
+
+          {paso === 'confirmando' && (
+            <div className="flex flex-col h-full justify-center items-center gap-6 animate-fade-in-up">
+              <div className="space-y-2 text-center w-full">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">¿Es el paquete correcto?</h3>
+                <div className="bg-gray-100 text-gray-900 p-4 rounded-xl">
+                  <p className="font-mono text-xl font-semibold break-all">{resultado}</p>
+                </div>
+              </div>
+              
+              <div className="w-full flex gap-3">
+                <button 
+                    onClick={confirmarYGuardar}
+                    disabled={procesando}
+                    className="flex-1 bg-yellow-400 text-gray-950 text-lg font-semibold py-4 rounded-2xl active:scale-95 disabled:opacity-50"
+                >
+                    Confirmar
+                </button>
+                <button 
+                  onClick={resetearEscaneo}
+                  className="bg-gray-200 text-gray-800 text-lg font-semibold px-6 rounded-2xl active:scale-95"
+                >
+                  X
+                </button>
+              </div>
             </div>
-            <button onClick={resetearEscaneo} className="w-full bg-gray-200 text-gray-700 font-bold py-3 rounded-full">Reintentar</button>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center opacity-50">
-            <p className="text-gray-500 font-semibold text-center">Enfocá el código de barras en el centro de la pantalla.</p>
-          </div>
-        )}
+          )}
+
+          {paso === 'guardado' && zonaAsignada && (
+            <div className="flex flex-col h-full justify-center items-center gap-6 animate-scale-in">
+              <div className="bg-green-500 text-white p-6 rounded-[20px] w-full text-center">
+                <p className="text-xs font-semibold uppercase mb-1 opacity-80">ID: {resultado}</p>
+                <p className="text-5xl font-semibold">{zonaAsignada}</p>
+              </div>
+              <button 
+                onClick={resetearEscaneo}
+                className="w-full bg-gray-900 text-white text-base font-semibold py-4 rounded-xl active:scale-95"
+              >
+                Escanear Siguiente
+              </button>
+            </div>
+          )}
+
+          {mensajeError && (
+            <div className="bg-red-100 text-red-700 p-4 mt-4 rounded-xl">
+              <p className="font-medium text-center text-sm">{mensajeError}</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
