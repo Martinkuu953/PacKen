@@ -15,39 +15,40 @@ const Paquetes = () => {
   const scannerRef = useRef(null);
   const readerId = "lector-camara-fullscreen";
 
-  // 1. Validación manual adaptada para Mercado Libre Flex
+  // 1. Validación manual ultra-compatible (Sin Regex)
   const validarCodigoManual = (codigo) => {
-    // Los QR de ML pueden ser largos (URLs) o cortos (IDs). Ampliamos de 5 a 150 caracteres.
-    if (!codigo || codigo.length < 5 || codigo.length > 150) return false;
+    // Ampliamos el rango de longitud por si el QR contiene una URL larga de Mercado Libre
+    if (!codigo || codigo.length < 3 || codigo.length > 250) return false;
     
-    // Agregamos símbolos comunes que pueden venir adentro del QR de ML (:, /, ., _, ?, =, &, espacio)
-    const caracteresPermitidos = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-:/._?=& ";
-    
+    // Iteramos manualmente cada posición de la cadena
     for (let i = 0; i < codigo.length; i++) {
-      let esValido = false;
-      for (let j = 0; j < caracteresPermitidos.length; j++) {
-        if (codigo[i] === caracteresPermitidos[j]) {
-          esValido = true;
-          break;
-        }
+      const ascii = codigo.charCodeAt(i);
+      
+      // El rango 32 al 126 en la tabla ASCII cubre todos los caracteres imprimibles:
+      // Letras, números, espacios y TODOS los símbolos ( { } " " , : / . ? = & % $ - _ )
+      if (ascii < 32 || ascii > 126) {
+        console.warn("Carácter inválido detectado en posición " + i + ", código ASCII:", ascii);
+        return false; 
       }
-      if (!esValido) return false; 
     }
     return true; 
   };
 
   // 2. Función al detectar QR
   const procesarLectura = (textoDecodificado) => {
+    // Dejamos este log para que en la consola puedan ver qué texto exacto trae el QR de Mercado Libre
+    console.log("TEXTO DETECTADO POR LA CÁMARA:", textoDecodificado);
+
     if (validarCodigoManual(textoDecodificado)) {
       if (scannerRef.current && scannerRef.current.isScanning) {
-        scannerRef.current.pause(true); 
+        scannerRef.current.pause(true); // Congela el cuadro de la cámara
       }
       setResultado(textoDecodificado);
       setPaso('confirmando');
       setMensajeError('');
       setCodigoManual(''); 
     } else {
-      setMensajeError('Formato inválido. Revisá la etiqueta.');
+      setMensajeError('Formato inválido o caracteres no soportados.');
     }
   };
 
@@ -90,7 +91,7 @@ const Paquetes = () => {
     }
   };
 
-  // 4. Control del Escáner (Vuelve a ser cuadrado para los QR)
+  // 4. Control del Escáner (Cuadrado para QR)
   useEffect(() => {
     if (modo && paso === 'escaneando') {
       const html5QrCode = new Html5Qrcode(readerId);
@@ -100,7 +101,6 @@ const Paquetes = () => {
         { facingMode: "environment" }, 
         {
           fps: 10,
-          // Volvemos al cuadrado perfecto de 250x250 para no cortar el QR
           qrbox: { width: 250, height: 250 }, 
           aspectRatio: 1.0 
         },
@@ -211,22 +211,22 @@ const Paquetes = () => {
           
           {paso === 'escaneando' && (
             <div className="flex flex-col h-full justify-start items-center gap-4">
-              <p className="text-base font-medium text-gray-600 text-center">Enfocá el código QR, o ingresalo manual:</p>
+              <p className="text-sm font-medium text-gray-600 text-center">Enfocá el código QR, o ingresalo manual:</p>
               
               {/* INPUT MANUAL */}
               <div className="w-full flex gap-2">
                 <input 
                   type="text" 
-                  placeholder="Ej: 200001237811471"
+                  placeholder="Pegá o escribí el código"
                   value={codigoManual}
                   onChange={(e) => setCodigoManual(e.target.value)}
-                  className="flex-1 bg-gray-100 border border-gray-200 text-gray-900 text-lg rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:bg-white transition-all font-mono"
+                  className="flex-1 bg-gray-100 border border-gray-200 text-gray-900 text-base rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:bg-white transition-all font-mono"
                 />
                 <button 
                   onClick={handleIngresoManual}
-                  className="bg-gray-900 text-white font-semibold px-6 rounded-2xl active:scale-95 transition-transform"
+                  className="bg-gray-900 text-white font-semibold px-5 rounded-2xl active:scale-95 transition-transform text-sm"
                 >
-                  Buscar
+                  Ingresar
                 </button>
               </div>
             </div>
@@ -237,7 +237,7 @@ const Paquetes = () => {
               <div className="space-y-2 text-center w-full">
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">¿Es el paquete correcto?</h3>
                 <div className="bg-gray-100 text-gray-900 p-4 rounded-xl">
-                  <p className="font-mono text-xl font-semibold break-all">{resultado}</p>
+                  <p className="font-mono text-base font-semibold break-all text-left max-h-32 overflow-y-auto">{resultado}</p>
                 </div>
               </div>
               
@@ -245,13 +245,13 @@ const Paquetes = () => {
                 <button 
                     onClick={confirmarYGuardar}
                     disabled={procesando}
-                    className="flex-1 bg-yellow-400 text-gray-950 text-lg font-semibold py-4 rounded-2xl active:scale-95 disabled:opacity-50"
+                    className="flex-1 bg-yellow-400 text-gray-950 text-base font-semibold py-4 rounded-2xl active:scale-95 disabled:opacity-50"
                 >
                     Confirmar
                 </button>
                 <button 
                   onClick={resetearEscaneo}
-                  className="bg-gray-200 text-gray-800 text-lg font-semibold px-6 rounded-2xl active:scale-95"
+                  className="bg-gray-200 text-gray-800 text-base font-semibold px-6 rounded-2xl active:scale-95"
                 >
                   X
                 </button>
@@ -262,8 +262,8 @@ const Paquetes = () => {
           {paso === 'guardado' && zonaAsignada && (
             <div className="flex flex-col h-full justify-center items-center gap-6 animate-scale-in">
               <div className="bg-green-500 text-white p-6 rounded-[20px] w-full text-center">
-                <p className="text-xs font-semibold uppercase mb-1 opacity-80">ID: {resultado}</p>
-                <p className="text-5xl font-semibold">{zonaAsignada}</p>
+                <p className="text-xs font-semibold uppercase mb-1 opacity-80">ID Escaneado con éxito</p>
+                <p className="text-4xl font-semibold">{zonaAsignada}</p>
               </div>
               <button 
                 onClick={resetearEscaneo}
