@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef } from 'react';
-// ¡Atención acá! Cambiamos la importación. Solo traemos el motor puro.
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from '../supabaseClient';
 
@@ -10,14 +9,20 @@ const Paquetes = () => {
   const [procesando, setProcesando] = useState(false);
   const [mensajeError, setMensajeError] = useState('');
   const [paso, setPaso] = useState('escaneando'); 
+  
+  const [codigoManual, setCodigoManual] = useState('');
 
   const scannerRef = useRef(null);
   const readerId = "lector-camara-fullscreen";
 
-  // 1. Validación manual del código (sin Regex)
+  // 1. Validación manual adaptada para Mercado Libre Flex
   const validarCodigoManual = (codigo) => {
-    if (!codigo || codigo.length < 8 || codigo.length > 20) return false;
-    const caracteresPermitidos = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-";
+    // Los QR de ML pueden ser largos (URLs) o cortos (IDs). Ampliamos de 5 a 150 caracteres.
+    if (!codigo || codigo.length < 5 || codigo.length > 150) return false;
+    
+    // Agregamos símbolos comunes que pueden venir adentro del QR de ML (:, /, ., _, ?, =, &, espacio)
+    const caracteresPermitidos = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-:/._?=& ";
+    
     for (let i = 0; i < codigo.length; i++) {
       let esValido = false;
       for (let j = 0; j < caracteresPermitidos.length; j++) {
@@ -32,20 +37,29 @@ const Paquetes = () => {
   };
 
   // 2. Función al detectar QR
-  const alEscanearQr = (textoDecodificado) => {
+  const procesarLectura = (textoDecodificado) => {
     if (validarCodigoManual(textoDecodificado)) {
-      if (scannerRef.current) {
-        scannerRef.current.pause(true); // Congela la imagen
+      if (scannerRef.current && scannerRef.current.isScanning) {
+        scannerRef.current.pause(true); 
       }
       setResultado(textoDecodificado);
       setPaso('confirmando');
       setMensajeError('');
+      setCodigoManual(''); 
     } else {
-      setMensajeError('Formato inválido. Volvé a apuntar.');
+      setMensajeError('Formato inválido. Revisá la etiqueta.');
     }
   };
 
-  // 3. Función para guardar
+  const handleIngresoManual = () => {
+    if (codigoManual.trim() === '') {
+      setMensajeError('Por favor, ingresá un código.');
+      return;
+    }
+    procesarLectura(codigoManual.trim());
+  };
+
+  // 3. Función para guardar en Supabase
   const confirmarYGuardar = async () => {
     setProcesando(true);
     setMensajeError('');
@@ -76,29 +90,26 @@ const Paquetes = () => {
     }
   };
 
-  // 4. Control del Escáner (Motor Puro - 100% Automático)
+  // 4. Control del Escáner (Vuelve a ser cuadrado para los QR)
   useEffect(() => {
     if (modo && paso === 'escaneando') {
-      // Usamos el motor puro, sin botones ni interfaz inyectada
       const html5QrCode = new Html5Qrcode(readerId);
       scannerRef.current = html5QrCode;
 
-      // Le decimos que inicie automáticamente con la cámara trasera
       html5QrCode.start(
         { facingMode: "environment" }, 
         {
           fps: 10,
-          qrbox: { width: 250, height: 250 },
-          aspectRatio: 1.0
+          // Volvemos al cuadrado perfecto de 250x250 para no cortar el QR
+          qrbox: { width: 250, height: 250 }, 
+          aspectRatio: 1.0 
         },
-        alEscanearQr,
-        () => { /* Ignoramos los fallos de enfoque cuadro por cuadro */ }
+        (texto) => procesarLectura(texto),
+        () => { }
       ).catch((err) => {
         console.error("Error al iniciar cámara:", err);
-        setMensajeError("No se pudo iniciar la cámara. Verificá los permisos del navegador.");
       });
 
-      // Limpieza segura al desmontar
       return () => {
         if (scannerRef.current) {
           try {
@@ -117,11 +128,11 @@ const Paquetes = () => {
     }
   }, [modo, paso]);
 
-
   const resetearEscaneo = () => {
     setResultado(null);
     setZonaAsignada(null);
     setMensajeError('');
+    setCodigoManual('');
     setPaso('escaneando');
   };
 
@@ -132,7 +143,6 @@ const Paquetes = () => {
         <h2 className="text-2xl font-semibold text-gray-900 mb-10 text-center">
           Iniciá el proceso
         </h2>
-        
         <div className="w-full space-y-5">
           <button 
             onClick={() => setModo('colecta')}
@@ -140,7 +150,6 @@ const Paquetes = () => {
           >
             Colecta
           </button>
-          
           <button 
             onClick={() => setModo('reparto')}
             className="w-full bg-white border border-gray-100 text-gray-900 text-2xl font-medium py-8 rounded-[24px] shadow-sm hover:border-yellow-400 active:scale-95 transition-all"
@@ -152,11 +161,10 @@ const Paquetes = () => {
     );
   }
 
-  // --- INTERFAZ 2: ESCÁNER ---
+  // --- INTERFAZ 2: ESCÁNER Y CARGA MANUAL ---
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 max-w-lg mx-auto">
       
-      {/* CSS para forzar la visibilidad del video adaptado al móvil */}
       <style>{`
           #${readerId} video {
               width: 100% !important;
@@ -184,7 +192,7 @@ const Paquetes = () => {
       <div className="flex-1 flex flex-col pt-24 pb-8 px-4">
         
         {/* LA CÁMARA */}
-        <div className="w-full flex justify-center mb-8 relative">
+        <div className="w-full flex justify-center mb-6 relative">
           <div 
             id={readerId} 
             className={`w-full bg-black rounded-3xl shadow-lg border-4 border-yellow-400 aspect-square overflow-hidden ${paso !== 'escaneando' ? 'opacity-50' : ''}`}
@@ -192,18 +200,35 @@ const Paquetes = () => {
              {paso === 'escaneando' && (
               <div className="flex flex-col items-center justify-center p-12 text-gray-400 absolute inset-0 z-[-1]">
                 <div className="w-8 h-8 border-4 border-gray-600 border-t-gray-300 rounded-full animate-spin mb-4"></div>
-                <p className="text-center text-sm">Iniciando cámara automáticamente...</p>
+                <p className="text-center text-sm">Cámara principal...</p>
               </div>
             )}
           </div>
         </div>
 
         {/* PANEL INFERIOR */}
-        <div className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100 min-h-[300px] flex-1">
+        <div className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100 min-h-[250px] flex-1 flex flex-col">
           
-          {paso === 'escaneando' && !mensajeError && (
-            <div className="flex flex-col h-full justify-center items-center gap-6">
-              <p className="text-lg font-medium text-gray-800 text-center">Apuntá el código hacia la cámara</p>
+          {paso === 'escaneando' && (
+            <div className="flex flex-col h-full justify-start items-center gap-4">
+              <p className="text-base font-medium text-gray-600 text-center">Enfocá el código QR, o ingresalo manual:</p>
+              
+              {/* INPUT MANUAL */}
+              <div className="w-full flex gap-2">
+                <input 
+                  type="text" 
+                  placeholder="Ej: 200001237811471"
+                  value={codigoManual}
+                  onChange={(e) => setCodigoManual(e.target.value)}
+                  className="flex-1 bg-gray-100 border border-gray-200 text-gray-900 text-lg rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:bg-white transition-all font-mono"
+                />
+                <button 
+                  onClick={handleIngresoManual}
+                  className="bg-gray-900 text-white font-semibold px-6 rounded-2xl active:scale-95 transition-transform"
+                >
+                  Buscar
+                </button>
+              </div>
             </div>
           )}
 
@@ -250,7 +275,7 @@ const Paquetes = () => {
           )}
 
           {mensajeError && (
-            <div className="bg-red-100 text-red-700 p-4 mt-4 rounded-xl">
+            <div className="bg-red-100 text-red-700 p-4 mt-auto rounded-xl">
               <p className="font-medium text-center text-sm">{mensajeError}</p>
             </div>
           )}
