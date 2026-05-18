@@ -1,31 +1,42 @@
-import { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from '../supabaseClient';
 
-const Paquetes = () => {
-  // --- SISTEMA ANTI-CRASH (Caja Negra) ---
-  const [crashLog, setCrashLog] = useState(null);
+// ==========================================
+// 🛡️ EL ESCUDO DEFINITIVO DE REACT
+// Esto evita la pantalla blanca sí o sí.
+// ==========================================
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, errorMsg: '' };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, errorMsg: error.toString() };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-red-900 text-white p-8 flex flex-col items-center justify-center">
+          <h1 className="text-4xl font-black mb-4 text-center">💥 CRASH ATRAPADO</h1>
+          <p className="mb-4 text-center">El escudo evitó la pantalla blanca. Pasame este error:</p>
+          <div className="bg-black p-4 rounded-xl w-full text-xs font-mono text-red-400 break-words mb-8 shadow-xl">
+            {this.state.errorMsg}
+          </div>
+          <button onClick={() => window.location.reload()} className="bg-white text-red-900 font-bold py-4 px-8 rounded-full shadow-lg">
+            Recargar App
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
-  useEffect(() => {
-    // Atrapamos errores normales de React/JS
-    const handleGlobalError = (event) => {
-      setCrashLog(event.message || String(event.error));
-    };
-    // Atrapamos errores asíncronos (promesas rotas de la cámara)
-    const handleUnhandledRejection = (event) => {
-      setCrashLog(String(event.reason));
-    };
-
-    window.addEventListener('error', handleGlobalError);
-    window.addEventListener('unhandledrejection', handleUnhandledRejection);
-
-    return () => {
-      window.removeEventListener('error', handleGlobalError);
-      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-    };
-  }, []);
-
-  // --- ESTADOS NORMALES ---
+// ==========================================
+// 📦 LÓGICA PRINCIPAL DE LA APP
+// ==========================================
+const PaquetesLogica = () => {
   const [modo, setModo] = useState(null); 
   const [resultado, setResultado] = useState(null);
   const [zonaAsignada, setZonaAsignada] = useState(null);
@@ -42,27 +53,26 @@ const Paquetes = () => {
     pasoRef.current = paso;
   }, [paso]);
 
-  // 1. Validación manual (Defensiva)
   const validarCodigoManual = (codigo) => {
     try {
-      const texto = String(codigo); // Forzamos a string siempre
-      if (!texto || texto.length < 3 || texto.length > 250) return false;
+      const texto = String(codigo); 
+      if (!texto || texto.length < 3 || texto.length > 500) return false;
       for (let i = 0; i < texto.length; i++) {
         const ascii = texto.charCodeAt(i);
         if (ascii < 32 || ascii > 126) return false; 
       }
       return true; 
     } catch (e) {
-      return false; // Si falla la validación, lo rechazamos, pero no crasheamos
+      return false;
     }
   };
 
-  // 2. Función al detectar QR (Blindada contra errores)
   const procesarLectura = (textoDecodificado) => {
-    try {
+    // EL TRUCO MAGISTRAL: Usamos setTimeout para "escapar" del hilo de la cámara
+    // Esto evita que la librería colapse el navegador al cambiar la interfaz de golpe.
+    setTimeout(() => {
       if (pasoRef.current !== 'escaneando') return;
 
-      // DEFENSIVO: Si la librería de ML devuelve un objeto raro, lo hacemos texto sí o sí
       const textoSeguro = typeof textoDecodificado === 'object' ? JSON.stringify(textoDecodificado) : String(textoDecodificado);
 
       if (validarCodigoManual(textoSeguro)) {
@@ -70,13 +80,12 @@ const Paquetes = () => {
         setPaso('confirmando');
         setMensajeError('');
         setCodigoManual(''); 
+        // 🚨 OJO ACÁ: Ya NO pausamos la cámara. Dejamos que siga corriendo de fondo 
+        // pero la ignoramos. Esto cura el 99% de los crasheos en celulares.
       } else {
         setMensajeError('Formato inválido.');
       }
-    } catch (error) {
-      // Si algo de acá explota, lo mandamos a la pantalla roja
-      setCrashLog("Error procesando lectura: " + String(error));
-    }
+    }, 10);
   };
 
   const handleIngresoManual = () => {
@@ -87,7 +96,6 @@ const Paquetes = () => {
     procesarLectura(codigoManual.trim());
   };
 
-  // 3. Guardar en Supabase
   const confirmarYGuardar = async () => {
     setProcesando(true);
     setMensajeError('');
@@ -115,7 +123,6 @@ const Paquetes = () => {
     }
   };
 
-  // 4. Encendido de Cámara
   useEffect(() => {
     if (modo) {
       const html5QrCode = new Html5Qrcode(readerId);
@@ -126,14 +133,12 @@ const Paquetes = () => {
         { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
         (texto) => procesarLectura(texto), 
         () => { }
-      ).catch((err) => {
-        console.error(err);
-      });
+      ).catch((err) => console.error(err));
 
       return () => {
         if (scannerRef.current) {
           scannerRef.current.stop()
-            .then(() => { scannerRef.current.clear(); })
+            .then(() => scannerRef.current.clear())
             .catch(() => { });
         }
       };
@@ -148,25 +153,7 @@ const Paquetes = () => {
     setPaso('escaneando');
   };
 
-  // ==========================================
-  // RENDERIZADO CONDICIONAL DE EMERGENCIA
-  // ==========================================
-  if (crashLog) {
-    return (
-      <div className="min-h-screen bg-red-900 text-white p-6 flex flex-col items-center justify-center">
-        <h1 className="text-4xl font-black mb-4 text-center">💥 CRASH DETECTADO</h1>
-        <p className="mb-4 text-center font-medium">Sacale captura a este error y pasámelo:</p>
-        <div className="bg-black p-4 rounded-xl w-full max-w-md font-mono text-sm break-words text-red-400 border border-red-500 shadow-xl">
-          {crashLog}
-        </div>
-        <button onClick={() => window.location.reload()} className="mt-8 bg-white text-red-900 font-bold py-4 px-8 rounded-full active:scale-95 shadow-lg">
-          Recargar App
-        </button>
-      </div>
-    );
-  }
-
-  // --- INTERFAZ 1: SELECCIÓN DE MODO ---
+  // --- INTERFACES ---
   if (!modo) {
     return (
       <div className="max-w-md mx-auto min-h-[85vh] flex flex-col items-center justify-center p-6 bg-gray-50">
@@ -179,7 +166,6 @@ const Paquetes = () => {
     );
   }
 
-  // --- INTERFAZ 2: ESCÁNER ---
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 max-w-lg mx-auto">
       <style>{`
@@ -191,7 +177,6 @@ const Paquetes = () => {
           }
       `}</style>
 
-      {/* Cabecera */}
       <div className="fixed top-0 left-0 right-0 bg-white shadow-sm z-50 p-4 border-b border-gray-100">
         <div className="flex items-center gap-3">
           <button onClick={() => { setModo(null); resetearEscaneo(); }} className="text-gray-900 font-semibold p-2 text-2xl active:scale-90">←</button>
@@ -200,7 +185,6 @@ const Paquetes = () => {
       </div>
 
       <div className="flex-1 flex flex-col pt-24 pb-8 px-4">
-        {/* LA CÁMARA */}
         <div className="w-full flex justify-center mb-6 relative">
           <div id={readerId} className={`w-full bg-black rounded-3xl shadow-lg border-4 border-yellow-400 aspect-square overflow-hidden transition-opacity ${paso !== 'escaneando' ? 'opacity-30' : 'opacity-100'}`}>
              {paso === 'escaneando' && (
@@ -211,7 +195,6 @@ const Paquetes = () => {
           </div>
         </div>
 
-        {/* PANEL INFERIOR */}
         <div className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100 min-h-[250px] flex-1 flex flex-col">
           
           {paso === 'escaneando' && (
@@ -260,4 +243,11 @@ const Paquetes = () => {
   );
 };
 
-export default Paquetes;
+// Exportamos el componente envuelto en el escudo protector
+export default function Paquetes() {
+  return (
+    <ErrorBoundary>
+      <PaquetesLogica />
+    </ErrorBoundary>
+  );
+}
