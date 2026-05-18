@@ -46,61 +46,64 @@ const PaquetesLogica = () => {
     pasoRef.current = paso;
   }, [paso]);
 
-  // 1. EXTRACTOR MANUAL DE ID (Sin usar Regex)
+  // 1. EXTRACTOR DE ID DEL PACK (Sin usar Regex, iterando caracteres)
   const extraerIdPaquete = (texto) => {
     if (!texto) return '';
     let str = String(texto).trim();
 
-    // Caso A: Si el QR de Mercado Libre es un JSON en vez de una URL
-    if (str.indexOf('{') === 0 && str.indexOf('}') === str.length - 1) {
-      try {
-        const obj = JSON.parse(str);
-        if (obj.id) return String(obj.id);
-        if (obj.tracking_id) return String(obj.tracking_id);
-        if (obj.shipment_id) return String(obj.shipment_id);
-      } catch (e) {}
+    // Recorremos la cadena buscando el bloque numérico continuo más largo
+    // Las etiquetas de ML contienen el ID de envío como una cadena pura de 10 a 15 dígitos
+    let bloqueMaximo = '';
+    let bloqueActual = '';
+    
+    for (let i = 0; i < str.length; i++) {
+      const ascii = str.charCodeAt(i);
+      
+      // Verificamos si el carácter actual es un número (0 al 9 en ASCII)
+      if (ascii >= 48 && ascii <= 57) {
+        bloqueActual += str[i];
+      } else {
+        // Al encontrar un quiebre (letra, barra, símbolo), comparamos longitudes
+        if (bloqueActual.length > bloqueMaximo.length) {
+          bloqueMaximo = bloqueActual;
+        }
+        bloqueActual = ''; // Reiniciamos el acumulador
+      }
+    }
+    // Verificación final por si la cadena terminaba en número
+    if (bloqueActual.length > bloqueMaximo.length) {
+      bloqueMaximo = bloqueActual;
     }
 
-    // Caso B: Si contiene un parámetro de ID en la URL (ej: ?id=2000012378 o &id=...)
+    // Si encontramos un bloque numérico largo y consistente, ese es el ID del pack
+    if (bloqueMaximo.length >= 9) {
+      return bloqueMaximo;
+    }
+
+    // Si por alguna razón no hay un bloque numérico largo, buscamos un parámetro 'id=' por descarte
     const posId = str.indexOf('id=');
     if (posId !== -1) {
-      let idExtraido = '';
-      // Iteramos a partir de donde termina el 'id=' (que son 3 caracteres)
+      let extraido = '';
       for (let i = posId + 3; i < str.length; i++) {
-        const caracter = str[i];
-        // Frenamos si encontramos otro parámetro o un espacio
-        if (caracter === '&' || caracter === ' ' || caracter === '#' || caracter === '"') {
-          break;
-        }
-        idExtraido += caracter;
+        const c = str[i];
+        if (c === '&' || c === ' ' || c === '#' || c === '"' || c === '/' || c === ',') break;
+        extraido += c;
       }
-      if (idExtraido) return idExtraido;
+      if (extraido) return extraido;
     }
 
-    // Caso C: Si es una URL larga y el ID es la última parte de la ruta (ej: .../p/v1/flex/2000012378)
-    if (str.indexOf('http://') === 0 || str.indexOf('https://') === 0) {
-      const partes = str.split('/');
-      for (let i = partes.length - 1; i >= 0; i--) {
-        const porcion = partes[i].trim();
-        if (porcion && porcion.length >= 4) {
-          return porcion; // Retorna el último segmento válido de la URL
-        }
-      }
-    }
-
-    return str; // Si ya era un ID limpio o no coincidió con ninguna estructura, lo deja igual
+    return str; 
   };
 
-  // 2. VALIDACIÓN MANUAL (Sin usar Regex)
+  // 2. VALIDACIÓN MANUAL DEL ID FILTRADO (Sin Regex)
   const validarCodigoManual = (codigo) => {
     try {
       const texto = String(codigo); 
-      // Un ID real limpio de paquete suele tener entre 4 y 40 caracteres
+      // El ID limpio del paquete final debe tener una longitud lógica y caracteres seguros
       if (!texto || texto.length < 4 || texto.length > 40) return false;
       
       for (let i = 0; i < texto.length; i++) {
         const ascii = texto.charCodeAt(i);
-        // Solo aceptamos letras, números y guiones para el ID final seguro
         if (ascii < 32 || ascii > 126) return false; 
       }
       return true; 
@@ -109,23 +112,23 @@ const PaquetesLogica = () => {
     }
   };
 
-  // 3. PROCESAMIENTO DE LECTURA (Cámara o Input)
+  // 3. PROCESAMIENTO DE LECTURA
   const procesarLectura = (textoDecodificado) => {
     setTimeout(() => {
       if (pasoRef.current !== 'escaneando') return;
 
       const textoSeguro = typeof textoDecodificado === 'object' ? JSON.stringify(textoDecodificado) : String(textoDecodificado);
 
-      // Extraemos puramente el ID del paquete descartando el link molesto
+      // Extraemos exclusivamente el número de identificación del paquete
       const idLimpio = extraerIdPaquete(textoSeguro);
 
       if (validarCodigoManual(idLimpio)) {
-        setResultado(idLimpio); // Guardamos únicamente el ID en el estado
-        setPaso('confirmando'); // Mostramos la confirmación limpia
+        setResultado(idLimpio); // Guardamos el ID numérico real
+        setPaso('confirmando'); 
         setMensajeError('');
         setCodigoManual(''); 
       } else {
-        setMensajeError('Formato de ID no reconocido.');
+        setMensajeError('Formato de ID no reconocido en la etiqueta.');
       }
     }, 10);
   };
@@ -138,7 +141,7 @@ const PaquetesLogica = () => {
     procesarLectura(codigoManual.trim());
   };
 
-  // 4. GUARDADO DEFINITIVO EN SUPABASE
+  // 4. GUARDADO EN LA BASE DE DATOS
   const confirmarYGuardar = async () => {
     setProcesando(true);
     setMensajeError('');
@@ -146,7 +149,7 @@ const PaquetesLogica = () => {
 
     try {
       const paqueteData = {
-        IdEnvioML: resultado, // Ahora viaja el ID limpio (ej: "2000012378"), no el link completo
+        IdEnvioML: resultado, // Viaja el número puro aislado de la URL
         IdSeller: 1, 
         IdZona: 1,  
         Estado: modo === 'colecta' ? 'Ingresado' : 'En camino' 
@@ -160,8 +163,8 @@ const PaquetesLogica = () => {
       setZonaAsignada("ZONA 1"); 
       setPaso('guardado');
     } catch (err) {
-      console.error("Error de Supabase:", err);
-      setMensajeError("Error al guardar. Verificá las columnas de la base de datos.");
+      console.error("Error de inserción en Supabase:", err);
+      setMensajeError("Error al guardar. Comprobá que las columnas acepten este ID numérico.");
     } finally {
       setProcesando(false);
     }
@@ -197,7 +200,6 @@ const PaquetesLogica = () => {
     setPaso('escaneando');
   };
 
-  // --- INTERFAZ 1: SELECCIÓN DE MODO ---
   if (!modo) {
     return (
       <div className="max-w-md mx-auto min-h-[85vh] flex flex-col items-center justify-center p-6 bg-gray-50">
@@ -210,7 +212,6 @@ const PaquetesLogica = () => {
     );
   }
 
-  // --- INTERFAZ 2: ESCÁNER RESPONSIVE MÓVIL ---
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 max-w-lg mx-auto">
       <style>{`
@@ -222,7 +223,6 @@ const PaquetesLogica = () => {
           }
       `}</style>
 
-      {/* Barra de Navegación Superior */}
       <div className="fixed top-0 left-0 right-0 bg-white shadow-sm z-50 p-4 border-b border-gray-100">
         <div className="flex items-center gap-3">
           <button onClick={() => { setModo(null); resetearEscaneo(); }} className="text-gray-900 font-semibold p-2 text-2xl active:scale-90">←</button>
@@ -231,7 +231,6 @@ const PaquetesLogica = () => {
       </div>
 
       <div className="flex-1 flex flex-col pt-24 pb-8 px-4">
-        {/* Contenedor de la cámara */}
         <div className="w-full flex justify-center mb-6 relative">
           {paso === 'escaneando' && (
             <div className="absolute inset-0 z-0 flex flex-col items-center justify-center p-12 text-gray-400">
@@ -245,26 +244,25 @@ const PaquetesLogica = () => {
           </div>
         </div>
 
-        {/* Tarjeta de información inferior */}
         <div className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100 min-h-[250px] flex-1 flex flex-col">
           {paso === 'escaneando' && (
             <div className="flex flex-col h-full justify-start items-center gap-4">
               <p className="text-sm font-medium text-gray-600 text-center">Enfocá el código QR, o ingresalo manual:</p>
               <div className="w-full flex gap-2">
-                <input type="text" placeholder="Escribí el ID del paquete" value={codigoManual} onChange={(e) => setCodigoManual(e.target.value)} className="flex-1 bg-gray-100 border border-gray-200 text-gray-900 text-base rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-yellow-400 transition-all font-mono" />
+                <input type="text" placeholder="Escribí el ID numérico del paquete" value={codigoManual} onChange={(e) => setCodigoManual(e.target.value)} className="flex-1 bg-gray-100 border border-gray-200 text-gray-900 text-base rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-yellow-400 transition-all font-mono" />
                 <button onClick={handleIngresoManual} className="bg-gray-900 text-white font-semibold px-5 rounded-2xl active:scale-95 transition-transform text-sm">Ingresar</button>
               </div>
             </div>
           )}
 
-          {/* CUADRO DE CONFIRMACIÓN REFINADO (Muestra solo el ID limpio) */}
+          {/* PANEL DE CONFIRMACIÓN CON EL ID LIMPIO */}
           {paso === 'confirmando' && (
             <div className="flex flex-col h-full justify-center items-center gap-6 animate-fade-in-up">
               <div className="space-y-2 text-center w-full">
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">¿Confirmar paquete detectado?</h3>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">¿Confirmar ID del Paquete?</h3>
                 <div className="bg-gray-100 text-gray-900 p-4 rounded-xl border border-gray-200">
-                  {/* Aquí se visualiza únicamente el ID filtrado, libre de la URL de Mercado Libre */}
-                  <p className="font-mono text-xl font-semibold break-all text-center text-yellow-600">{resultado}</p>
+                  {/* Se visualiza únicamente la secuencia numérica identificadora de la caja */}
+                  <p className="font-mono text-2xl font-semibold break-all text-center text-gray-900 tracking-wider">{resultado}</p>
                 </div>
               </div>
               <div className="w-full flex gap-3">
