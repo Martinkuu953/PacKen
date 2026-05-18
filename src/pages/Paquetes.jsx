@@ -127,7 +127,7 @@ const PaquetesLogica = () => {
 
       if (modo === 'reparto') paqueteData.IdTransportista = 1; 
 
-      const { error } = await supabase.from('Paquete').insert([paqueteData]);
+      const { error } = await supabase.from('paquete').insert([paqueteData]);
       
       // Si Supabase devuelve un error, lo enviamos directo al bloque catch
       if (error) throw error;
