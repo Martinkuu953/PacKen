@@ -45,7 +45,6 @@ const PaquetesLogica = () => {
     pasoRef.current = paso;
   }, [paso]);
 
-  // Extractor de ID por bloques numéricos
   const extraerIdPaquete = (texto) => {
     if (!texto) return '';
     let str = String(texto).trim();
@@ -111,37 +110,37 @@ const PaquetesLogica = () => {
     procesarLectura(codigoManual.trim());
   };
 
-  // LÓGICA DE GUARDADO CON DIAGNÓSTICO AVANZADO
+  // LÓGICA DE GUARDADO CON COLUMNAS EN MINÚSCULAS (MÉTODO DEFENSIVO)
   const confirmarYGuardar = async () => {
     setProcesando(true);
     setMensajeError('');
     setZonaAsignada(null);
 
     try {
+      // Modificamos las claves del objeto para que apunten a nombres en minúsculas/snake_case
+      // Cambiá el nombre de la izquierda según cómo figure en tu panel de Supabase
       const paqueteData = {
-        IdEnvioML: resultado, 
-        IdSeller: 1, 
-        IdZona: 1,  
-        Estado: modo === 'colecta' ? 'Ingresado' : 'En camino' 
+        id_envio_ml: resultado, // Antes: IdEnvioML
+        id_seller: 1,           // Antes: IdSeller
+        id_zona: 1,             // Antes: IdZona
+        estado: modo === 'colecta' ? 'Ingresado' : 'En camino' // Antes: Estado
       };
 
-      if (modo === 'reparto') paqueteData.IdTransportista = 1; 
+      if (modo === 'reparto') {
+        paqueteData.id_transportista = 1; // Antes: IdTransportista
+      }
 
+      // Conectamos a la tabla 'paquete' en minúsculas
       const { error } = await supabase.from('paquete').insert([paqueteData]);
       
-      // Si Supabase devuelve un error, lo enviamos directo al bloque catch
       if (error) throw error;
 
       setZonaAsignada("ZONA 1"); 
       setPaso('guardado');
     } catch (err) {
       console.error("Error completo de Supabase:", err);
-      
-      // Aislamos los datos nativos del error de PostgreSQL
       const codigoPostgres = err.code ? `[Código ${err.code}] ` : '';
-      const detallePostgres = err.message || 'Error desconocido en el servidor';
-      
-      // Imprimimos el diagnóstico en el banner rojo de la interfaz
+      const detallePostgres = err.message || 'Error desconocido';
       setMensajeError(`${codigoPostgres}${detallePostgres}`);
     } finally {
       setProcesando(false);
@@ -256,7 +255,6 @@ const PaquetesLogica = () => {
 
           {mensajeError && (
             <div className="bg-red-100 text-red-700 p-4 mt-auto rounded-xl">
-              {/* Aquí se imprimirá el código y mensaje real de Postgres */}
               <p className="font-mono text-center text-xs break-words">{mensajeError}</p>
             </div>
           )}
