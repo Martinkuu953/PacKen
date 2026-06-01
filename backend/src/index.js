@@ -3,6 +3,8 @@ import express from 'express';
 import cors from 'cors';
 import enviosRouter from './routes/envios.js';
 import vendedoresRouter from './routes/vendedores.js';
+import paquetesRouter from './routes/paquetes.js';
+import { probarConexionDb } from './lib/db.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -20,8 +22,14 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'packen-backend' });
 });
 
+app.get('/health/db', async (_req, res) => {
+  const resultado = await probarConexionDb();
+  res.status(resultado.ok ? 200 : 503).json(resultado);
+});
+
 app.use('/api/envios', enviosRouter);
 app.use('/api/vendedores', vendedoresRouter);
+app.use('/api/paquetes', paquetesRouter);
 
 app.use((err, _req, res, _next) => {
   console.error(err);

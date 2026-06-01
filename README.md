@@ -7,7 +7,7 @@ Sistema de gestión logística (envíos Flex). El proyecto está dividido en **f
 ```
 PacKen/
 ├── frontend/     # React + Vite + Tailwind
-├── backend/      # API Express (Mercado Libre, Supabase)
+├── backend/      # API Express (Mercado Libre, PostgreSQL)
 ├── package.json  # npm workspaces
 └── README.md
 ```
@@ -36,8 +36,7 @@ Completar en `backend/.env`:
 |----------|-------------|
 | `ML_CLIENT_ID` | App de Mercado Libre |
 | `ML_CLIENT_SECRET` | Secreto de la app (solo servidor) |
-| `SUPABASE_URL` | URL del proyecto Supabase |
-| `SUPABASE_SERVICE_ROLE_KEY` | Clave service role (nunca en el frontend) |
+| `DATABASE_URL` | Connection string PostgreSQL (Supabase → Settings → Database) |
 | `FRONTEND_URL` | Origen del front para CORS (ej. `http://localhost:5173`) |
 
 3. (Opcional) Frontend en producción con API en otro dominio:
@@ -65,6 +64,9 @@ npm run dev:backend    # http://localhost:3001
 ```
 
 - Health check: `GET http://localhost:3001/health`
+- Listar paquetes: `GET /api/paquetes`
+- Diagnóstico base de datos: `GET http://localhost:3001/health/db`
+- Probar conexión en terminal: `node backend/scripts/test-db.mjs`
 - Envío ML: `GET /api/envios/:shipmentId?sellerId=...`
 - Registrar vendedor: `POST /api/vendedores` `{ "sellerId", "refreshToken" }`
 

@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase.js';
+import { dbConfigurado, query } from '../lib/db.js';
 
 const ML_API = 'https://api.mercadolibre.com';
 const _tokenCache = {};
@@ -30,40 +30,50 @@ async function refreshTokenDeVendedor(refreshToken) {
   };
 }
 
+async function getRefreshTokenVendedor(sellerId) {
+  const { rows } = await query(
+    'SELECT refresh_token FROM vendedor WHERE id_seller = $1',
+    [String(sellerId)],
+  );
+  return rows[0]?.refresh_token ?? null;
+}
+
+async function actualizarRefreshToken(sellerId, refreshToken) {
+  await query(
+    `INSERT INTO vendedor (id_seller, refresh_token)
+     VALUES ($1, $2)
+     ON CONFLICT (id_seller) DO UPDATE SET refresh_token = EXCLUDED.refresh_token`,
+    [String(sellerId), refreshToken],
+  );
+}
+
 async function getTokenParaVendedor(sellerId) {
   const cached = _tokenCache[sellerId];
   if (cached && Date.now() < cached.expiry) {
     return cached.accessToken;
   }
 
-  if (!supabase) {
-    throw new Error('Supabase no configurado en el servidor');
+  if (!dbConfigurado()) {
+    throw new Error('DATABASE_URL no configurado en el servidor');
   }
 
-  const { data, error } = await supabase
-    .from('vendedor')
-    .select('refresh_token')
-    .eq('id_seller', String(sellerId))
-    .single();
+  const refreshToken = await getRefreshTokenVendedor(sellerId);
 
-  if (error || !data?.refresh_token) {
+  if (!refreshToken) {
     throw new Error(
       `Vendedor ${sellerId} no tiene token registrado en PacKen. Pedile que autorice la app.`,
     );
   }
 
-  const tokens = await refreshTokenDeVendedor(data.refresh_token);
+  const tokens = await refreshTokenDeVendedor(refreshToken);
 
   _tokenCache[sellerId] = {
     accessToken: tokens.accessToken,
     expiry: tokens.expiry,
   };
 
-  if (tokens.refreshToken !== data.refresh_token) {
-    await supabase
-      .from('vendedor')
-      .update({ refresh_token: tokens.refreshToken })
-      .eq('id_seller', String(sellerId));
+  if (tokens.refreshToken !== refreshToken) {
+    await actualizarRefreshToken(sellerId, tokens.refreshToken);
   }
 
   return tokens.accessToken;
@@ -104,7 +114,7 @@ export async function obtenerDatosEnvio(shipmentId, sellerId) {
   return {
     id_envio_ml: String(shipment.id),
     id_seller: String(sellerId),
-    vendedor: ngitull,
+    vendedor: null,
     estado: shipment.status || null,
     subestado: shipment.substatus || null,
     fecha: shipment.date_created || null,
@@ -114,18 +124,10 @@ export async function obtenerDatosEnvio(shipmentId, sellerId) {
 }
 
 export async function registrarVendedor(sellerId, refreshToken) {
-  if (!supabase) {
-    throw new Error('Supabase no configurado en el servidor');
+  if (!dbConfigurado()) {
+    throw new Error('DATABASE_URL no configurado en el servidor');
   }
 
-  const { error } = await supabase.from('vendedor').upsert(
-    {
-      id_seller: String(sellerId),
-      refresh_token: refreshToken,
-    },
-    { onConflict: 'id_seller' },
-  );
-
-  if (error) throw new Error(`Error registrando vendedor: ${error.message}`);
+  await actualizarRefreshToken(sellerId, refreshToken);
   return { ok: true };
 }
