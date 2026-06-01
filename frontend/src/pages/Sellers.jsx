@@ -1,7 +1,6 @@
 import { useState } from 'react';
 
 const Sellers = () => {
-  // Datos mock de Sellers
   const [sellersData] = useState([
     { nombre: 'Baby Movil', totales: 100, enCamino: 40, demorados: 11, entregados: 32, cancelados: 5, reprogramados: 12 },
     { nombre: 'Baby Movil', totales: 100, enCamino: 40, demorados: 11, entregados: 32, cancelados: 5, reprogramados: 12 },
@@ -12,7 +11,6 @@ const Sellers = () => {
     { nombre: 'Baby Movil', totales: 100, enCamino: 40, demorados: 11, entregados: 32, cancelados: 5, reprogramados: 12 },
   ]);
 
-  // Cálculo de totales
   const totalPaquetes = sellersData.reduce((sum, seller) => sum + seller.totales, 0);
   const totalEnCamino = sellersData.reduce((sum, seller) => sum + seller.enCamino, 0);
   const montoTotal = 300000;
@@ -51,7 +49,6 @@ const Sellers = () => {
           </table>
         </div>
 
-        {/* Totales */}
         <div className="mt-6 pt-4 border-t border-gray-200 flex justify-between items-center">
           <div className="space-y-1">
             <p className="text-gray-600">

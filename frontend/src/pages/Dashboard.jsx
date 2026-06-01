@@ -9,7 +9,7 @@ import {
 } from 'react-icons/fa';
 
 const Dashboard = () => {
-  const navigate = useNavigate(); // 👈 Agregar this hook
+  const navigate = useNavigate();
 
   const paquetesRecientes = [
     { cliente: 'Ana', seller: 'Baby Movil', transportista: 'Jorge Moreno', ubicacion: 'CABA', zona: 'Capital', estado: 'Atrasado' },
@@ -18,7 +18,6 @@ const Dashboard = () => {
     { cliente: 'Valentín', seller: 'Toys Kids', transportista: 'Jorge Moreno', ubicacion: 'CABA', zona: 'Capital', estado: 'Atrasado' },
   ];
 
-  // 👈 Función para manejar la navegación
   const handleNavigation = (path) => {
     navigate(path);
   };
@@ -26,12 +25,10 @@ const Dashboard = () => {
   return (
     <div className="max-w-6xl mx-auto">
       
-      {/* 1. Tarjeta Principal: Estado Logístico */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
         <h2 className="text-2xl font-bold text-gray-800 mb-6">La Veloz</h2>
         
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Columna Izquierda: Resumen Numérico */}
           <div className="flex flex-col justify-between w-full lg:w-1/3 space-y-4">
             <div className="mb-2">
               <p className="text-2xl font-bold text-gray-800 mb-4">Paquetes Actuales</p>
@@ -52,7 +49,6 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Columna Derecha: Tabla de Seguimiento Rápido */}
           <div className="w-full lg:w-2/3 bg-gray-50 rounded-xl p-4 overflow-x-auto">
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-gray-500 uppercase border-b border-gray-200">
@@ -87,7 +83,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* 3. Grilla de Botones de Acceso Rápido - MODIFICADA con rutas */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
         <button 
           onClick={() => handleNavigation('/estadisticas')}

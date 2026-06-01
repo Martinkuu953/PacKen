@@ -3,7 +3,6 @@ import { Link, useLocation } from 'react-router-dom';
 const Sidebar = () => {
   const location = useLocation();
 
-
   const menuItems = [
     { name: 'Inicio', path: '/' },
     { name: 'Sellers', path: '/sellers' },
