@@ -104,7 +104,7 @@ export async function obtenerDatosEnvio(shipmentId, sellerId) {
   return {
     id_envio_ml: String(shipment.id),
     id_seller: String(sellerId),
-    vendedor: null,
+    vendedor: ngitull,
     estado: shipment.status || null,
     subestado: shipment.substatus || null,
     fecha: shipment.date_created || null,
