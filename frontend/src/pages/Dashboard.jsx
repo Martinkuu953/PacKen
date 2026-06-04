@@ -134,37 +134,33 @@ const Dashboard = () => {
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-gray-500 uppercase border-b border-gray-200">
                 <tr>
-                  <th className="py-2 px-2">Cliente Final</th>
-                  <th className="py-2 px-2">Seller</th>
-                  <th className="py-2 px-2">Transportista</th>
-                  <th className="py-2 px-2">Ubicación</th>
-                  <th className="py-2 px-2">Zona</th>
+                  <th className="py-2 px-2">ID Envío ML</th>
+                  <th className="py-2 px-2">Comprador</th>
+                  <th className="py-2 px-2">Dirección</th>
                   <th className="py-2 px-2">Estado</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={6} className="py-6 px-2 text-center text-gray-500">
+                    <td colSpan={4} className="py-6 px-2 text-center text-gray-500">
                       Cargando paquetes…
                     </td>
                   </tr>
                 )}
                 {!loading && paquetes.length === 0 && !error && (
                   <tr>
-                    <td colSpan={6} className="py-6 px-2 text-center text-gray-500">
+                    <td colSpan={4} className="py-6 px-2 text-center text-gray-500">
                       No hay paquetes registrados.
                     </td>
                   </tr>
                 )}
                 {!loading &&
                   paquetes.map((paquete, index) => (
-                    <tr key={`${paquete.cliente}-${index}`} className="border-b border-gray-100 last:border-0">
-                      <td className="py-2 px-2 font-medium">{paquete.cliente}</td>
-                      <td className="py-2 px-2">{paquete.seller}</td>
-                      <td className="py-2 px-2">{paquete.transportista}</td>
-                      <td className="py-2 px-2">{paquete.ubicacion}</td>
-                      <td className="py-2 px-2">{paquete.zona}</td>
+                    <tr key={`${paquete.idenvioml}-${index}`} className="border-b border-gray-100 last:border-0">
+                      <td className="py-2 px-2 font-mono text-xs">{paquete.idenvioml}</td>
+                      <td className="py-2 px-2 font-medium">{paquete.comprador}</td>
+                      <td className="py-2 px-2 text-gray-600">{paquete.direccion}</td>
                       <td className={`py-2 px-2 font-bold ${colorEstado(paquete.estado)}`}>
                         {paquete.estado}
                       </td>
