@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FaChartBar,
@@ -8,76 +8,34 @@ import {
   FaMobileAlt,
   FaClipboardList,
 } from 'react-icons/fa';
-import { getPaquetes } from '../services/paquetes';
-
-function normalizarEstado(estado) {
-  return String(estado ?? '').toLowerCase().trim();
-}
-
-function colorEstado(estado) {
-  const e = normalizarEstado(estado);
-  if (e.includes('atrasad') || e.includes('demorad')) return 'text-red-500';
-  if (e.includes('entregad')) return 'text-green-500';
-  if (e.includes('cancel')) return 'text-red-500';
-  if (e.includes('reprogram')) return 'text-orange-500';
-  return 'text-yellow-500';
-}
+import { usePaquetes } from '../hooks/usePaquetes';
+import { colorEstado, normalizarEstado, prioridadEstado } from '../utils/estados';
 
 function calcularResumen(paquetes) {
-  const total = paquetes.length;
-  const entregados = paquetes.filter((p) => normalizarEstado(p.estado).includes('entregad')).length;
-  const demorados = paquetes.filter((p) => {
-    const e = normalizarEstado(p.estado);
-    return e.includes('atrasad') || e.includes('demorad');
-  }).length;
-  const reprogramados = paquetes.filter((p) => normalizarEstado(p.estado).includes('reprogram')).length;
-  const cancelados = paquetes.filter((p) => normalizarEstado(p.estado).includes('cancel')).length;
+  const contar = (predicado) => paquetes.filter((p) => predicado(normalizarEstado(p.estado))).length;
 
-  return { total, entregados, demorados, reprogramados, cancelados };
+  return {
+    total: paquetes.length,
+    entregados: contar((e) => e.includes('entregad')),
+    demorados: contar((e) => e.includes('atrasad') || e.includes('demorad')),
+    enCamino: contar((e) => e.includes('camino')),
+    ingresados: contar((e) => e.includes('ingresad')),
+    reprogramados: contar((e) => e.includes('reprogram')),
+    cancelados: contar((e) => e.includes('cancel')),
+  };
 }
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [paquetes, setPaquetes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [aviso, setAviso] = useState(null);
-
-  useEffect(() => {
-    let activo = true;
-
-    getPaquetes()
-      .then((data) => {
-        if (!activo) return;
-        setPaquetes(data.paquetes ?? []);
-        setAviso(data.aviso ?? null);
-        setError(null);
-      })
-      .catch((err) => {
-        if (!activo) return;
-        const msg = err.message ?? '';
-        const backendApagado =
-          msg.includes('fetch failed') ||
-          msg.includes('Failed to fetch') ||
-          msg.includes('NetworkError');
-        setError(
-          backendApagado
-            ? 'No se pudo conectar con el backend. Ejecutá npm run dev desde la raíz del proyecto.'
-            : msg,
-        );
-        setAviso(null);
-        setPaquetes([]);
-      })
-      .finally(() => {
-        if (activo) setLoading(false);
-      });
-
-    return () => {
-      activo = false;
-    };
-  }, []);
+  const { paquetes, loading, error, aviso } = usePaquetes();
 
   const resumen = useMemo(() => calcularResumen(paquetes), [paquetes]);
+
+  // En la tabla del dashboard mostramos los paquetes ordenados por importancia.
+  const paquetesOrdenados = useMemo(
+    () => [...paquetes].sort((a, b) => prioridadEstado(a.estado) - prioridadEstado(b.estado)),
+    [paquetes],
+  );
 
   const handleNavigation = (path) => {
     navigate(path);
@@ -112,8 +70,20 @@ const Dashboard = () => {
             </div>
             <div>
               <p className="text-gray-500 font-semibold text-sm">Demorados</p>
-              <p className="text-xl font-bold text-yellow-500">
+              <p className="text-xl font-bold text-red-500">
                 {loading ? '…' : `${resumen.demorados}/${resumen.total}`}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-500 font-semibold text-sm">En camino</p>
+              <p className="text-xl font-bold text-yellow-600">
+                {loading ? '…' : `${resumen.enCamino}/${resumen.total}`}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-500 font-semibold text-sm">Ingresados</p>
+              <p className="text-xl font-bold text-blue-500">
+                {loading ? '…' : `${resumen.ingresados}/${resumen.total}`}
               </p>
             </div>
             <div>
@@ -156,8 +126,8 @@ const Dashboard = () => {
                   </tr>
                 )}
                 {!loading &&
-                  paquetes.map((paquete, index) => (
-                    <tr key={`${paquete.idenvioml}-${index}`} className="border-b border-gray-100 last:border-0">
+                  paquetesOrdenados.map((paquete, index) => (
+                    <tr key={paquete.id ?? `${paquete.idenvioml}-${index}`} className="border-b border-gray-100 last:border-0">
                       <td className="py-2 px-2 font-mono text-xs">{paquete.idenvioml}</td>
                       <td className="py-2 px-2 font-medium">{paquete.comprador}</td>
                       <td className="py-2 px-2 text-gray-600">{paquete.direccion}</td>

@@ -1,16 +1,17 @@
 import { dbConfigurado, query } from '../lib/db.js';
 
 const PAQUETES_DEV = [
-  { idenvioml: 'ML-001', comprador: 'Ana García', direccion: 'Av. Corrientes 1234, CABA', estado: 'Atrasado' },
-  { idenvioml: 'ML-002', comprador: 'Marcos López', direccion: 'Av. Santa Fe 567, CABA', estado: 'En camino' },
-  { idenvioml: 'ML-003', comprador: 'Federico Ruiz', direccion: 'Av. Rivadavia 890, CABA', estado: 'Entregado' },
-  { idenvioml: 'ML-004', comprador: 'Valentín Torres', direccion: 'Av. Cabildo 321, CABA', estado: 'Atrasado' },
+  { id: 1, idenvioml: 'ML-001', comprador: 'Ana García', direccion: 'Av. Corrientes 1234, CABA', estado: 'Atrasado' },
+  { id: 2, idenvioml: 'ML-002', comprador: 'Marcos López', direccion: 'Av. Santa Fe 567, CABA', estado: 'En camino' },
+  { id: 3, idenvioml: 'ML-003', comprador: 'Federico Ruiz', direccion: 'Av. Rivadavia 890, CABA', estado: 'Entregado' },
+  { id: 4, idenvioml: 'ML-004', comprador: 'Valentín Torres', direccion: 'Av. Cabildo 321, CABA', estado: 'Ingresado' },
 ];
 
 const TABLAS_PAQUETE = ['paquete', 'paquetes'];
 
 function mapPaquete(row) {
   return {
+    id: row.id ?? row.idenvioml ?? '',
     idenvioml: row.idenvioml ?? row.id ?? '',
     comprador: row.comprador ?? row.cliente_final ?? row.cliente ?? '',
     direccion: row.direccion ?? row.ubicacion ?? '',
