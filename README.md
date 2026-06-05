@@ -1,25 +1,81 @@
-# 📦 pacKen - Sistema de Gestión Logística (Envíos Flex)
+# PacKen — Monorepo
 
-**pacKen** es una plataforma de cross-docking enfocada en agilizar el ingreso y ruteo de paquetes para logística de envíos en el mismo día (Flex). 
+Sistema de gestión logística (envíos Flex). El proyecto está dividido en **frontend** (React) y **backend** (API Node/Express).
 
-## 🎯 Foco del MVP (Fase 1)
-El objetivo central de esta primera versión es **automatizar el escaneo y clasificación de paquetes en el depósito**. A través de la lectura de códigos QR/barras (como los de Mercado Libre), el sistema identifica el paquete, cruza los datos del Seller y mapea automáticamente el código postal a una zona de ruteo específica, ingresándolo a la base de datos en tiempo real y eliminando la carga manual.
+## Estructura
 
-## 🚀 Características Principales
-* **Escáner Inteligente:** Lector de etiquetas integrado en el navegador para uso inmediato con la cámara de cualquier celular, tablet o PC.
-* **Mapeo Automático de Zonas:** Lógica de asignación de paquetes (ej. CABA Sur, GBA Norte) basada en el origen y destino escaneado.
-* **Dashboard Operativo en Vivo:** Seguimiento del flujo de paquetes (Ingresado, En Camino, Entregado, Atrasado).
-* **Gestión Base:** Administración de Sellers, Transportistas y Listas de Precios.
+```
+PacKen/
+├── frontend/     # React + Vite + Tailwind
+├── backend/      # API Express (Mercado Libre, PostgreSQL)
+├── package.json  # npm workspaces
+└── README.md
+```
 
-## 🛠️ Stack Tecnológico
-Elegimos una arquitectura moderna y serverless para garantizar velocidad en el escaneo y sincronización en tiempo real:
+## Requisitos
 
-* **Frontend:** React + Vite + Tailwind CSS (Interfaces rápidas, modulares y pensadas para la operativa en depósito).
-* **Base de Datos & Backend (BaaS):** Supabase (PostgreSQL). Utilizado para el almacenamiento relacional de los paquetes, reglas de negocio y sistema de autenticación, permitiendo lecturas/escrituras ultrarrápidas desde el cliente.
-* 
-👥 Equipo de Desarrollo
-Proyecto desarrollado como trabajo final (ORT Promoción 2026).
+- Node.js 20+
 
-Integrantes: Martín, Tobías y Tobias.
+## Configuración
 
-Diseñado con 💛 para la logística del futuro.
+1. Instalar dependencias desde la raíz:
+
+```bash
+npm install
+```
+
+2. Copiar variables de entorno del backend:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Completar en `backend/.env`:
+
+| Variable | Descripción |
+|----------|-------------|
+| `ML_CLIENT_ID` | App de Mercado Libre |
+| `ML_CLIENT_SECRET` | Secreto de la app (solo servidor) |
+| `DATABASE_URL` | Connection string PostgreSQL (Supabase → Settings → Database) |
+| `FRONTEND_URL` | Origen del front para CORS (ej. `http://localhost:5173`) |
+
+3. (Opcional) Frontend en producción con API en otro dominio:
+
+```bash
+# frontend/.env
+VITE_API_URL=https://tu-api.com
+```
+
+En desarrollo no hace falta: Vite hace proxy de `/api` → `http://localhost:3001`.
+
+## Desarrollo
+
+Levantar front y back a la vez:
+
+```bash
+npm run dev
+```
+
+Por separado:
+
+```bash
+npm run dev:frontend   # http://localhost:5173
+npm run dev:backend    # http://localhost:3001
+```
+
+- Health check: `GET http://localhost:3001/health`
+- Listar paquetes: `GET /api/paquetes`
+- Diagnóstico base de datos: `GET http://localhost:3001/health/db`
+- Probar conexión en terminal: `node backend/scripts/test-db.mjs`
+- Envío ML: `GET /api/envios/:shipmentId?sellerId=...`
+- Registrar vendedor: `POST /api/vendedores` `{ "sellerId", "refreshToken" }`
+
+## Stack
+
+- **Frontend:** React, Vite, Tailwind CSS
+- **Backend:** Express, Supabase (PostgreSQL)
+- **Integraciones:** Mercado Libre API
+
+## Equipo
+
+ORT Promoción 2026 — Martín, Tobías y Tobias.
