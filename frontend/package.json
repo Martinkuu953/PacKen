@@ -31,7 +31,8 @@
     "tailwindcss": "^4.2.4",
     "vite": "^8.0.10"
   },
-  "optionalDependencies": {
-    "@rolldown/binding-linux-x64-gnu": "*"
+"optionalDependencies": {
+    "@rolldown/binding-linux-x64-gnu": "*",
+    "lightningcss-linux-x64-gnu": "*"
   }
 }
