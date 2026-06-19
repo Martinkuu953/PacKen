@@ -1,85 +1,15 @@
-import { dbConfigurado, query } from '../lib/db.js';
+import { 
+  getTokenParaVendedor, 
+  renovarYGuardarTokens, 
+  ejecutarRefreshEnML, 
+  actualizarTokensEnBD, 
+  obtenerRefreshToken 
+} from './tokens.js';
 
 const ML_API = 'https://api.mercadolibre.com';
-const _tokenCache = {};
 
-async function refreshTokenDeVendedor(refreshToken) {
-  const params = new URLSearchParams({
-    grant_type: 'refresh_token',
-    client_id: process.env.ML_CLIENT_ID,
-    client_secret: process.env.ML_CLIENT_SECRET,
-    refresh_token: refreshToken,
-  });
-
-  const res = await fetch(`${ML_API}/oauth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params,
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(`ML OAuth error: ${err.message || res.status}`);
-  }
-
-  const data = await res.json();
-  return {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token || refreshToken,
-    expiry: Date.now() + (data.expires_in - 60) * 1000,
-  };
-}
-
-async function getRefreshTokenVendedor(sellerId) {
-  const { rows } = await query(
-    'SELECT refresh_token FROM vendedor WHERE id_seller = $1',
-    [String(sellerId)],
-  );
-  return rows[0]?.refresh_token ?? null;
-}
-
-async function actualizarRefreshToken(sellerId, refreshToken) {
-  await query(
-    `INSERT INTO vendedor (id_seller, refresh_token)
-     VALUES ($1, $2)
-     ON CONFLICT (id_seller) DO UPDATE SET refresh_token = EXCLUDED.refresh_token`,
-    [String(sellerId), refreshToken],
-  );
-}
-
-async function getTokenParaVendedor(sellerId) {
-  const cached = _tokenCache[sellerId];
-  if (cached && Date.now() < cached.expiry) {
-    return cached.accessToken;
-  }
-
-  if (!dbConfigurado()) {
-    throw new Error('DATABASE_URL no configurado en el servidor');
-  }
-
-  const refreshToken = await getRefreshTokenVendedor(sellerId);
-
-  if (!refreshToken) {
-    throw new Error(
-      `Vendedor ${sellerId} no tiene token registrado en PacKen. Pedile que autorice la app.`,
-    );
-  }
-
-  const tokens = await refreshTokenDeVendedor(refreshToken);
-
-  _tokenCache[sellerId] = {
-    accessToken: tokens.accessToken,
-    expiry: tokens.expiry,
-  };
-
-  if (tokens.refreshToken !== refreshToken) {
-    await actualizarRefreshToken(sellerId, tokens.refreshToken);
-  }
-
-  return tokens.accessToken;
-}
-
-async function mlFetch(path, sellerId) {
+// Wrapper para consultas HTTP con reintento automático por token revocado
+async function mlFetch(path, sellerId, permitirReintento = true) {
   const token = await getTokenParaVendedor(sellerId);
 
   const res = await fetch(`${ML_API}${path}`, {
@@ -89,6 +19,34 @@ async function mlFetch(path, sellerId) {
     },
   });
 
+  // Si Mercado Libre rechaza el token (cayó antes de lo previsto), forzamos un refresh reactivo
+  if (res.status === 401 && permitirReintento) {
+    const currentRefreshToken = await obtenerRefreshToken(sellerId);
+
+    if (currentRefreshToken) {
+      try {
+        const nuevoToken = await renovarYGuardarTokens(sellerId, currentRefreshToken);
+        
+        // Reintentamos la petición original
+        const retryRes = await fetch(`${ML_API}${path}`, {
+          headers: {
+            Authorization: `Bearer ${nuevoToken}`,
+            'x-format-new': 'true',
+          },
+        });
+
+        if (!retryRes.ok) {
+          const err = await retryRes.json().catch(() => ({}));
+          throw new Error(err.message || `Error ${retryRes.status} en reintento de ${path}`);
+        }
+
+        return retryRes.json();
+      } catch (errorRefresh) {
+        throw new Error(`La sesión caducó por completo para el vendedor ${sellerId}: ${errorRefresh.message}`);
+      }
+    }
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || `Error ${res.status} en ${path}`);
@@ -97,11 +55,10 @@ async function mlFetch(path, sellerId) {
   return res.json();
 }
 
+// Lógica de negocio logística pura
 export async function obtenerDatosEnvio(shipmentId, sellerId) {
   if (!shipmentId) throw new Error('Shipment ID requerido');
-  if (!sellerId) {
-    throw new Error('Seller ID requerido. Escaneá una etiqueta válida de ML.');
-  }
+  if (!sellerId) throw new Error('Seller ID requerido para procesar el envío');
 
   const shipment = await mlFetch(`/shipments/${shipmentId}`, sellerId);
 
@@ -123,11 +80,11 @@ export async function obtenerDatosEnvio(shipmentId, sellerId) {
   };
 }
 
+// Punto de entrada para la vinculación del vendedor
 export async function registrarVendedor(sellerId, refreshToken) {
-  if (!dbConfigurado()) {
-    throw new Error('DATABASE_URL no configurado en el servidor');
-  }
+  // Le delegamos todo al servicio de tokens
+  const tokensIniciales = await ejecutarRefreshEnML(refreshToken);
+  await actualizarTokensEnBD(sellerId, tokensIniciales);
 
-  await actualizarRefreshToken(sellerId, refreshToken);
-  return { ok: true };
+  return { ok: true, message: 'Vendedor vinculado y tokens sincronizados con éxito' };
 }
