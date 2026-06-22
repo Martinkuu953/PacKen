@@ -1,6 +1,5 @@
 import { supabase, supabaseConfigurado } from './supabase.js';
 
-// Pasa una fila de la tabla "paquete" al formato que usa la UI.
 function mapPaquete(row) {
   return {
     id: row.id ?? row.idenvioml ?? '',
@@ -8,11 +7,12 @@ function mapPaquete(row) {
     comprador: row.comprador ?? '',
     direccion: row.direccion ?? '',
     estado: row.estado ?? '',
+    codigopostal: row.codigopostal ?? '',
+    fechaingreso: row.fechaingreso ?? null,
+    fechaentrega: row.fechaentrega ?? null,
   };
 }
 
-// Lee los paquetes directamente desde Supabase (sirve igual en local y en Vercel,
-// sin depender de que el backend Express esté corriendo).
 export async function getPaquetes() {
   if (!supabaseConfigurado) {
     return {
@@ -22,7 +22,11 @@ export async function getPaquetes() {
     };
   }
 
-  const { data, error } = await supabase.from('paquete').select('*');
+  const { data, error } = await supabase
+    .from('paquete')
+    .select('*')
+    .order('fechaingreso', { ascending: false });
+
   if (error) throw new Error(error.message);
 
   return { paquetes: (data ?? []).map(mapPaquete), origen: 'supabase' };

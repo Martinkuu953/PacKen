@@ -6,10 +6,10 @@ const READER_ID = 'lector-qr-packen';
 
 const EscanerQR = ({ tipo, onCerrar, onPaqueteGuardado }) => {
   const lectorRef = useRef(null);
-  const [estado, setEstado] = useState('iniciando'); // iniciando | escaneando | procesando | error | ok
+  const [estado, setEstado] = useState('iniciando');
   const [mensaje, setMensaje] = useState('');
+  const [paqueteData, setPaqueteData] = useState(null);
 
-  // Para parar el scanner de forma segura, sin importar en qué estado quedó
   const detenerCamaraSeguro = async () => {
     const lector = lectorRef.current;
     if (!lector) return;
@@ -25,7 +25,7 @@ const EscanerQR = ({ tipo, onCerrar, onPaqueteGuardado }) => {
       }
       lector.clear();
     } catch {
-      // Si ya estaba detenido/destruido, no hacemos nada: no es un error real
+      // Ya detenido/destruido
     }
   };
 
@@ -41,13 +41,10 @@ const EscanerQR = ({ tipo, onCerrar, onPaqueteGuardado }) => {
         (textoDecodificado) => {
           if (!cancelado) manejarLectura(textoDecodificado);
         },
-        () => {
-          /* frame sin QR detectado, se ignora */
-        }
+        () => {}
       )
       .then(() => {
         if (cancelado) {
-          // El componente ya se desmontó mientras arrancaba la cámara: la apagamos ya mismo
           detenerCamaraSeguro();
         } else {
           setEstado('escaneando');
@@ -72,12 +69,15 @@ const EscanerQR = ({ tipo, onCerrar, onPaqueteGuardado }) => {
     await detenerCamaraSeguro();
 
     let shipmentId = null;
+    let sellerId = null;
+
     try {
       const obj = JSON.parse(textoQR);
       if (obj.id) shipmentId = String(obj.id);
+      if (obj.sender_id) sellerId = String(obj.sender_id);
     } catch {
       setEstado('error');
-      setMensaje('El QR escaneado no tiene el formato esperado.');
+      setMensaje('El QR escaneado no tiene el formato esperado de Mercado Libre.');
       return;
     }
 
@@ -87,12 +87,19 @@ const EscanerQR = ({ tipo, onCerrar, onPaqueteGuardado }) => {
       return;
     }
 
+    if (!sellerId) {
+      setEstado('error');
+      setMensaje('No se encontró el Seller ID (sender_id) en el QR.');
+      return;
+    }
+
     try {
       const resultado = await apiFetch('/api/paquetes/escanear', {
         method: 'POST',
-        body: JSON.stringify({ shipmentId, tipo }),
+        body: JSON.stringify({ shipmentId, sellerId, tipo }),
       });
 
+      setPaqueteData(resultado.paquete);
       setEstado('ok');
       setMensaje(`Paquete ${shipmentId} guardado correctamente.`);
       onPaqueteGuardado?.(resultado.paquete);
@@ -105,6 +112,7 @@ const EscanerQR = ({ tipo, onCerrar, onPaqueteGuardado }) => {
   const reintentar = () => {
     setEstado('iniciando');
     setMensaje('');
+    setPaqueteData(null);
     window.location.reload();
   };
 
@@ -127,7 +135,7 @@ const EscanerQR = ({ tipo, onCerrar, onPaqueteGuardado }) => {
         <div id={READER_ID} className="w-full rounded-xl overflow-hidden bg-gray-100" />
 
         {estado === 'procesando' && (
-          <p className="mt-4 text-sm text-gray-600 text-center">Procesando paquete…</p>
+          <p className="mt-4 text-sm text-gray-600 text-center">Consultando Mercado Libre...</p>
         )}
 
         {estado === 'error' && (
@@ -144,10 +152,21 @@ const EscanerQR = ({ tipo, onCerrar, onPaqueteGuardado }) => {
 
         {estado === 'ok' && (
           <div className="mt-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
-            {mensaje}
+            <p className="font-semibold mb-2">{mensaje}</p>
+            {paqueteData && (
+              <div className="space-y-1 text-xs text-green-800 bg-green-100 rounded-lg p-3 mt-2">
+                <p><span className="font-semibold">ID Envío:</span> {paqueteData.idenvioml}</p>
+                <p><span className="font-semibold">Comprador:</span> {paqueteData.comprador || '—'}</p>
+                <p><span className="font-semibold">Dirección:</span> {paqueteData.direccion || '—'}</p>
+                <p><span className="font-semibold">Estado:</span> {paqueteData.estado}</p>
+                {paqueteData.codigopostal && (
+                  <p><span className="font-semibold">CP:</span> {paqueteData.codigopostal}</p>
+                )}
+              </div>
+            )}
             <button
               onClick={onCerrar}
-              className="block mt-2 text-green-800 underline font-medium"
+              className="block mt-3 text-green-800 underline font-medium"
             >
               Cerrar
             </button>

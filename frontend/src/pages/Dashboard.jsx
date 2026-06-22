@@ -92,20 +92,21 @@ const Dashboard = () => {
                 <th className="py-2 px-2">ID Envío ML</th>
                 <th className="py-2 px-2 hidden lg:table-cell">Comprador</th>
                 <th className="py-2 px-2">Dirección</th>
+                <th className="py-2 px-2 hidden sm:table-cell">CP</th>
                 <th className="py-2 px-2">Estado</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={4} className="py-6 px-2 text-center text-gray-500">
-                    Cargando paquetes…
+                  <td colSpan={5} className="py-6 px-2 text-center text-gray-500">
+                    Cargando paquetes...
                   </td>
                 </tr>
               )}
               {!loading && paquetes.length === 0 && !error && (
                 <tr>
-                  <td colSpan={4} className="py-6 px-2 text-center text-gray-500">
+                  <td colSpan={5} className="py-6 px-2 text-center text-gray-500">
                     No hay paquetes registrados.
                   </td>
                 </tr>
@@ -114,8 +115,9 @@ const Dashboard = () => {
                 paquetesOrdenados.map((paquete, index) => (
                   <tr key={paquete.id ?? `${paquete.idenvioml}-${index}`} className="border-b border-gray-100 last:border-0">
                     <td className="py-2 px-2 font-mono text-xs">{paquete.idenvioml}</td>
-                    <td className="py-2 px-2 font-medium hidden lg:table-cell">{paquete.comprador}</td>
+                    <td className="py-2 px-2 font-medium hidden lg:table-cell">{paquete.comprador || '—'}</td>
                     <td className="py-2 px-2 text-gray-600">{paquete.direccion}</td>
+                    <td className="py-2 px-2 text-gray-500 hidden sm:table-cell">{paquete.codigopostal || '—'}</td>
                     <td className={`py-2 px-2 font-bold ${colorEstado(paquete.estado)}`}>
                       {paquete.estado}
                     </td>

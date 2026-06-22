@@ -10,10 +10,11 @@ const ESTADO_POR_VISTA = {
   reparto: 'En camino',
 };
 
-// Sin Comprador: solo lo que entra cómodo en pantalla sin scroll horizontal
 const COLUMNAS = [
   { campo: 'idenvioml', label: 'ID Envío ML' },
+  { campo: 'comprador', label: 'Comprador' },
   { campo: 'direccion', label: 'Dirección' },
+  { campo: 'codigopostal', label: 'CP' },
   { campo: 'estado', label: 'Estado', importante: true },
 ];
 
@@ -120,7 +121,7 @@ const TablaPaquetes = ({ paquetes, loading, error, aviso, vista, onVolver }) => 
             <h2 className="text-lg sm:text-2xl font-bold text-gray-800">{titulo}</h2>
           </div>
           <span className="text-xs sm:text-sm text-gray-500">
-            {loading ? 'Cargando…' : `${paquetesFiltrados.length} envíos`}
+            {loading ? 'Cargando...' : `${paquetesFiltrados.length} envíos`}
           </span>
         </div>
 
@@ -135,52 +136,55 @@ const TablaPaquetes = ({ paquetes, loading, error, aviso, vista, onVolver }) => 
           </p>
         )}
 
-        {/* Sin overflow-x-auto: sin Comprador, las 3 columnas entran en cualquier pantalla */}
-        <table className="w-full text-xs sm:text-sm text-left table-fixed">
-          <thead className="text-[10px] sm:text-xs text-gray-500 uppercase border-b border-gray-200">
-            <tr>
-              {COLUMNAS.map((col) => (
-                <th
-                  key={col.campo}
-                  onClick={() => cambiarOrden(col.campo)}
-                  className="py-2 px-1 sm:px-2 cursor-pointer select-none hover:text-gray-800 truncate"
-                >
-                  {col.label}
-                  {flecha(col.campo)}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs sm:text-sm text-left">
+            <thead className="text-[10px] sm:text-xs text-gray-500 uppercase border-b border-gray-200">
               <tr>
-                <td colSpan={COLUMNAS.length} className="py-6 px-2 text-center text-gray-500">
-                  Cargando paquetes…
-                </td>
+                {COLUMNAS.map((col) => (
+                  <th
+                    key={col.campo}
+                    onClick={() => cambiarOrden(col.campo)}
+                    className="py-2 px-1 sm:px-2 cursor-pointer select-none hover:text-gray-800 whitespace-nowrap"
+                  >
+                    {col.label}
+                    {flecha(col.campo)}
+                  </th>
+                ))}
               </tr>
-            )}
-            {!loading && paquetesOrdenados.length === 0 && !error && (
-              <tr>
-                <td colSpan={COLUMNAS.length} className="py-6 px-2 text-center text-gray-500">
-                  No hay paquetes en este listado.
-                </td>
-              </tr>
-            )}
-            {!loading &&
-              paquetesOrdenados.map((paquete, index) => (
-                <tr
-                  key={paquete.id ?? `${paquete.idenvioml}-${index}`}
-                  className="border-b border-gray-100 last:border-0 hover:bg-gray-50"
-                >
-                  <td className="py-2 px-1 sm:px-2 font-mono truncate">{paquete.idenvioml}</td>
-                  <td className="py-2 px-1 sm:px-2 text-gray-600 truncate">{paquete.direccion}</td>
-                  <td className={`py-2 px-1 sm:px-2 font-bold truncate ${colorEstado(paquete.estado)}`}>
-                    {paquete.estado}
+            </thead>
+            <tbody>
+              {loading && (
+                <tr>
+                  <td colSpan={COLUMNAS.length} className="py-6 px-2 text-center text-gray-500">
+                    Cargando paquetes...
                   </td>
                 </tr>
-              ))}
-          </tbody>
-        </table>
+              )}
+              {!loading && paquetesOrdenados.length === 0 && !error && (
+                <tr>
+                  <td colSpan={COLUMNAS.length} className="py-6 px-2 text-center text-gray-500">
+                    No hay paquetes en este listado.
+                  </td>
+                </tr>
+              )}
+              {!loading &&
+                paquetesOrdenados.map((paquete, index) => (
+                  <tr
+                    key={paquete.id ?? `${paquete.idenvioml}-${index}`}
+                    className="border-b border-gray-100 last:border-0 hover:bg-gray-50"
+                  >
+                    <td className="py-2 px-1 sm:px-2 font-mono truncate">{paquete.idenvioml}</td>
+                    <td className="py-2 px-1 sm:px-2 text-gray-700">{paquete.comprador || '—'}</td>
+                    <td className="py-2 px-1 sm:px-2 text-gray-600 truncate">{paquete.direccion}</td>
+                    <td className="py-2 px-1 sm:px-2 text-gray-600">{paquete.codigopostal || '—'}</td>
+                    <td className={`py-2 px-1 sm:px-2 font-bold truncate ${colorEstado(paquete.estado)}`}>
+                      {paquete.estado}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -191,10 +195,17 @@ const Paquetes = () => {
   const [vista, setVista] = useState(VISTAS.SELECCION);
   const [tipoEscaneo, setTipoEscaneo] = useState(null);
 
-  const cerrarEscaner = () => setTipoEscaneo(null);
+  const cerrarEscaner = () => {
+    setTipoEscaneo(null);
+  };
 
-  const onPaqueteGuardado = () => {
-    recargar?.();
+  const onPaqueteGuardado = (paquete) => {
+    recargar();
+    if (paquete?.estado === 'Ingresado') {
+      setVista(VISTAS.COLECTA);
+    } else if (paquete?.estado === 'En camino') {
+      setVista(VISTAS.REPARTO);
+    }
   };
 
   if (tipoEscaneo) {
