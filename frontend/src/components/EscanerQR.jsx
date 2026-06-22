@@ -99,7 +99,16 @@ const EscanerQR = ({ tipo, onCerrar, onPaqueteGuardado }) => {
         body: JSON.stringify({ shipmentId, sellerId, tipo }),
       });
 
-      setPaqueteData(resultado.paquete);
+      const envio = resultado.envio ?? {};
+      setPaqueteData({
+        ...resultado.paquete,
+        ciudad: envio.ciudad,
+        provincia: envio.provincia,
+        telefono: envio.telefono,
+        trackingNumber: envio.trackingNumber,
+        estadoMl: envio.estadoMl,
+        subestadoMl: envio.subestadoMl,
+      });
       setEstado('ok');
       setMensaje(`Paquete ${shipmentId} guardado correctamente.`);
       onPaqueteGuardado?.(resultado.paquete);
@@ -158,9 +167,27 @@ const EscanerQR = ({ tipo, onCerrar, onPaqueteGuardado }) => {
                 <p><span className="font-semibold">ID Envío:</span> {paqueteData.idenvioml}</p>
                 <p><span className="font-semibold">Comprador:</span> {paqueteData.comprador || '—'}</p>
                 <p><span className="font-semibold">Dirección:</span> {paqueteData.direccion || '—'}</p>
-                <p><span className="font-semibold">Estado:</span> {paqueteData.estado}</p>
+                {(paqueteData.ciudad || paqueteData.provincia) && (
+                  <p>
+                    <span className="font-semibold">Localidad:</span>{' '}
+                    {[paqueteData.ciudad, paqueteData.provincia].filter(Boolean).join(', ')}
+                  </p>
+                )}
                 {paqueteData.codigopostal && (
                   <p><span className="font-semibold">CP:</span> {paqueteData.codigopostal}</p>
+                )}
+                {paqueteData.telefono && (
+                  <p><span className="font-semibold">Teléfono:</span> {paqueteData.telefono}</p>
+                )}
+                {paqueteData.trackingNumber && (
+                  <p><span className="font-semibold">Tracking:</span> {paqueteData.trackingNumber}</p>
+                )}
+                <p><span className="font-semibold">Estado:</span> {paqueteData.estado}</p>
+                {paqueteData.estadoMl && (
+                  <p>
+                    <span className="font-semibold">Estado ML:</span> {paqueteData.estadoMl}
+                    {paqueteData.subestadoMl ? ` (${paqueteData.subestadoMl})` : ''}
+                  </p>
                 )}
               </div>
             )}

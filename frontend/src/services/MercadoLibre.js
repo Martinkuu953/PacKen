@@ -43,7 +43,8 @@ export async function obtenerDatosEnvio(shipmentId, sellerId) {
   if (!sellerId) throw new Error('Seller ID requerido. Escaneá una etiqueta válida de ML.');
 
   const params = new URLSearchParams({ sellerId: String(sellerId) });
-  return apiFetch(`/api/envios/${encodeURIComponent(shipmentId)}?${params}`);
+  const { envio } = await apiFetch(`/api/envios/${encodeURIComponent(shipmentId)}?${params}`);
+  return envio;
 }
 
 export async function registrarVendedor(sellerId, refreshToken) {

@@ -1,93 +1,15 @@
-import { createClient } from '@supabase/supabase-js';
+import {
+  getSupabase,
+  resolverSellerInterno,
+  obtenerShipment,
+  ESTADO_POR_TIPO,
+} from '../_lib/ml.js';
 
-const ML_API = 'https://api.mercadolibre.com';
+// Estados reales de ML que tienen prioridad sobre la acción de escaneo del courier.
+// Ej: si ML ya lo marca como entregado/cancelado, no lo pisamos con "Ingresado".
+const ESTADOS_ML_PRIORITARIOS = ['Entregado', 'Cancelado', 'Reprogramado'];
 
-const ESTADO_POR_TIPO = {
-  colecta: 'Ingresado',
-  reparto: 'En camino',
-};
-
-function getSupabase() {
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) throw new Error('SUPABASE_URL y SUPABASE_KEY no configurados en Vercel');
-  return createClient(url, key);
-}
-
-async function refreshMLToken(refreshToken) {
-  const params = new URLSearchParams({
-    grant_type: 'refresh_token',
-    client_id: process.env.ML_CLIENT_ID,
-    client_secret: process.env.ML_CLIENT_SECRET,
-    refresh_token: refreshToken,
-  });
-
-  const res = await fetch(`${ML_API}/oauth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params,
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(`Error renovando token ML: ${err.message || res.status}`);
-  }
-
-  return res.json();
-}
-
-async function getValidToken(supabase, idSellerInterno) {
-  const { data: tokenRow, error } = await supabase
-    .from('meli_token')
-    .select('id, access_token, refresh_token, expires_at')
-    .eq('idseller', idSellerInterno)
-    .limit(1)
-    .single();
-
-  if (error || !tokenRow) {
-    throw new Error(`No hay tokens en meli_token para seller id=${idSellerInterno}`);
-  }
-
-  const vencido = !tokenRow.expires_at || new Date(tokenRow.expires_at).getTime() <= Date.now();
-
-  if (!vencido) return { accessToken: tokenRow.access_token, tokenId: tokenRow.id, refreshToken: tokenRow.refresh_token };
-
-  const data = await refreshMLToken(tokenRow.refresh_token);
-  const expiresAt = new Date(Date.now() + (data.expires_in - 60) * 1000).toISOString();
-
-  await supabase
-    .from('meli_token')
-    .update({
-      access_token: data.access_token,
-      refresh_token: data.refresh_token || tokenRow.refresh_token,
-      expires_at: expiresAt,
-      fechaactualizacion: new Date().toISOString(),
-    })
-    .eq('id', tokenRow.id);
-
-  return { accessToken: data.access_token, tokenId: tokenRow.id, refreshToken: data.refresh_token || tokenRow.refresh_token };
-}
-
-async function callMLAPI(path, accessToken) {
-  const res = await fetch(`${ML_API}${path}`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'x-format-new': 'true',
-    },
-  });
-
-  if (res.status === 401) {
-    throw new Error('401_UNAUTHORIZED');
-  }
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || `Error ${res.status} en ${path}`);
-  }
-
-  return res.json();
-}
-
+// POST /api/paquetes/escanear  { shipmentId, sellerId, tipo }
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -99,71 +21,39 @@ export default async function handler(req, res) {
     if (!shipmentId || !sellerId || !tipo) {
       return res.status(400).json({ error: 'shipmentId, sellerId y tipo son requeridos' });
     }
-
     if (!ESTADO_POR_TIPO[tipo]) {
       return res.status(400).json({ error: 'Tipo inválido: debe ser "colecta" o "reparto"' });
     }
 
     const supabase = getSupabase();
+    const idSellerInterno = await resolverSellerInterno(supabase, sellerId);
 
-    const { data: seller, error: sellerErr } = await supabase
-      .from('seller')
-      .select('id')
-      .eq('idmercadolibre', String(sellerId))
-      .limit(1)
-      .single();
+    console.log(`[PacKen] Escaneo ${tipo} → shipment ${shipmentId}, seller ${sellerId} (interno ${idSellerInterno})`);
 
-    if (sellerErr || !seller) {
-      return res.status(404).json({
-        error: `No existe seller con idmercadolibre = ${sellerId}. Cargalo en la tabla "seller" primero.`,
-      });
-    }
+    // Trae el envío de ML (incluye estado real: status + substatus)
+    const envio = await obtenerShipment(supabase, idSellerInterno, shipmentId);
 
-    const idSellerInterno = seller.id;
+    // El estado real de ML manda si es terminal; si no, usamos el de la acción de escaneo.
+    const estado = ESTADOS_ML_PRIORITARIOS.includes(envio.estado)
+      ? envio.estado
+      : ESTADO_POR_TIPO[tipo];
 
-    let { accessToken, tokenId, refreshToken } = await getValidToken(supabase, idSellerInterno);
-
-    let shipment;
-    try {
-      shipment = await callMLAPI(`/shipments/${shipmentId}`, accessToken);
-    } catch (err) {
-      if (err.message === '401_UNAUTHORIZED') {
-        const data = await refreshMLToken(refreshToken);
-        accessToken = data.access_token;
-        const expiresAt = new Date(Date.now() + (data.expires_in - 60) * 1000).toISOString();
-
-        await supabase
-          .from('meli_token')
-          .update({
-            access_token: data.access_token,
-            refresh_token: data.refresh_token || refreshToken,
-            expires_at: expiresAt,
-            fechaactualizacion: new Date().toISOString(),
-          })
-          .eq('id', tokenId);
-
-        shipment = await callMLAPI(`/shipments/${shipmentId}`, accessToken);
-      } else {
-        throw err;
-      }
-    }
-
-    const destAddr = shipment.receiver_address || {};
-    const estado = ESTADO_POR_TIPO[tipo];
-    const idenvioml = String(shipment.id);
+    console.log(
+      `[PacKen] Estado ML="${envio.estadoMl}" (sub="${envio.subestadoMl}") → estado interno="${estado}"`
+    );
 
     const paqueteData = {
-      comprador: destAddr.receiver_name || null,
-      direccion: destAddr.address_line || null,
+      comprador: envio.comprador,
+      direccion: envio.direccion,
       estado,
-      codigopostal: destAddr.zip_code || null,
-      fechaentrega: shipment.status_history?.date_delivered || null,
+      codigopostal: envio.codigoPostal,
+      fechaentrega: envio.fechaEntrega,
     };
 
     const { data: existente } = await supabase
       .from('paquete')
       .select('id')
-      .eq('idenvioml', idenvioml)
+      .eq('idenvioml', envio.idEnvioMl)
       .limit(1)
       .maybeSingle();
 
@@ -175,26 +65,27 @@ export default async function handler(req, res) {
         .eq('id', existente.id)
         .select()
         .single();
-
       if (upErr) throw new Error(upErr.message);
       paquete = data;
+      console.log(`[PacKen] Paquete actualizado (id=${paquete.id})`);
     } else {
       const { data, error: insErr } = await supabase
         .from('paquete')
         .insert({
-          idenvioml,
+          idenvioml: envio.idEnvioMl,
           idseller: idSellerInterno,
           idzona: 1,
           ...paqueteData,
         })
         .select()
         .single();
-
       if (insErr) throw new Error(insErr.message);
       paquete = data;
+      console.log(`[PacKen] Paquete insertado (id=${paquete.id})`);
     }
 
-    return res.status(200).json({ ok: true, paquete });
+    // Devolvemos el paquete guardado + todos los datos de ML (estado real, tracking, etc.)
+    return res.status(200).json({ ok: true, paquete, envio });
   } catch (err) {
     console.error('[PacKen] Error en escanear:', err.message);
     return res.status(400).json({ error: err.message });
