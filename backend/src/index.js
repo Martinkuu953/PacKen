@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import authRouter from './routes/auth.js';
 import enviosRouter from './routes/envios.js';
 import paquetesRouter from './routes/paquetes.js';
 import { probarConexionDb } from './lib/db.js';
@@ -26,6 +27,7 @@ app.get('/health/db', async (_req, res) => {
   res.status(resultado.ok ? 200 : 503).json(resultado);
 });
 
+app.use('/api/auth', authRouter);
 app.use('/api/envios', enviosRouter);
 app.use('/api/paquetes', paquetesRouter);
 
