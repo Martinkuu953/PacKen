@@ -1,4 +1,5 @@
 import { supabase, supabaseConfigurado } from './supabase.js';
+import { apiFetch } from './api.js';
 
 function mapPaquete(row) {
   return {
@@ -30,4 +31,15 @@ export async function getPaquetes() {
   if (error) throw new Error(error.message);
 
   return { paquetes: (data ?? []).map(mapPaquete), origen: 'supabase' };
+}
+
+export async function marcarEntregado(id) {
+  return apiFetch(`/api/paquetes/${id}/estado`, {
+    method: 'PATCH',
+    body: JSON.stringify({ estado: 'Entregado' }),
+  });
+}
+
+export async function simularEntregas() {
+  return apiFetch('/api/paquetes/simular-entregas', { method: 'POST' });
 }

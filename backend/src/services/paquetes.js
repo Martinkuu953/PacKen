@@ -60,3 +60,42 @@ export async function listarPaquetes() {
     };
   }
 }
+
+const ESTADOS_VALIDOS = ['Ingresado', 'En camino', 'Entregado', 'Cancelado', 'Reprogramado', 'Atrasado', 'Demorado'];
+
+export async function cambiarEstado(id, nuevoEstado) {
+  if (!dbConfigurado()) throw new Error('DATABASE_URL no configurado');
+  if (!ESTADOS_VALIDOS.includes(nuevoEstado)) {
+    throw new Error(`Estado inválido: "${nuevoEstado}". Válidos: ${ESTADOS_VALIDOS.join(', ')}`);
+  }
+
+  const fechaEntrega = nuevoEstado === 'Entregado' ? new Date().toISOString() : null;
+
+  const { rows } = await query(
+    `UPDATE paquete
+     SET estado = $1, fechaentrega = COALESCE($2, fechaentrega)
+     WHERE id = $3
+     RETURNING *`,
+    [nuevoEstado, fechaEntrega, id]
+  );
+
+  if (!rows[0]) throw new Error(`Paquete con id=${id} no encontrado`);
+  return mapPaquete(rows[0]);
+}
+
+export async function simularEntregas() {
+  if (!dbConfigurado()) throw new Error('DATABASE_URL no configurado');
+
+  const { rows } = await query(
+    `UPDATE paquete
+     SET estado = 'Entregado', fechaentrega = now()
+     WHERE estado = 'En camino'
+     RETURNING *`
+  );
+
+  return {
+    ok: true,
+    actualizados: rows.length,
+    paquetes: rows.map(mapPaquete),
+  };
+}

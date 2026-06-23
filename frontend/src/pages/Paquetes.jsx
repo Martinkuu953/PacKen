@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { usePaquetes } from '../hooks/usePaquetes';
 import { colorEstado, prioridadEstado } from '../utils/estados';
+import { marcarEntregado, simularEntregas } from '../services/paquetes';
 import EscanerQR from '../components/EscanerQR';
 
 const VISTAS = { SELECCION: null, COLECTA: 'colecta', REPARTO: 'reparto' };
@@ -77,11 +78,18 @@ const PantallaSeleccion = ({ paquetes, onEscanear, onVerListado }) => {
   );
 };
 
-const TablaPaquetes = ({ paquetes, loading, error, aviso, vista, onVolver }) => {
+const TablaPaquetes = ({ paquetes, loading, error, aviso, vista, onVolver, onRecargar }) => {
   const [orden, setOrden] = useState({ campo: 'estado', dir: 'asc' });
+  const [entregando, setEntregando] = useState(null);
+  const [simulando, setSimulando] = useState(false);
 
+  const esReparto = vista === VISTAS.REPARTO;
   const estadoFiltro = ESTADO_POR_VISTA[vista];
   const titulo = vista === VISTAS.COLECTA ? 'Listado Colecta' : 'Listado Reparto';
+
+  const columnas = esReparto
+    ? [...COLUMNAS, { campo: 'acciones', label: '', importante: false }]
+    : COLUMNAS;
 
   const paquetesFiltrados = useMemo(
     () => paquetes.filter((p) => p.estado === estadoFiltro),
@@ -94,6 +102,7 @@ const TablaPaquetes = ({ paquetes, loading, error, aviso, vista, onVolver }) => 
   );
 
   const cambiarOrden = (campo) => {
+    if (campo === 'acciones') return;
     setOrden((prev) =>
       prev.campo === campo
         ? { campo, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
@@ -104,6 +113,31 @@ const TablaPaquetes = ({ paquetes, loading, error, aviso, vista, onVolver }) => 
   const flecha = (campo) => {
     if (orden.campo !== campo) return '';
     return orden.dir === 'asc' ? ' ▲' : ' ▼';
+  };
+
+  const handleEntregar = async (id) => {
+    setEntregando(id);
+    try {
+      await marcarEntregado(id);
+      onRecargar();
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setEntregando(null);
+    }
+  };
+
+  const handleSimularTodas = async () => {
+    setSimulando(true);
+    try {
+      const res = await simularEntregas();
+      alert(`${res.actualizados} paquete(s) marcados como Entregado`);
+      onRecargar();
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setSimulando(false);
+    }
   };
 
   return (
@@ -120,9 +154,20 @@ const TablaPaquetes = ({ paquetes, loading, error, aviso, vista, onVolver }) => 
             </button>
             <h2 className="text-lg sm:text-2xl font-bold text-gray-800">{titulo}</h2>
           </div>
-          <span className="text-xs sm:text-sm text-gray-500">
-            {loading ? 'Cargando...' : `${paquetesFiltrados.length} envíos`}
-          </span>
+          <div className="flex items-center gap-3">
+            {esReparto && paquetesFiltrados.length > 0 && (
+              <button
+                onClick={handleSimularTodas}
+                disabled={simulando}
+                className="text-xs sm:text-sm px-3 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 transition-colors duration-150 font-medium"
+              >
+                {simulando ? 'Simulando...' : 'Entregar todos'}
+              </button>
+            )}
+            <span className="text-xs sm:text-sm text-gray-500">
+              {loading ? 'Cargando...' : `${paquetesFiltrados.length} envíos`}
+            </span>
+          </div>
         </div>
 
         {aviso && !error && (
@@ -140,7 +185,7 @@ const TablaPaquetes = ({ paquetes, loading, error, aviso, vista, onVolver }) => 
           <table className="w-full text-xs sm:text-sm text-left">
             <thead className="text-[10px] sm:text-xs text-gray-500 uppercase border-b border-gray-200">
               <tr>
-                {COLUMNAS.map((col) => (
+                {columnas.map((col) => (
                   <th
                     key={col.campo}
                     onClick={() => cambiarOrden(col.campo)}
@@ -155,14 +200,14 @@ const TablaPaquetes = ({ paquetes, loading, error, aviso, vista, onVolver }) => 
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={COLUMNAS.length} className="py-6 px-2 text-center text-gray-500">
+                  <td colSpan={columnas.length} className="py-6 px-2 text-center text-gray-500">
                     Cargando paquetes...
                   </td>
                 </tr>
               )}
               {!loading && paquetesOrdenados.length === 0 && !error && (
                 <tr>
-                  <td colSpan={COLUMNAS.length} className="py-6 px-2 text-center text-gray-500">
+                  <td colSpan={columnas.length} className="py-6 px-2 text-center text-gray-500">
                     No hay paquetes en este listado.
                   </td>
                 </tr>
@@ -180,6 +225,17 @@ const TablaPaquetes = ({ paquetes, loading, error, aviso, vista, onVolver }) => 
                     <td className={`py-2 px-1 sm:px-2 font-bold truncate ${colorEstado(paquete.estado)}`}>
                       {paquete.estado}
                     </td>
+                    {esReparto && (
+                      <td className="py-2 px-1 sm:px-2">
+                        <button
+                          onClick={() => handleEntregar(paquete.id)}
+                          disabled={entregando === paquete.id}
+                          className="text-xs px-2.5 py-1 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 transition-colors duration-150 font-medium whitespace-nowrap"
+                        >
+                          {entregando === paquete.id ? '...' : 'Entregar'}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
             </tbody>
@@ -236,6 +292,7 @@ const Paquetes = () => {
       aviso={aviso}
       vista={vista}
       onVolver={() => setVista(VISTAS.SELECCION)}
+      onRecargar={recargar}
     />
   );
 };
