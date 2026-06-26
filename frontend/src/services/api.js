@@ -1,3 +1,5 @@
+import { supabase } from './supabase.js';
+
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
 export function apiUrl(path) {
@@ -7,10 +9,16 @@ export function apiUrl(path) {
 }
 
 export async function apiFetch(path, options = {}) {
-  const res = await fetch(apiUrl(path), {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options,
-  });
+  const headers = { 'Content-Type': 'application/json', ...options.headers };
+
+  if (!headers.Authorization && !headers.authorization && supabase) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      headers.Authorization = `Bearer ${session.access_token}`;
+    }
+  }
+
+  const res = await fetch(apiUrl(path), { ...options, headers });
 
   const body = await res.json().catch(() => ({}));
 
