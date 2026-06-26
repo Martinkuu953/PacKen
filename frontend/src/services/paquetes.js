@@ -34,9 +34,9 @@ export async function getPaquetes() {
 }
 
 export async function marcarEntregado(id) {
-  return apiFetch(`/api/paquetes/${id}/estado`, {
-    method: 'PATCH',
-    body: JSON.stringify({ estado: 'Entregado' }),
+  return apiFetch('/api/paquetes/cambiar-estado', {
+    method: 'POST',
+    body: JSON.stringify({ id, estado: 'Entregado' }),
   });
 }
 

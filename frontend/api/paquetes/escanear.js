@@ -58,7 +58,7 @@ export default async function handler(req, res) {
       direccion: envio.direccion,
       estado,
       codigopostal: envio.codigoPostal,
-      fechaentrega: envio.fechaEntrega,
+      fechaentrega: estado === 'Entregado' ? envio.fechaEntrega : null,
     };
 
     let paquete;
