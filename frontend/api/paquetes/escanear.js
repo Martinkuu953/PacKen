@@ -5,10 +5,6 @@ import {
   ESTADO_POR_TIPO,
 } from '../_lib/ml.js';
 
-// Estados reales de ML que tienen prioridad sobre la acción de escaneo del courier.
-// Ej: si ML ya lo marca como entregado/cancelado, no lo pisamos con "Ingresado".
-const ESTADOS_ML_PRIORITARIOS = ['Entregado', 'Cancelado', 'Reprogramado'];
-
 // POST /api/paquetes/escanear  { shipmentId, sellerId, tipo }
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -30,13 +26,28 @@ export default async function handler(req, res) {
 
     console.log(`[PacKen] Escaneo ${tipo} → shipment ${shipmentId}, seller ${sellerId} (interno ${idSellerInterno})`);
 
-    // Trae el envío de ML (incluye estado real: status + substatus)
     const envio = await obtenerShipment(supabase, idSellerInterno, shipmentId);
 
-    // El estado real de ML manda si es terminal; si no, usamos el de la acción de escaneo.
-    const estado = ESTADOS_ML_PRIORITARIOS.includes(envio.estado)
-      ? envio.estado
-      : ESTADO_POR_TIPO[tipo];
+    const { data: existente } = await supabase
+      .from('paquete')
+      .select('id, estado')
+      .eq('idenvioml', envio.idEnvioMl)
+      .limit(1)
+      .maybeSingle();
+
+    // Colecta: siempre "Ingresado". Si ya existe y se re-escanea en colecta, no cambia.
+    // Reparto: pasa a "En camino" solo si el paquete ya fue ingresado.
+    // "Entregado" solo llega por webhook de ML.
+    let estado;
+    if (tipo === 'colecta') {
+      estado = 'Ingresado';
+    } else {
+      if (existente && existente.estado === 'Entregado') {
+        estado = 'Entregado';
+      } else {
+        estado = 'En camino';
+      }
+    }
 
     console.log(
       `[PacKen] Estado ML="${envio.estadoMl}" (sub="${envio.subestadoMl}") → estado interno="${estado}"`
@@ -49,13 +60,6 @@ export default async function handler(req, res) {
       codigopostal: envio.codigoPostal,
       fechaentrega: envio.fechaEntrega,
     };
-
-    const { data: existente } = await supabase
-      .from('paquete')
-      .select('id')
-      .eq('idenvioml', envio.idEnvioMl)
-      .limit(1)
-      .maybeSingle();
 
     let paquete;
     if (existente) {
@@ -84,7 +88,6 @@ export default async function handler(req, res) {
       console.log(`[PacKen] Paquete insertado (id=${paquete.id})`);
     }
 
-    // Devolvemos el paquete guardado + todos los datos de ML (estado real, tracking, etc.)
     return res.status(200).json({ ok: true, paquete, envio });
   } catch (err) {
     console.error('[PacKen] Error en escanear:', err.message);
