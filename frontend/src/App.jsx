@@ -3,13 +3,16 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Registro from './pages/Registro';
+import PendienteAprobacion from './pages/PendienteAprobacion';
 import Dashboard from './pages/Dashboard';
 import Paquetes from './pages/Paquetes';
+import Solicitudes from './pages/Solicitudes';
 
 function RutaProtegida({ children, rolesPermitidos }) {
-  const { autenticado, usuario } = useAuth();
+  const { autenticado, usuario, aprobado } = useAuth();
 
   if (!autenticado) return <Navigate to="/login" replace />;
+  if (!aprobado) return <Navigate to="/pendiente" replace />;
   if (rolesPermitidos && !rolesPermitidos.includes(usuario.rol)) return <Navigate to="/" replace />;
 
   return <Layout>{children}</Layout>;
@@ -21,15 +24,28 @@ function RutaPublica({ children }) {
   return children;
 }
 
+function RutaPendiente() {
+  const { autenticado, aprobado } = useAuth();
+  if (!autenticado) return <Navigate to="/login" replace />;
+  if (aprobado) return <Navigate to="/" replace />;
+  return <PendienteAprobacion />;
+}
+
 function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<RutaPublica><Login /></RutaPublica>} />
       <Route path="/registro" element={<RutaPublica><Registro /></RutaPublica>} />
+      <Route path="/pendiente" element={<RutaPendiente />} />
 
       <Route path="/" element={<RutaProtegida><Dashboard /></RutaProtegida>} />
       <Route path="/paquetes" element={<RutaProtegida><Paquetes /></RutaProtegida>} />
 
+      <Route path="/solicitudes" element={
+        <RutaProtegida rolesPermitidos={['empresa']}>
+          <Solicitudes />
+        </RutaProtegida>
+      } />
       <Route path="/sellers" element={
         <RutaProtegida rolesPermitidos={['empresa']}>
           <h2>Pantalla de Sellers en construcción...</h2>

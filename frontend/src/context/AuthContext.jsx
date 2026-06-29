@@ -49,15 +49,24 @@ export function AuthProvider({ children }) {
     return res.usuario;
   }, [guardarSesion]);
 
+  const refrescarUsuario = useCallback(async () => {
+    const res = await apiFetch('/api/auth/me');
+    const updated = res.usuario;
+    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updated));
+    setUsuario(updated);
+    return updated;
+  }, []);
+
   const autenticado = Boolean(token && usuario);
   const esEmpresa = usuario?.rol === 'empresa';
   const esTransportista = usuario?.rol === 'transportista';
+  const aprobado = !esTransportista || usuario?.estado_solicitud === 'aceptado';
 
   return (
     <AuthContext.Provider value={{
-      usuario, token, autenticado,
+      usuario, token, autenticado, aprobado,
       esEmpresa, esTransportista,
-      registrar, login, cerrarSesion,
+      registrar, login, cerrarSesion, refrescarUsuario,
     }}>
       {children}
     </AuthContext.Provider>

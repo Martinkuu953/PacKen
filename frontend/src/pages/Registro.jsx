@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { apiFetch } from '../services/api';
 
 const Registro = () => {
   const { registrar } = useAuth();
@@ -10,8 +11,18 @@ const Registro = () => {
   const [dni, setDni] = useState('');
   const [password, setPassword] = useState('');
   const [confirmar, setConfirmar] = useState('');
+  const [idempresa, setIdempresa] = useState('');
+  const [empresas, setEmpresas] = useState([]);
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
+
+  useEffect(() => {
+    if (rol === 'transportista') {
+      apiFetch('/api/empresas')
+        .then((res) => setEmpresas(res.empresas ?? []))
+        .catch(() => setEmpresas([]));
+    }
+  }, [rol]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -25,6 +36,10 @@ const Registro = () => {
       setError('Las contraseñas no coinciden');
       return;
     }
+    if (rol === 'transportista' && !idempresa) {
+      setError('Debe seleccionar una empresa');
+      return;
+    }
 
     setCargando(true);
     try {
@@ -34,6 +49,7 @@ const Registro = () => {
         password,
         dni: rol === 'transportista' ? dni.trim() : undefined,
         rol,
+        idempresa: rol === 'transportista' ? Number(idempresa) : undefined,
       });
     } catch (err) {
       setError(err.message || 'Error al registrarse');
@@ -115,22 +131,48 @@ const Registro = () => {
           </div>
 
           {rol === 'transportista' && (
-            <div>
-              <label htmlFor="dni" className="block text-sm font-medium text-gray-700 mb-1">
-                DNI
-              </label>
-              <input
-                id="dni"
-                type="text"
-                value={dni}
-                onChange={(e) => setDni(e.target.value)}
-                placeholder="Tu número de DNI"
-                required
-                inputMode="numeric"
-                pattern="\d+"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent transition-all"
-              />
-            </div>
+            <>
+              <div>
+                <label htmlFor="dni" className="block text-sm font-medium text-gray-700 mb-1">
+                  DNI
+                </label>
+                <input
+                  id="dni"
+                  type="text"
+                  value={dni}
+                  onChange={(e) => setDni(e.target.value)}
+                  placeholder="Tu número de DNI"
+                  required
+                  inputMode="numeric"
+                  pattern="\d+"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent transition-all"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="empresa" className="block text-sm font-medium text-gray-700 mb-1">
+                  Empresa
+                </label>
+                {empresas.length === 0 ? (
+                  <p className="text-sm text-gray-500 italic">No hay empresas registradas aún.</p>
+                ) : (
+                  <select
+                    id="empresa"
+                    value={idempresa}
+                    onChange={(e) => setIdempresa(e.target.value)}
+                    required
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent transition-all bg-white"
+                  >
+                    <option value="">Seleccioná una empresa</option>
+                    {empresas.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.nombre}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </>
           )}
 
           <div>
@@ -185,7 +227,7 @@ const Registro = () => {
 
           <button
             type="submit"
-            disabled={cargando}
+            disabled={cargando || (rol === 'transportista' && empresas.length === 0)}
             className="w-full py-2.5 bg-[#FDE047] text-gray-800 font-semibold rounded-xl hover:bg-yellow-300 disabled:opacity-50 transition-colors duration-150"
           >
             {cargando ? 'Registrando...' : 'Crear cuenta'}

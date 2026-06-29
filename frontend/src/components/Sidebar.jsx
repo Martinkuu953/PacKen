@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 
 const allMenuItems = [
   { name: 'Inicio', path: '/', roles: ['empresa', 'transportista'] },
+  { name: 'Solicitudes', path: '/solicitudes', roles: ['empresa'] },
   { name: 'Sellers', path: '/sellers', roles: ['empresa'] },
   { name: 'Facturas', path: '/facturas', roles: ['empresa'] },
   { name: 'Transportistas', path: '/transportistas', roles: ['empresa'] },

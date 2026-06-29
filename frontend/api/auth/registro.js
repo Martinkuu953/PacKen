@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { nombre, email, password, dni, rol } = req.body ?? {};
+    const { nombre, email, password, dni, rol, idempresa } = req.body ?? {};
 
     if (!nombre || !email || !password || !rol) {
       return res.status(400).json({ error: 'nombre, email, password y rol son requeridos' });
@@ -18,9 +18,13 @@ export default async function handler(req, res) {
     if (rol === 'transportista' && !dni) {
       return res.status(400).json({ error: 'DNI es requerido para transportistas' });
     }
+    if (rol === 'transportista' && !idempresa) {
+      return res.status(400).json({ error: 'Debe seleccionar una empresa' });
+    }
 
     const supabase = getSupabase();
     const hash = hashPassword(password);
+    const estadoSolicitud = rol === 'transportista' ? 'pendiente' : null;
 
     const { data, error } = await supabase
       .from('usuario')
@@ -30,8 +34,10 @@ export default async function handler(req, res) {
         password: hash,
         dni: dni || null,
         rol,
+        idempresa: idempresa || null,
+        estado_solicitud: estadoSolicitud,
       })
-      .select('id, nombre, email, dni, rol, created_at')
+      .select('id, nombre, email, dni, rol, idempresa, estado_solicitud, created_at')
       .single();
 
     if (error) {

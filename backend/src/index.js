@@ -2,8 +2,10 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import authRouter from './routes/auth.js';
+import empresasRouter from './routes/empresas.js';
 import enviosRouter from './routes/envios.js';
 import paquetesRouter from './routes/paquetes.js';
+import solicitudesRouter from './routes/solicitudes.js';
 import { probarConexionDb } from './lib/db.js';
 import { autenticar, requiereRol } from './middleware/auth.js';
 
@@ -29,8 +31,10 @@ app.get('/health/db', async (_req, res) => {
 });
 
 app.use('/api/auth', authRouter);
+app.use('/api/empresas', empresasRouter);
 app.use('/api/envios', autenticar, requiereRol('empresa'), enviosRouter);
 app.use('/api/paquetes', autenticar, paquetesRouter);
+app.use('/api/solicitudes', solicitudesRouter);
 
 app.use((err, _req, res, _next) => {
   console.error(err);

@@ -15,7 +15,13 @@ export function comparePassword(plain, hash) {
 
 export function generateToken(usuario) {
   return jwt.sign(
-    { id: usuario.id, rol: usuario.rol, email: usuario.email, nombre: usuario.nombre },
+    {
+      id: usuario.id,
+      rol: usuario.rol,
+      email: usuario.email,
+      nombre: usuario.nombre,
+      estado_solicitud: usuario.estado_solicitud ?? null,
+    },
     JWT_SECRET,
     { expiresIn: JWT_EXPIRES_IN },
   );
