@@ -1,10 +1,15 @@
 import { getSupabase } from '../_lib/ml.js';
+import { autenticar, requiereRol } from '../_lib/auth.js';
 
 // POST /api/paquetes/simular-entregas
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  const usuario = autenticar(req, res);
+  if (!usuario) return;
+  if (!requiereRol(res, usuario, 'empresa')) return;
 
   try {
     const supabase = getSupabase();

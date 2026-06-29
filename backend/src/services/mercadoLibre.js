@@ -174,7 +174,7 @@ const ESTADO_POR_TIPO = {
   reparto: 'En camino',
 };
 
-export async function procesarEscaneoQR(shipmentId, senderIdMl, tipo) {
+export async function procesarEscaneoQR(shipmentId, senderIdMl, tipo, idTransportista = null) {
   if (!shipmentId) throw new Error('Shipment ID requerido');
   if (!senderIdMl) throw new Error('Seller ID (sender_id) requerido del QR');
   if (!ESTADO_POR_TIPO[tipo]) throw new Error('Tipo inválido: debe ser "colecta" o "reparto"');
@@ -197,18 +197,19 @@ export async function procesarEscaneoQR(shipmentId, senderIdMl, tipo) {
   if (existentes.length > 0) {
     const { rows } = await query(
       `UPDATE paquete
-       SET comprador = $1, direccion = $2, estado = $3, codigopostal = $4, fechaentrega = $5
-       WHERE id = $6
+       SET comprador = $1, direccion = $2, estado = $3, codigopostal = $4, fechaentrega = $5,
+           idtransportista = COALESCE($6, idtransportista)
+       WHERE id = $7
        RETURNING *`,
-      [envio.comprador, envio.direccion, estado, envio.codigo_postal, envio.fecha_entrega, existentes[0].id]
+      [envio.comprador, envio.direccion, estado, envio.codigo_postal, envio.fecha_entrega, idTransportista, existentes[0].id]
     );
     paquete = rows[0];
   } else {
     const { rows } = await query(
-      `INSERT INTO paquete (idenvioml, idseller, idzona, comprador, direccion, estado, codigopostal, fechaentrega)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO paquete (idenvioml, idseller, idzona, comprador, direccion, estado, codigopostal, fechaentrega, idtransportista)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [envio.id_envio_ml, idSellerInterno, idZona, envio.comprador, envio.direccion, estado, envio.codigo_postal, envio.fecha_entrega]
+      [envio.id_envio_ml, idSellerInterno, idZona, envio.comprador, envio.direccion, estado, envio.codigo_postal, envio.fecha_entrega, idTransportista]
     );
     paquete = rows[0];
   }

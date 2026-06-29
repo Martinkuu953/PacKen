@@ -4,12 +4,16 @@ import {
   obtenerShipment,
   ESTADO_POR_TIPO,
 } from '../_lib/ml.js';
+import { autenticar } from '../_lib/auth.js';
 
 // POST /api/paquetes/escanear  { shipmentId, sellerId, tipo }
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  const usuario = autenticar(req, res);
+  if (!usuario) return;
 
   try {
     const { shipmentId, sellerId, tipo } = req.body ?? {};
@@ -53,6 +57,8 @@ export default async function handler(req, res) {
       `[PacKen] Estado ML="${envio.estadoMl}" (sub="${envio.subestadoMl}") → estado interno="${estado}"`
     );
 
+    const idTransportista = usuario.rol === 'transportista' ? usuario.id : null;
+
     const paqueteData = {
       comprador: envio.comprador,
       direccion: envio.direccion,
@@ -63,9 +69,11 @@ export default async function handler(req, res) {
 
     let paquete;
     if (existente) {
+      const updateData = { ...paqueteData };
+      if (idTransportista) updateData.idtransportista = idTransportista;
       const { data, error: upErr } = await supabase
         .from('paquete')
-        .update(paqueteData)
+        .update(updateData)
         .eq('id', existente.id)
         .select()
         .single();
@@ -79,6 +87,7 @@ export default async function handler(req, res) {
           idenvioml: envio.idEnvioMl,
           idseller: idSellerInterno,
           idzona: 1,
+          idtransportista: idTransportista,
           ...paqueteData,
         })
         .select()

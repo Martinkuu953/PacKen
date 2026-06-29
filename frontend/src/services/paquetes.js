@@ -1,4 +1,3 @@
-import { supabase, supabaseConfigurado } from './supabase.js';
 import { apiFetch } from './api.js';
 
 function mapPaquete(row) {
@@ -15,22 +14,12 @@ function mapPaquete(row) {
 }
 
 export async function getPaquetes() {
-  if (!supabaseConfigurado) {
-    return {
-      paquetes: [],
-      origen: 'sin-config',
-      aviso: 'Faltan VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY (ver frontend/.env o las env vars de Vercel).',
-    };
-  }
-
-  const { data, error } = await supabase
-    .from('paquete')
-    .select('*')
-    .order('fechaingreso', { ascending: false });
-
-  if (error) throw new Error(error.message);
-
-  return { paquetes: (data ?? []).map(mapPaquete), origen: 'supabase' };
+  const data = await apiFetch('/api/paquetes');
+  return {
+    paquetes: (data.paquetes ?? []).map(mapPaquete),
+    origen: data.origen ?? 'api',
+    aviso: data.aviso ?? null,
+  };
 }
 
 export async function marcarEntregado(id) {

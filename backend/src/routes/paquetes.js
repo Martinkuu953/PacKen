@@ -4,9 +4,10 @@ import { procesarEscaneoQR } from '../services/mercadoLibre.js';
 
 const router = Router();
 
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const json = await listarPaquetes();
+    const idTransportista = req.usuario.rol === 'transportista' ? req.usuario.id : null;
+    const json = await listarPaquetes(idTransportista);
     res.json(json);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -20,7 +21,8 @@ router.post('/escanear', async (req, res) => {
       return res.status(400).json({ error: 'shipmentId, sellerId y tipo son requeridos' });
     }
 
-    const resultado = await procesarEscaneoQR(String(shipmentId), String(sellerId), tipo);
+    const idTransportista = req.usuario.rol === 'transportista' ? req.usuario.id : null;
+    const resultado = await procesarEscaneoQR(String(shipmentId), String(sellerId), tipo, idTransportista);
     res.json(resultado);
   } catch (err) {
     res.status(400).json({ error: err.message });

@@ -1,4 +1,5 @@
 import { getSupabase } from '../_lib/ml.js';
+import { autenticar, requiereRol } from '../_lib/auth.js';
 
 const ESTADOS_VALIDOS = ['Ingresado', 'En camino', 'Entregado', 'Cancelado', 'Reprogramado'];
 
@@ -7,6 +8,9 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  const usuario = autenticar(req, res);
+  if (!usuario) return;
 
   try {
     const { id, estado } = req.body ?? {};
@@ -19,6 +23,17 @@ export default async function handler(req, res) {
     }
 
     const supabase = getSupabase();
+
+    if (usuario.rol === 'transportista') {
+      const { data: paquete } = await supabase
+        .from('paquete')
+        .select('idtransportista')
+        .eq('id', Number(id))
+        .single();
+      if (!paquete || paquete.idtransportista !== usuario.id) {
+        return res.status(403).json({ error: 'No tenés permiso para modificar este paquete' });
+      }
+    }
 
     const updateData = { estado };
     if (estado === 'Entregado') {

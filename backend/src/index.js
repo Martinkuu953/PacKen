@@ -1,9 +1,11 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import authRouter from './routes/auth.js';
 import enviosRouter from './routes/envios.js';
 import paquetesRouter from './routes/paquetes.js';
 import { probarConexionDb } from './lib/db.js';
+import { autenticar, requiereRol } from './middleware/auth.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -26,8 +28,9 @@ app.get('/health/db', async (_req, res) => {
   res.status(resultado.ok ? 200 : 503).json(resultado);
 });
 
-app.use('/api/envios', enviosRouter);
-app.use('/api/paquetes', paquetesRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/envios', autenticar, requiereRol('empresa'), enviosRouter);
+app.use('/api/paquetes', autenticar, paquetesRouter);
 
 app.use((err, _req, res, _next) => {
   console.error(err);

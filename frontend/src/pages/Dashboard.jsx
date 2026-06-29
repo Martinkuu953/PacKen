@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  FaBoxOpen,
   FaChartBar,
   FaUserTie,
   FaMotorcycle,
@@ -10,6 +11,7 @@ import {
 } from 'react-icons/fa';
 import { usePaquetes } from '../hooks/usePaquetes';
 import { colorEstado, normalizarEstado, prioridadEstado } from '../utils/estados';
+import { useAuth } from '../context/AuthContext';
 
 function calcularResumen(paquetes) {
   const contar = (predicado) => paquetes.filter((p) => predicado(normalizarEstado(p.estado))).length;
@@ -35,9 +37,20 @@ const STATS = [
   { key: 'cancelados', label: 'Cancelados', color: 'text-red-500' },
 ];
 
+const ALL_SHORTCUTS = [
+  { path: '/estadisticas', label: 'Estadísticas', Icon: FaChartBar, roles: ['empresa'] },
+  { path: '/sellers', label: 'Sellers', Icon: FaUserTie, roles: ['empresa'] },
+  { path: '/transportistas', label: 'Transportistas', Icon: FaMotorcycle, roles: ['empresa'] },
+  { path: '/facturas', label: 'Facturas', Icon: FaFileInvoiceDollar, roles: ['empresa'] },
+  { path: '/liquidaciones', label: 'Liquidaciones', Icon: FaMobileAlt, roles: ['empresa'] },
+  { path: '/listas-precios', label: 'Lista de Precios', Icon: FaClipboardList, roles: ['empresa'] },
+  { path: '/paquetes', label: 'Paquetes', Icon: FaBoxOpen, roles: ['transportista'] },
+];
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const { paquetes, loading, error, aviso } = usePaquetes();
+  const { usuario } = useAuth();
 
   const resumen = useMemo(() => calcularResumen(paquetes), [paquetes]);
 
@@ -129,71 +142,19 @@ const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6">
-        <button
-          onClick={() => handleNavigation('/estadisticas')}
-          className="flex flex-col items-center justify-center bg-white border border-gray-200 rounded-2xl p-4 sm:p-8 hover:shadow-md hover:border-yellow-400 transition-all cursor-pointer group"
-        >
-          <div className="text-gray-600 group-hover:text-yellow-500 transition-colors mb-2 sm:mb-4">
-            <FaChartBar size={28} className="sm:hidden" />
-            <FaChartBar size={40} className="hidden sm:block" />
-          </div>
-          <span className="font-semibold text-gray-800 text-sm sm:text-base">Estadísticas</span>
-        </button>
-
-        <button
-          onClick={() => handleNavigation('/sellers')}
-          className="flex flex-col items-center justify-center bg-white border border-gray-200 rounded-2xl p-4 sm:p-8 hover:shadow-md hover:border-yellow-400 transition-all cursor-pointer group"
-        >
-          <div className="text-gray-600 group-hover:text-yellow-500 transition-colors mb-2 sm:mb-4">
-            <FaUserTie size={28} className="sm:hidden" />
-            <FaUserTie size={40} className="hidden sm:block" />
-          </div>
-          <span className="font-semibold text-gray-800 text-sm sm:text-base">Sellers</span>
-        </button>
-
-        <button
-          onClick={() => handleNavigation('/transportistas')}
-          className="flex flex-col items-center justify-center bg-white border border-gray-200 rounded-2xl p-4 sm:p-8 hover:shadow-md hover:border-yellow-400 transition-all cursor-pointer group"
-        >
-          <div className="text-gray-600 group-hover:text-yellow-500 transition-colors mb-2 sm:mb-4">
-            <FaMotorcycle size={28} className="sm:hidden" />
-            <FaMotorcycle size={40} className="hidden sm:block" />
-          </div>
-          <span className="font-semibold text-gray-800 text-sm sm:text-base">Transportistas</span>
-        </button>
-
-        <button
-          onClick={() => handleNavigation('/facturas')}
-          className="flex flex-col items-center justify-center bg-white border border-gray-200 rounded-2xl p-4 sm:p-8 hover:shadow-md hover:border-yellow-400 transition-all cursor-pointer group"
-        >
-          <div className="text-gray-600 group-hover:text-yellow-500 transition-colors mb-2 sm:mb-4">
-            <FaFileInvoiceDollar size={28} className="sm:hidden" />
-            <FaFileInvoiceDollar size={40} className="hidden sm:block" />
-          </div>
-          <span className="font-semibold text-gray-800 text-sm sm:text-base">Facturas</span>
-        </button>
-
-        <button
-          onClick={() => handleNavigation('/liquidaciones')}
-          className="flex flex-col items-center justify-center bg-white border border-gray-200 rounded-2xl p-4 sm:p-8 hover:shadow-md hover:border-yellow-400 transition-all cursor-pointer group"
-        >
-          <div className="text-gray-600 group-hover:text-yellow-500 transition-colors mb-2 sm:mb-4">
-            <FaMobileAlt size={28} className="sm:hidden" />
-            <FaMobileAlt size={40} className="hidden sm:block" />
-          </div>
-          <span className="font-semibold text-gray-800 text-sm sm:text-base">Liquidaciones</span>
-        </button>
-
-        <button
-          onClick={() => handleNavigation('/listas-precios')}
-          className="flex flex-col items-center justify-center bg-white border border-gray-200 rounded-2xl p-4 sm:p-8 hover:shadow-md hover:border-yellow-400 transition-all cursor-pointer group"
-        >
-          <div className="text-gray-600 group-hover:text-yellow-500 transition-colors mb-2 sm:mb-4">
-            <FaClipboardList size={28} className="sm:hidden" />
-            <FaClipboardList size={40} className="hidden sm:block" />
-          </div>
-          <span className="font-semibold text-gray-800 text-sm sm:text-base">Lista de Precios</span>
-        </button>
+        {ALL_SHORTCUTS.filter((s) => s.roles.includes(usuario?.rol)).map((shortcut) => (
+          <button
+            key={shortcut.path}
+            onClick={() => handleNavigation(shortcut.path)}
+            className="flex flex-col items-center justify-center bg-white border border-gray-200 rounded-2xl p-4 sm:p-8 hover:shadow-md hover:border-yellow-400 transition-all cursor-pointer group"
+          >
+            <div className="text-gray-600 group-hover:text-yellow-500 transition-colors mb-2 sm:mb-4">
+              <shortcut.Icon size={28} className="sm:hidden" />
+              <shortcut.Icon size={40} className="hidden sm:block" />
+            </div>
+            <span className="font-semibold text-gray-800 text-sm sm:text-base">{shortcut.label}</span>
+          </button>
+        ))}
       </div>
     </div>
   );

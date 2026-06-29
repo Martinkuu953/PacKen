@@ -24,9 +24,16 @@ function esErrorDeTabla(err) {
   return err?.code === '42P01';
 }
 
-async function obtenerDesdeDb() {
+async function obtenerDesdeDb(idTransportista = null) {
   try {
-    const { rows } = await query('SELECT * FROM paquete ORDER BY fechaingreso DESC');
+    let sql = 'SELECT * FROM paquete';
+    const params = [];
+    if (idTransportista) {
+      sql += ' WHERE idtransportista = $1';
+      params.push(idTransportista);
+    }
+    sql += ' ORDER BY fechaingreso DESC';
+    const { rows } = await query(sql, params);
     return { paquetes: rows.map(mapPaquete), origen: 'database' };
   } catch (err) {
     if (esErrorDeTabla(err)) {
@@ -40,7 +47,7 @@ async function obtenerDesdeDb() {
   }
 }
 
-export async function listarPaquetes() {
+export async function listarPaquetes(idTransportista = null) {
   if (!dbConfigurado()) {
     return {
       paquetes: PAQUETES_DEV,
@@ -50,7 +57,7 @@ export async function listarPaquetes() {
   }
 
   try {
-    return await obtenerDesdeDb();
+    return await obtenerDesdeDb(idTransportista);
   } catch (err) {
     console.error('[PacKen] Error al listar paquetes:', err.message);
     return {

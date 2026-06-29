@@ -1,23 +1,32 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+
+const allMenuItems = [
+  { name: 'Inicio', path: '/', roles: ['empresa', 'transportista'] },
+  { name: 'Sellers', path: '/sellers', roles: ['empresa'] },
+  { name: 'Facturas', path: '/facturas', roles: ['empresa'] },
+  { name: 'Transportistas', path: '/transportistas', roles: ['empresa'] },
+  { name: 'Paquetes', path: '/paquetes', roles: ['empresa', 'transportista'] },
+  { name: 'Estadísticas', path: '/estadisticas', roles: ['empresa'] },
+  { name: 'Mi Perfil', path: '/perfil', roles: ['empresa', 'transportista'] },
+  { name: 'Listas de precios', path: '/listas-precios', roles: ['empresa'] },
+  { name: 'Liquidaciones', path: '/liquidaciones', roles: ['empresa'] },
+];
 
 const Sidebar = ({ abierto, onCerrar }) => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { usuario, cerrarSesion } = useAuth();
 
-  const menuItems = [
-    { name: 'Inicio', path: '/' },
-    { name: 'Sellers', path: '/sellers' },
-    { name: 'Facturas', path: '/facturas' },
-    { name: 'Transportistas', path: '/transportistas' },
-    { name: 'Paquetes', path: '/paquetes' },
-    { name: 'Estadísticas', path: '/estadisticas' },
-    { name: 'Mi Perfil', path: '/perfil' },
-    { name: 'Listas de precios', path: '/listas-precios' },
-    { name: 'Liquidaciones', path: '/liquidaciones' },
-  ];
+  const menuItems = allMenuItems.filter((item) => item.roles.includes(usuario?.rol));
+
+  const handleLogout = () => {
+    cerrarSesion();
+    navigate('/login');
+  };
 
   return (
     <>
-      {/* Overlay oscuro detrás del drawer, solo visible en mobile/tablet cuando está abierto */}
       {abierto && (
         <div
           onClick={onCerrar}
@@ -29,17 +38,16 @@ const Sidebar = ({ abierto, onCerrar }) => {
       <aside
         className={`
           bg-[#FDE047] h-screen fixed left-0 top-0 overflow-y-auto shadow-lg z-40
-          w-64 transition-transform duration-200
+          w-64 transition-transform duration-200 flex flex-col
           ${abierto ? 'translate-x-0' : '-translate-x-full'}
           lg:translate-x-0
         `}
       >
-        <div className="p-6">
+        <div className="p-6 flex-1">
           <div className="flex items-center justify-between mb-8">
             <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
               📦 PacKen
             </h1>
-            {/* Botón cerrar, solo visible en mobile/tablet */}
             <button
               onClick={onCerrar}
               className="text-gray-700 hover:text-gray-900 text-2xl font-bold lg:hidden"
@@ -67,6 +75,22 @@ const Sidebar = ({ abierto, onCerrar }) => {
               ))}
             </ul>
           </nav>
+        </div>
+
+        <div className="p-6 border-t border-yellow-400/50">
+          {usuario && (
+            <p className="text-xs text-gray-700 mb-3 truncate">
+              <span className="font-semibold">{usuario.nombre}</span>
+              <br />
+              <span className="capitalize text-gray-600">{usuario.rol}</span>
+            </p>
+          )}
+          <button
+            onClick={handleLogout}
+            className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white/60 rounded-md hover:bg-white transition-colors"
+          >
+            Cerrar sesión
+          </button>
         </div>
       </aside>
     </>
