@@ -46,7 +46,7 @@ const Sidebar = ({ abierto, onCerrar }) => {
         <div className="p-6 flex-1">
           <div className="flex items-center justify-between mb-8">
             <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-              📦 PacKen
+              PacKen
             </h1>
             <button
               onClick={onCerrar}

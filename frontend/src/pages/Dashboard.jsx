@@ -27,7 +27,6 @@ function calcularResumen(paquetes) {
   };
 }
 
-// Tarjetitas compactas de resumen, en fila horizontal arriba de la tabla
 const STATS = [
   { key: 'entregados', label: 'Entregados', color: 'text-green-500' },
   { key: 'demorados', label: 'Demorados', color: 'text-red-500' },
@@ -66,7 +65,9 @@ const Dashboard = () => {
   return (
     <div className="max-w-6xl mx-auto">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-6">
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 sm:mb-6">La Veloz</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 sm:mb-6">
+          {usuario?.nombre || 'PacKen'}
+        </h2>
 
         {aviso && !error && (
           <p className="mb-4 text-amber-800 text-sm bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
@@ -80,7 +81,6 @@ const Dashboard = () => {
           </p>
         )}
 
-        {/* Fila horizontal compacta con los totales por estado */}
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3 mb-4 sm:mb-6">
           {STATS.map((stat) => (
             <div
@@ -97,7 +97,6 @@ const Dashboard = () => {
           ))}
         </div>
 
-        {/* Tabla de paquetes */}
         <div className="bg-gray-50 rounded-xl p-3 sm:p-4 overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="text-xs text-gray-500 uppercase border-b border-gray-200">
