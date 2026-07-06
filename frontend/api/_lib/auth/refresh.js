@@ -1,7 +1,7 @@
-import { getSupabase } from '../_lib/ml.js';
-import { generateToken } from '../_lib/auth.js';
-import { rotarRefreshToken } from '../_lib/refreshTokens.js';
-import { getRefreshCookie, setRefreshCookie, clearRefreshCookie } from '../_lib/cookies.js';
+import { getSupabase } from '../ml.js';
+import { generateToken } from '../auth.js';
+import { rotarRefreshToken } from '../refreshTokens.js';
+import { getRefreshCookie, setRefreshCookie, clearRefreshCookie } from '../cookies.js';
 
 // POST /api/auth/refresh — rota el refresh token de la cookie y emite un
 // access token nuevo. Responde { usuario, token } igual que login.

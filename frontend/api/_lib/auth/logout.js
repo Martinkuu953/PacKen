@@ -1,6 +1,6 @@
-import { getSupabase } from '../_lib/ml.js';
-import { revocarRefreshToken } from '../_lib/refreshTokens.js';
-import { getRefreshCookie, clearRefreshCookie } from '../_lib/cookies.js';
+import { getSupabase } from '../ml.js';
+import { revocarRefreshToken } from '../refreshTokens.js';
+import { getRefreshCookie, clearRefreshCookie } from '../cookies.js';
 
 // POST /api/auth/logout — revoca el refresh token en la DB y limpia la
 // cookie. Siempre responde ok: el logout local nunca debe fallar.

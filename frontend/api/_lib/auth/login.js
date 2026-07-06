@@ -1,7 +1,7 @@
-import { getSupabase } from '../_lib/ml.js';
-import { comparePassword, generateToken } from '../_lib/auth.js';
-import { crearRefreshToken } from '../_lib/refreshTokens.js';
-import { setRefreshCookie } from '../_lib/cookies.js';
+import { getSupabase } from '../ml.js';
+import { comparePassword, generateToken } from '../auth.js';
+import { crearRefreshToken } from '../refreshTokens.js';
+import { setRefreshCookie } from '../cookies.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
