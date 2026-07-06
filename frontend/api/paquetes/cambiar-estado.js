@@ -33,6 +33,15 @@ export default async function handler(req, res) {
       if (!paquete || paquete.idtransportista !== usuario.id) {
         return res.status(403).json({ error: 'No tenés permiso para modificar este paquete' });
       }
+    } else if (usuario.rol === 'empresa') {
+      const { data: paquete } = await supabase
+        .from('paquete')
+        .select('idempresa')
+        .eq('id', Number(id))
+        .single();
+      if (!paquete || paquete.idempresa !== usuario.id) {
+        return res.status(403).json({ error: 'No tenés permiso para modificar este paquete' });
+      }
     }
 
     const updateData = { estado };

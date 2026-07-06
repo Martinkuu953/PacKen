@@ -34,7 +34,7 @@ export default async function handler(req, res) {
 
     const { data: existente } = await supabase
       .from('paquete')
-      .select('id, estado')
+      .select('id, estado, idempresa')
       .eq('idenvioml', envio.idEnvioMl)
       .limit(1)
       .maybeSingle();
@@ -58,6 +58,9 @@ export default async function handler(req, res) {
     );
 
     const idTransportista = usuario.rol === 'transportista' ? usuario.id : null;
+    // Empresa dueña del paquete: la empresa misma si escanea directo, o la
+    // empresa del transportista que escanea. Necesario para aislar por empresa.
+    const idEmpresa = usuario.rol === 'empresa' ? usuario.id : (usuario.idempresa ?? null);
 
     const paqueteData = {
       comprador: envio.comprador,
@@ -71,6 +74,9 @@ export default async function handler(req, res) {
     if (existente) {
       const updateData = { ...paqueteData };
       if (idTransportista) updateData.idtransportista = idTransportista;
+      // Solo completamos idempresa si el paquete no la tenía (no reasignamos
+      // un paquete de otra empresa que se re-escanee).
+      if (existente.idempresa == null && idEmpresa != null) updateData.idempresa = idEmpresa;
       const { data, error: upErr } = await supabase
         .from('paquete')
         .update(updateData)
@@ -88,6 +94,7 @@ export default async function handler(req, res) {
           idseller: idSellerInterno,
           idzona: 1,
           idtransportista: idTransportista,
+          idempresa: idEmpresa,
           ...paqueteData,
         })
         .select()

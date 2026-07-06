@@ -18,6 +18,7 @@ export default async function handler(req, res) {
       .from('paquete')
       .update({ estado: 'Entregado', fechaentrega: new Date().toISOString() })
       .eq('estado', 'En camino')
+      .eq('idempresa', usuario.id)
       .select();
 
     if (error) throw new Error(error.message);

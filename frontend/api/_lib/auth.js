@@ -20,6 +20,7 @@ export function generateToken(usuario) {
       rol: usuario.rol,
       email: usuario.email,
       nombre: usuario.nombre,
+      idempresa: usuario.idempresa ?? null,
       estado_solicitud: usuario.estado_solicitud ?? null,
     },
     JWT_SECRET,

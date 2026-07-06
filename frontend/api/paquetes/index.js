@@ -16,6 +16,9 @@ export default async function handler(req, res) {
 
     if (usuario.rol === 'transportista') {
       query = query.eq('idtransportista', usuario.id);
+    } else if (usuario.rol === 'empresa') {
+      // Aislamiento multi-tenant: una empresa solo ve sus propios paquetes.
+      query = query.eq('idempresa', usuario.id);
     }
 
     const { data, error } = await query;
