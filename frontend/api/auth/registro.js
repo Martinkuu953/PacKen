@@ -1,5 +1,7 @@
 import { getSupabase } from '../_lib/ml.js';
 import { hashPassword, generateToken } from '../_lib/auth.js';
+import { crearRefreshToken } from '../_lib/refreshTokens.js';
+import { setRefreshCookie } from '../_lib/cookies.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -48,6 +50,8 @@ export default async function handler(req, res) {
     }
 
     const token = generateToken(data);
+    const { token: refreshToken, expiresAt } = await crearRefreshToken(supabase, data.id);
+    setRefreshCookie(res, refreshToken, expiresAt);
     return res.status(201).json({ usuario: data, token });
   } catch (err) {
     console.error('[PacKen] Error en registro:', err.message);

@@ -1,5 +1,7 @@
 import { getSupabase } from '../_lib/ml.js';
 import { comparePassword, generateToken } from '../_lib/auth.js';
+import { crearRefreshToken } from '../_lib/refreshTokens.js';
+import { setRefreshCookie } from '../_lib/cookies.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -30,6 +32,8 @@ export default async function handler(req, res) {
     }
 
     const token = generateToken(usuario);
+    const { token: refreshToken, expiresAt } = await crearRefreshToken(supabase, usuario.id);
+    setRefreshCookie(res, refreshToken, expiresAt);
     const { password: _, ...safe } = usuario;
     return res.json({ usuario: safe, token });
   } catch (err) {
