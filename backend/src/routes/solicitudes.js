@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import { query } from '../lib/db.js';
-import { autenticar, requiereRol } from '../middleware/auth.js';
+import { requiereRol } from '../middleware/auth.js';
 
 const router = Router();
 
-router.get('/', autenticar, requiereRol('empresa'), async (req, res) => {
+router.get('/', requiereRol('empresa'), async (req, res) => {
   try {
     const { rows } = await query(
       `SELECT id, nombre, email, dni, estado_solicitud, created_at
@@ -19,7 +19,7 @@ router.get('/', autenticar, requiereRol('empresa'), async (req, res) => {
   }
 });
 
-router.patch('/:id', autenticar, requiereRol('empresa'), async (req, res) => {
+router.patch('/:id', requiereRol('empresa'), async (req, res) => {
   try {
     const { id } = req.params;
     const { estado } = req.body ?? {};

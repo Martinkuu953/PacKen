@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useCallback } from 'react';
-import { apiFetch } from '../services/api.js';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { apiFetch, setAuthSyncHandlers } from '../services/api.js';
 
 const AuthContext = createContext(null);
 
@@ -24,11 +24,17 @@ export function AuthProvider({ children }) {
     setUsuario(nuevoUsuario);
   }, []);
 
-  const cerrarSesion = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY_TOKEN);
-    localStorage.removeItem(STORAGE_KEY_USER);
-    setToken(null);
-    setUsuario(null);
+  const cerrarSesion = useCallback(async () => {
+    try {
+      await apiFetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // el logout local debe funcionar aunque falle la llamada al servidor
+    } finally {
+      localStorage.removeItem(STORAGE_KEY_TOKEN);
+      localStorage.removeItem(STORAGE_KEY_USER);
+      setToken(null);
+      setUsuario(null);
+    }
   }, []);
 
   const registrar = useCallback(async (datos) => {
@@ -47,6 +53,18 @@ export function AuthProvider({ children }) {
     });
     guardarSesion(res.token, res.usuario);
     return res.usuario;
+  }, [guardarSesion]);
+
+  useEffect(() => {
+    setAuthSyncHandlers({
+      onTokenRefreshed: guardarSesion,
+      onSessionExpired: () => {
+        localStorage.removeItem(STORAGE_KEY_TOKEN);
+        localStorage.removeItem(STORAGE_KEY_USER);
+        setToken(null);
+        setUsuario(null);
+      },
+    });
   }, [guardarSesion]);
 
   const refrescarUsuario = useCallback(async () => {

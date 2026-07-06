@@ -1,24 +1,8 @@
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import { query } from '../lib/db.js';
+import { firmarAccessToken } from '../lib/jwt.js';
 
-const JWT_SECRET = process.env.JWT_SECRET;
-const JWT_EXPIRES_IN = '7d';
 const SALT_ROUNDS = 10;
-
-function buildToken(usuario) {
-  return jwt.sign(
-    {
-      id: usuario.id,
-      rol: usuario.rol,
-      email: usuario.email,
-      nombre: usuario.nombre,
-      estado_solicitud: usuario.estado_solicitud ?? null,
-    },
-    JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN },
-  );
-}
 
 function safeUser(u) {
   return {
@@ -43,7 +27,7 @@ export async function registrar({ nombre, email, password, dni, rol, idempresa }
     [nombre, email.toLowerCase().trim(), hash, dni || null, rol, idempresa || null, estadoSolicitud],
   );
   const usuario = rows[0];
-  const token = buildToken(usuario);
+  const token = firmarAccessToken(usuario);
   return { usuario: safeUser(usuario), token };
 }
 
@@ -60,7 +44,7 @@ export async function login(identificador, password) {
     throw new Error('Credenciales inválidas');
   }
 
-  const token = buildToken(usuario);
+  const token = firmarAccessToken(usuario);
   return { usuario: safeUser(usuario), token };
 }
 

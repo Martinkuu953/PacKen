@@ -1,6 +1,4 @@
-import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET;
+import { verificarAccessToken } from '../lib/jwt.js';
 
 export function autenticar(req, res, next) {
   const header = req.headers.authorization;
@@ -8,7 +6,7 @@ export function autenticar(req, res, next) {
     return res.status(401).json({ error: 'Token requerido' });
   }
   try {
-    req.usuario = jwt.verify(header.split(' ')[1], JWT_SECRET);
+    req.usuario = verificarAccessToken(header.split(' ')[1]);
     next();
   } catch {
     return res.status(401).json({ error: 'Token inválido o expirado' });

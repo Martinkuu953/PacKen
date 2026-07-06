@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import authRouter from './routes/auth.js';
 import empresasRouter from './routes/empresas.js';
 import enviosRouter from './routes/envios.js';
@@ -13,6 +14,21 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
+const RUTAS_PUBLICAS = [
+  { method: 'POST', path: '/api/auth/login' },
+  { method: 'POST', path: '/api/auth/registro' },
+  { method: 'POST', path: '/api/auth/refresh' },
+  { method: 'POST', path: '/api/auth/logout' },
+  { method: 'GET', path: '/api/empresas' },
+];
+
+function esRutaPublica(req) {
+  const path = req.originalUrl.split('?')[0];
+  return RUTAS_PUBLICAS.some(
+    (ruta) => ruta.method === req.method && path === ruta.path,
+  );
+}
+
 app.use(
   cors({
     origin: [FRONTEND_URL, 'http://localhost:5173'],
@@ -20,6 +36,7 @@ app.use(
   }),
 );
 app.use(express.json());
+app.use(cookieParser());
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'packen-backend' });
@@ -30,10 +47,15 @@ app.get('/health/db', async (_req, res) => {
   res.status(resultado.ok ? 200 : 503).json(resultado);
 });
 
+app.use('/api', (req, res, next) => {
+  if (esRutaPublica(req)) return next();
+  return autenticar(req, res, next);
+});
+
 app.use('/api/auth', authRouter);
 app.use('/api/empresas', empresasRouter);
-app.use('/api/envios', autenticar, requiereRol('empresa'), enviosRouter);
-app.use('/api/paquetes', autenticar, paquetesRouter);
+app.use('/api/envios', requiereRol('empresa'), enviosRouter);
+app.use('/api/paquetes', paquetesRouter);
 app.use('/api/solicitudes', solicitudesRouter);
 
 app.use((err, _req, res, _next) => {
