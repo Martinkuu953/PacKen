@@ -9,6 +9,7 @@ import Paquetes from './pages/Paquetes';
 import Solicitudes from './pages/Solicitudes';
 import Sellers from './pages/Sellers';
 import ListasPrecios from './pages/ListasPrecios';
+import Transportistas from './pages/Transportistas';
 
 function RutaProtegida({ children, rolesPermitidos }) {
   const { autenticado, usuario, aprobado } = useAuth();
@@ -75,7 +76,7 @@ function AppRoutes() {
       } />
       <Route path="/transportistas" element={
         <RutaProtegida rolesPermitidos={['empresa']}>
-          <h2>Pantalla de Transportistas en construcción...</h2>
+          <Transportistas />
         </RutaProtegida>
       } />
       <Route path="/estadisticas" element={
