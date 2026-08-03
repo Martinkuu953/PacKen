@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { registrar, login, obtenerUsuario } from '../services/auth.js';
+import { registrar, login, obtenerUsuario, perfilPublico } from '../services/auth.js';
 import { firmarAccessToken } from '../lib/jwt.js';
 import { REFRESH_COOKIE_NAME, setRefreshCookie, clearRefreshCookie } from '../lib/cookies.js';
 import { crearRefreshToken, rotarRefreshToken, revocarRefreshToken } from '../services/refreshTokens.js';
@@ -24,7 +24,7 @@ router.post('/registro', async (req, res) => {
     const result = await registrar({ nombre, email, password, dni, rol, idempresa });
     const { token: refreshToken, expiresAt } = await crearRefreshToken(result.usuario.id);
     setRefreshCookie(res, refreshToken, expiresAt);
-    res.status(201).json(result);
+    res.status(201).json({ usuario: perfilPublico(result.usuario), token: result.token });
   } catch (err) {
     if (err.code === '23505') {
       return res.status(409).json({ error: 'El email o DNI ya está registrado' });
@@ -42,7 +42,7 @@ router.post('/login', async (req, res) => {
     const result = await login(identificador, password);
     const { token: refreshToken, expiresAt } = await crearRefreshToken(result.usuario.id);
     setRefreshCookie(res, refreshToken, expiresAt);
-    res.json(result);
+    res.json({ usuario: perfilPublico(result.usuario), token: result.token });
   } catch (err) {
     res.status(401).json({ error: err.message });
   }
@@ -69,7 +69,7 @@ router.post('/refresh', async (req, res) => {
     setRefreshCookie(res, resultado.token, resultado.expiresAt);
     const usuario = await obtenerUsuario(resultado.usuarioId);
     const token = firmarAccessToken(usuario);
-    res.json({ usuario, token });
+    res.json({ usuario: perfilPublico(usuario), token });
   } catch (err) {
     clearRefreshCookie(res);
     res.status(400).json({ error: err.message });
@@ -83,13 +83,10 @@ router.post('/logout', async (req, res) => {
   res.json({ ok: true });
 });
 
-router.get('/me', async (req, res) => {
-  try {
-    const usuario = await obtenerUsuario(req.usuario.id);
-    res.json({ usuario });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
+// El middleware de auth ya trae el perfil fresco de la DB resolviendo el
+// public_id del token, así que no hace falta una segunda consulta.
+router.get('/me', (req, res) => {
+  res.json({ usuario: perfilPublico(req.usuario) });
 });
 
 export default router;

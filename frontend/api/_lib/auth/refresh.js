@@ -1,5 +1,5 @@
 import { getSupabase } from '../ml.js';
-import { generateToken } from '../auth.js';
+import { generateToken, perfilPublico } from '../auth.js';
 import { rotarRefreshToken } from '../refreshTokens.js';
 import { getRefreshCookie, setRefreshCookie, clearRefreshCookie } from '../cookies.js';
 
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
 
     const { data: usuario, error } = await supabase
       .from('usuario')
-      .select('id, nombre, email, dni, rol, idempresa, estado_solicitud, created_at')
+      .select('public_id, nombre, rol, estado_solicitud')
       .eq('id', resultado.usuarioId)
       .single();
 
@@ -42,7 +42,7 @@ export default async function handler(req, res) {
 
     setRefreshCookie(res, resultado.token, resultado.expiresAt);
     const token = generateToken(usuario);
-    return res.json({ usuario, token });
+    return res.json({ usuario: perfilPublico(usuario), token });
   } catch (err) {
     console.error('[PacKen] Error en refresh:', err.message);
     clearRefreshCookie(res);

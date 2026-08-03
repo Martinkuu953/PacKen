@@ -1,29 +1,14 @@
-import { getSupabase } from '../ml.js';
-import { autenticar } from '../auth.js';
+import { autenticar, perfilPublico } from '../auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const tokenUser = autenticar(req, res);
-  if (!tokenUser) return;
+  // autenticar() ya trae el perfil fresco de la DB resolviendo el public_id
+  // del token, así que no hace falta una segunda consulta.
+  const usuario = await autenticar(req, res);
+  if (!usuario) return;
 
-  try {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from('usuario')
-      .select('id, nombre, email, dni, rol, idempresa, estado_solicitud')
-      .eq('id', tokenUser.id)
-      .single();
-
-    if (error || !data) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
-
-    return res.json({ usuario: data });
-  } catch (err) {
-    console.error('[PacKen] Error en /auth/me:', err.message);
-    return res.status(400).json({ error: err.message });
-  }
+  return res.json({ usuario: perfilPublico(usuario) });
 }

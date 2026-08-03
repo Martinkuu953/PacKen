@@ -4,14 +4,25 @@ import { firmarAccessToken } from '../lib/jwt.js';
 
 const SALT_ROUNDS = 10;
 
-function safeUser(u) {
+// Uso interno: el id para los refresh tokens, el public_id para firmar el JWT.
+// Nunca se serializa tal cual en una respuesta.
+function datosSesion(u) {
   return {
     id: u.id,
+    public_id: u.public_id,
     nombre: u.nombre,
-    email: u.email,
-    dni: u.dni ?? null,
     rol: u.rol,
     idempresa: u.idempresa ?? null,
+    estado_solicitud: u.estado_solicitud ?? null,
+  };
+}
+
+// Perfil que viaja en el body de las respuestas: solo lo que la UI renderiza.
+// Ni el id ni el email salen del servidor.
+export function perfilPublico(u) {
+  return {
+    nombre: u.nombre,
+    rol: u.rol,
     estado_solicitud: u.estado_solicitud ?? null,
   };
 }
@@ -23,12 +34,12 @@ export async function registrar({ nombre, email, password, dni, rol, idempresa }
   const { rows } = await query(
     `INSERT INTO usuario (nombre, email, password, dni, rol, idempresa, estado_solicitud)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
-     RETURNING id, nombre, email, dni, rol, idempresa, estado_solicitud, created_at`,
+     RETURNING id, public_id, nombre, rol, idempresa, estado_solicitud`,
     [nombre, email.toLowerCase().trim(), hash, dni || null, rol, idempresa || null, estadoSolicitud],
   );
-  const usuario = rows[0];
+  const usuario = datosSesion(rows[0]);
   const token = firmarAccessToken(usuario);
-  return { usuario: safeUser(usuario), token };
+  return { usuario, token };
 }
 
 export async function login(identificador, password) {
@@ -39,20 +50,20 @@ export async function login(identificador, password) {
 
   if (!rows[0]) throw new Error('Credenciales inválidas');
 
-  const usuario = rows[0];
-  if (!bcrypt.compareSync(password, usuario.password)) {
+  if (!bcrypt.compareSync(password, rows[0].password)) {
     throw new Error('Credenciales inválidas');
   }
 
+  const usuario = datosSesion(rows[0]);
   const token = firmarAccessToken(usuario);
-  return { usuario: safeUser(usuario), token };
+  return { usuario, token };
 }
 
 export async function obtenerUsuario(id) {
   const { rows } = await query(
-    'SELECT id, nombre, email, dni, rol, idempresa, estado_solicitud FROM usuario WHERE id = $1',
+    'SELECT id, public_id, nombre, rol, idempresa, estado_solicitud FROM usuario WHERE id = $1',
     [id],
   );
   if (!rows[0]) throw new Error('Usuario no encontrado');
-  return safeUser(rows[0]);
+  return datosSesion(rows[0]);
 }

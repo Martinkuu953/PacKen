@@ -1,5 +1,5 @@
 import { getSupabase } from '../ml.js';
-import { comparePassword, generateToken } from '../auth.js';
+import { comparePassword, generateToken, perfilPublico } from '../auth.js';
 import { crearRefreshToken } from '../refreshTokens.js';
 import { setRefreshCookie } from '../cookies.js';
 
@@ -34,8 +34,7 @@ export default async function handler(req, res) {
     const token = generateToken(usuario);
     const { token: refreshToken, expiresAt } = await crearRefreshToken(supabase, usuario.id);
     setRefreshCookie(res, refreshToken, expiresAt);
-    const { password: _, ...safe } = usuario;
-    return res.json({ usuario: safe, token });
+    return res.json({ usuario: perfilPublico(usuario), token });
   } catch (err) {
     console.error('[PacKen] Error en login:', err.message);
     return res.status(401).json({ error: err.message });

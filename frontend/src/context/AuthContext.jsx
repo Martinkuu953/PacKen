@@ -6,11 +6,22 @@ const AuthContext = createContext(null);
 const STORAGE_KEY_TOKEN = 'packen_token';
 const STORAGE_KEY_USER = 'packen_usuario';
 
+// El backend ya no manda id ni email, pero una sesión guardada antes de ese
+// cambio sí los tiene: normalizamos siempre antes de persistir o usar.
+function perfilSeguro(usuario) {
+  if (!usuario) return null;
+  return {
+    nombre: usuario.nombre,
+    rol: usuario.rol,
+    estado_solicitud: usuario.estado_solicitud ?? null,
+  };
+}
+
 export function AuthProvider({ children }) {
   const [usuario, setUsuario] = useState(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY_USER);
-      return stored ? JSON.parse(stored) : null;
+      return stored ? perfilSeguro(JSON.parse(stored)) : null;
     } catch {
       return null;
     }
@@ -18,10 +29,11 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem(STORAGE_KEY_TOKEN));
 
   const guardarSesion = useCallback((nuevoToken, nuevoUsuario) => {
+    const perfil = perfilSeguro(nuevoUsuario);
     localStorage.setItem(STORAGE_KEY_TOKEN, nuevoToken);
-    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(nuevoUsuario));
+    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(perfil));
     setToken(nuevoToken);
-    setUsuario(nuevoUsuario);
+    setUsuario(perfil);
   }, []);
 
   const cerrarSesion = useCallback(async () => {
@@ -69,7 +81,7 @@ export function AuthProvider({ children }) {
 
   const refrescarUsuario = useCallback(async () => {
     const res = await apiFetch('/api/auth/me');
-    const updated = res.usuario;
+    const updated = perfilSeguro(res.usuario);
     localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updated));
     setUsuario(updated);
     return updated;
