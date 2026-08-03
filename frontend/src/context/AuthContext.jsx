@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { apiFetch, setAuthSyncHandlers } from '../services/api.js';
+import { apiFetch, intentarRefresh, setAuthSyncHandlers } from '../services/api.js';
 
 const AuthContext = createContext(null);
 
@@ -27,6 +27,13 @@ export function AuthProvider({ children }) {
     }
   });
   const [token, setToken] = useState(() => localStorage.getItem(STORAGE_KEY_TOKEN));
+
+  // Si no hay access token en localStorage puede que igual haya una sesión
+  // viva: el refresh token vive en una cookie httpOnly que JS no puede leer.
+  // Arrancamos "cargando" e intentamos rehidratar antes de mandar a /login.
+  const [cargandoSesion, setCargandoSesion] = useState(
+    () => !localStorage.getItem(STORAGE_KEY_TOKEN),
+  );
 
   const guardarSesion = useCallback((nuevoToken, nuevoUsuario) => {
     const perfil = perfilSeguro(nuevoUsuario);
@@ -79,6 +86,34 @@ export function AuthProvider({ children }) {
     });
   }, [guardarSesion]);
 
+  // Rehidratación al arrancar: sin access token, probamos canjear la cookie
+  // httpOnly por uno nuevo. Si no hay cookie (o venció) el refresh falla y
+  // seguimos deslogueados, que es el estado con el que ya arrancamos.
+  useEffect(() => {
+    if (!cargandoSesion) return undefined;
+
+    let cancelado = false;
+    intentarRefresh()
+      .then((res) => {
+        if (!cancelado) guardarSesion(res.token, res.usuario);
+      })
+      .catch(() => {
+        if (!cancelado) {
+          localStorage.removeItem(STORAGE_KEY_TOKEN);
+          localStorage.removeItem(STORAGE_KEY_USER);
+        }
+      })
+      .finally(() => {
+        if (!cancelado) setCargandoSesion(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+    // Solo al montar: es la rehidratación inicial, no debe repetirse.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const refrescarUsuario = useCallback(async () => {
     const res = await apiFetch('/api/auth/me');
     const updated = perfilSeguro(res.usuario);
@@ -94,7 +129,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      usuario, token, autenticado, aprobado,
+      usuario, token, autenticado, aprobado, cargandoSesion,
       esEmpresa, esTransportista,
       registrar, login, cerrarSesion, refrescarUsuario,
     }}>

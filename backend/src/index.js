@@ -7,6 +7,7 @@ import empresasRouter from './routes/empresas.js';
 import enviosRouter from './routes/envios.js';
 import paquetesRouter from './routes/paquetes.js';
 import solicitudesRouter from './routes/solicitudes.js';
+import preciosRouter from './routes/precios.js';
 import { probarConexionDb } from './lib/db.js';
 import { autenticar, requiereRol } from './middleware/auth.js';
 
@@ -57,6 +58,7 @@ app.use('/api/empresas', empresasRouter);
 app.use('/api/envios', requiereRol('empresa'), enviosRouter);
 app.use('/api/paquetes', paquetesRouter);
 app.use('/api/solicitudes', solicitudesRouter);
+app.use('/api/precios', preciosRouter);
 
 app.use((err, _req, res, _next) => {
   console.error(err);

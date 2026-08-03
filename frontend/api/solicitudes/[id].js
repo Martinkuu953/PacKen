@@ -19,19 +19,22 @@ export default async function handler(req, res) {
     }
 
     const supabase = getSupabase();
+    // `id` es el public_id (UUID opaco), no el id interno. El filtro por
+    // idempresa sigue garantizando que una empresa solo toque a los suyos.
     const { data, error } = await supabase
       .from('usuario')
       .update({ estado_solicitud: estado })
-      .eq('id', Number(id))
+      .eq('public_id', id)
       .eq('rol', 'transportista')
       .eq('idempresa', usuario.id)
-      .select('id, nombre, email, dni, estado_solicitud')
-      .single();
+      .select('public_id, nombre, dni, estado_solicitud')
+      .maybeSingle();
 
     if (error) throw new Error(error.message);
     if (!data) return res.status(404).json({ error: 'Solicitud no encontrada' });
 
-    return res.json({ ok: true, transportista: data });
+    const { public_id, ...resto } = data;
+    return res.json({ ok: true, transportista: { id: public_id, ...resto } });
   } catch (err) {
     console.error('[PacKen] Error en actualizar solicitud:', err.message);
     return res.status(400).json({ error: err.message });

@@ -25,6 +25,24 @@ export default async function handler(req, res) {
     }
 
     const supabase = getSupabase();
+
+    // El cliente manda el public_id de la empresa (UUID opaco), no su id
+    // interno. Lo resolvemos acá y de paso validamos que exista de verdad.
+    let idEmpresaInterno = null;
+    if (rol === 'transportista') {
+      const { data: empresa } = await supabase
+        .from('usuario')
+        .select('id')
+        .eq('public_id', idempresa)
+        .eq('rol', 'empresa')
+        .maybeSingle();
+
+      if (!empresa) {
+        return res.status(400).json({ error: 'La empresa seleccionada no existe' });
+      }
+      idEmpresaInterno = empresa.id;
+    }
+
     const hash = hashPassword(password);
     const estadoSolicitud = rol === 'transportista' ? 'pendiente' : null;
 
@@ -36,7 +54,7 @@ export default async function handler(req, res) {
         password: hash,
         dni: dni || null,
         rol,
-        idempresa: idempresa || null,
+        idempresa: idEmpresaInterno,
         estado_solicitud: estadoSolicitud,
       })
       .select('id, public_id, nombre, rol, idempresa, estado_solicitud')

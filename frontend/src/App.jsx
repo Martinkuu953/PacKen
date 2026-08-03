@@ -7,6 +7,8 @@ import PendienteAprobacion from './pages/PendienteAprobacion';
 import Dashboard from './pages/Dashboard';
 import Paquetes from './pages/Paquetes';
 import Solicitudes from './pages/Solicitudes';
+import Sellers from './pages/Sellers';
+import ListasPrecios from './pages/ListasPrecios';
 
 function RutaProtegida({ children, rolesPermitidos }) {
   const { autenticado, usuario, aprobado } = useAuth();
@@ -31,7 +33,22 @@ function RutaPendiente() {
   return <PendienteAprobacion />;
 }
 
+// Mientras se rehidrata la sesión desde la cookie httpOnly no sabemos todavía
+// si hay usuario: renderizar las rutas acá mandaría a /login de rebote a
+// alguien que sí tiene sesión válida.
+function PantallaCargando() {
+  return (
+    <div className="min-h-screen bg-[#F3F4F6] flex items-center justify-center">
+      <p className="text-gray-500 text-sm">Cargando...</p>
+    </div>
+  );
+}
+
 function AppRoutes() {
+  const { cargandoSesion } = useAuth();
+
+  if (cargandoSesion) return <PantallaCargando />;
+
   return (
     <Routes>
       <Route path="/login" element={<RutaPublica><Login /></RutaPublica>} />
@@ -48,7 +65,7 @@ function AppRoutes() {
       } />
       <Route path="/sellers" element={
         <RutaProtegida rolesPermitidos={['empresa']}>
-          <h2>Pantalla de Sellers en construcción...</h2>
+          <Sellers />
         </RutaProtegida>
       } />
       <Route path="/facturas" element={
@@ -68,7 +85,7 @@ function AppRoutes() {
       } />
       <Route path="/listas-precios" element={
         <RutaProtegida rolesPermitidos={['empresa']}>
-          <h2>Pantalla de Listas de Precios en construcción...</h2>
+          <ListasPrecios />
         </RutaProtegida>
       } />
       <Route path="/liquidaciones" element={

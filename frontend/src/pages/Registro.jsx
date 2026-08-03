@@ -49,7 +49,8 @@ const Registro = () => {
         password,
         dni: rol === 'transportista' ? dni.trim() : undefined,
         rol,
-        idempresa: rol === 'transportista' ? Number(idempresa) : undefined,
+        // public_id de la empresa (UUID opaco), no un id numérico.
+        idempresa: rol === 'transportista' ? idempresa : undefined,
       });
     } catch (err) {
       setError(err.message || 'Error al registrarse');

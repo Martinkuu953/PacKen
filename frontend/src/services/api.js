@@ -18,7 +18,10 @@ export function setAuthSyncHandlers(handlers) {
 
 let refreshPromise = null;
 
-function intentarRefresh() {
+// Una sola petición de refresh en vuelo a la vez: si tres requests se topan
+// con un 401 al mismo tiempo, comparten la misma rotación en lugar de rotar
+// el token tres veces (lo que dispararía la detección de reuso).
+export function intentarRefresh() {
   if (!refreshPromise) {
     refreshPromise = fetch(apiUrl('/api/auth/refresh'), {
       method: 'POST',

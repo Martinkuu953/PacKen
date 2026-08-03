@@ -1,11 +1,16 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../services/api';
+import Buscador from '../components/Buscador';
+import { filtrarPorTexto } from '../utils/busqueda';
+
+const CAMPOS_BUSQUEDA = ['nombre', 'dni'];
 
 const Solicitudes = () => {
   const [solicitudes, setSolicitudes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [procesando, setProcesando] = useState(null);
+  const [busqueda, setBusqueda] = useState('');
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -39,8 +44,13 @@ const Solicitudes = () => {
     }
   };
 
-  const pendientes = solicitudes.filter((s) => s.estado_solicitud === 'pendiente');
-  const resueltas = solicitudes.filter((s) => s.estado_solicitud !== 'pendiente');
+  const encontradas = useMemo(
+    () => filtrarPorTexto(solicitudes, busqueda, CAMPOS_BUSQUEDA),
+    [solicitudes, busqueda],
+  );
+
+  const pendientes = encontradas.filter((s) => s.estado_solicitud === 'pendiente');
+  const resueltas = encontradas.filter((s) => s.estado_solicitud !== 'pendiente');
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -55,10 +65,24 @@ const Solicitudes = () => {
           </p>
         )}
 
+        {!loading && solicitudes.length > 0 && (
+          <Buscador
+            valor={busqueda}
+            onChange={setBusqueda}
+            placeholder="Buscar transportista por nombre o DNI..."
+            resultados={encontradas.length}
+            total={solicitudes.length}
+          />
+        )}
+
         {loading && <p className="text-gray-500 text-sm">Cargando...</p>}
 
         {!loading && pendientes.length === 0 && (
-          <p className="text-gray-500 text-sm mb-6">No hay solicitudes pendientes.</p>
+          <p className="text-gray-500 text-sm mb-6">
+            {busqueda.trim()
+              ? `Ninguna solicitud pendiente coincide con "${busqueda.trim()}".`
+              : 'No hay solicitudes pendientes.'}
+          </p>
         )}
 
         {!loading && pendientes.length > 0 && (
@@ -71,9 +95,7 @@ const Solicitudes = () => {
               >
                 <div>
                   <p className="font-semibold text-gray-800">{s.nombre}</p>
-                  <p className="text-xs text-gray-500">
-                    DNI: {s.dni || '—'} · {s.email}
-                  </p>
+                  <p className="text-xs text-gray-500">DNI: {s.dni || '—'}</p>
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -106,9 +128,7 @@ const Solicitudes = () => {
               >
                 <div>
                   <p className="font-semibold text-gray-800">{s.nombre}</p>
-                  <p className="text-xs text-gray-500">
-                    DNI: {s.dni || '—'} · {s.email}
-                  </p>
+                  <p className="text-xs text-gray-500">DNI: {s.dni || '—'}</p>
                 </div>
                 <span
                   className={`text-xs font-bold px-2 py-1 rounded-full ${

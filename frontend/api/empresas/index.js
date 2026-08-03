@@ -9,13 +9,17 @@ export default async function handler(req, res) {
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from('usuario')
-      .select('id, nombre')
+      .select('public_id, nombre')
       .eq('rol', 'empresa')
       .order('nombre');
 
     if (error) throw new Error(error.message);
 
-    return res.json({ empresas: data ?? [] });
+    // Endpoint público (lo consume el formulario de registro): el id interno
+    // no sale, el cliente elige la empresa por su UUID opaco.
+    const empresas = (data ?? []).map(({ public_id, nombre }) => ({ id: public_id, nombre }));
+
+    return res.json({ empresas });
   } catch (err) {
     console.error('[PacKen] Error en listar empresas:', err.message);
     return res.status(500).json({ error: err.message });

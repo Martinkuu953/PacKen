@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import Buscador from '../components/Buscador';
+import { filtrarPorTexto } from '../utils/busqueda';
 
 const Sellers = () => {
   const [sellersData] = useState([
@@ -11,15 +13,32 @@ const Sellers = () => {
     { nombre: 'Baby Movil', totales: 100, enCamino: 40, demorados: 11, entregados: 32, cancelados: 5, reprogramados: 12 },
   ]);
 
-  const totalPaquetes = sellersData.reduce((sum, seller) => sum + seller.totales, 0);
-  const totalEnCamino = sellersData.reduce((sum, seller) => sum + seller.enCamino, 0);
+  const [busqueda, setBusqueda] = useState('');
+
+  const sellersFiltrados = useMemo(
+    () => filtrarPorTexto(sellersData, busqueda, ['nombre']),
+    [sellersData, busqueda],
+  );
+
+  // Los totales se calculan sobre lo que se está viendo: si filtrás por un
+  // seller, el resumen de abajo es el de ese seller.
+  const totalPaquetes = sellersFiltrados.reduce((sum, seller) => sum + seller.totales, 0);
+  const totalEnCamino = sellersFiltrados.reduce((sum, seller) => sum + seller.enCamino, 0);
   const montoTotal = 300000;
 
   return (
     <div className="max-w-7xl mx-auto">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
         <h2 className="text-2xl font-bold text-gray-800 mb-6">Sellers</h2>
-        
+
+        <Buscador
+          valor={busqueda}
+          onChange={setBusqueda}
+          placeholder="Buscar seller por nombre..."
+          resultados={sellersFiltrados.length}
+          total={sellersData.length}
+        />
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -34,7 +53,14 @@ const Sellers = () => {
               </tr>
             </thead>
             <tbody>
-              {sellersData.map((seller, index) => (
+              {sellersFiltrados.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-6 px-4 text-center text-gray-500">
+                    Ningún seller coincide con &quot;{busqueda.trim()}&quot;.
+                  </td>
+                </tr>
+              )}
+              {sellersFiltrados.map((seller, index) => (
                 <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="py-3 px-4 font-medium text-gray-800">{seller.nombre}</td>
                   <td className="py-3 px-4 text-gray-600">{seller.totales}</td>

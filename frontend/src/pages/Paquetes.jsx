@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { usePaquetes } from '../hooks/usePaquetes';
 import { colorEstado, prioridadEstado } from '../utils/estados';
+import { filtrarPorTexto } from '../utils/busqueda';
 import { marcarEntregado, simularEntregas } from '../services/paquetes';
+import Buscador from '../components/Buscador';
 import EscanerQR from '../components/EscanerQR';
 
 const VISTAS = { SELECCION: null, COLECTA: 'colecta', REPARTO: 'reparto' };
@@ -18,6 +20,8 @@ const COLUMNAS = [
   { campo: 'codigopostal', label: 'CP' },
   { campo: 'estado', label: 'Estado', importante: true },
 ];
+
+const CAMPOS_BUSQUEDA = ['idenvioml', 'comprador', 'direccion', 'codigopostal', 'estado'];
 
 function compararPaquetes(a, b, campo, dir) {
   let resultado;
@@ -80,6 +84,7 @@ const PantallaSeleccion = ({ paquetes, onEscanear, onVerListado }) => {
 
 const TablaPaquetes = ({ paquetes, loading, error, aviso, vista, onVolver, onRecargar }) => {
   const [orden, setOrden] = useState({ campo: 'estado', dir: 'asc' });
+  const [busqueda, setBusqueda] = useState('');
   const [entregando, setEntregando] = useState(null);
   const [simulando, setSimulando] = useState(false);
 
@@ -96,9 +101,14 @@ const TablaPaquetes = ({ paquetes, loading, error, aviso, vista, onVolver, onRec
     [paquetes, estadoFiltro],
   );
 
+  const paquetesBuscados = useMemo(
+    () => filtrarPorTexto(paquetesFiltrados, busqueda, CAMPOS_BUSQUEDA),
+    [paquetesFiltrados, busqueda],
+  );
+
   const paquetesOrdenados = useMemo(
-    () => [...paquetesFiltrados].sort((a, b) => compararPaquetes(a, b, orden.campo, orden.dir)),
-    [paquetesFiltrados, orden],
+    () => [...paquetesBuscados].sort((a, b) => compararPaquetes(a, b, orden.campo, orden.dir)),
+    [paquetesBuscados, orden],
   );
 
   const cambiarOrden = (campo) => {
@@ -181,6 +191,14 @@ const TablaPaquetes = ({ paquetes, loading, error, aviso, vista, onVolver, onRec
           </p>
         )}
 
+        <Buscador
+          valor={busqueda}
+          onChange={setBusqueda}
+          placeholder="Buscar por ID de envío, comprador, dirección o CP..."
+          resultados={paquetesBuscados.length}
+          total={paquetesFiltrados.length}
+        />
+
         <div className="overflow-x-auto">
           <table className="w-full text-xs sm:text-sm text-left">
             <thead className="text-[10px] sm:text-xs text-gray-500 uppercase border-b border-gray-200">
@@ -208,7 +226,9 @@ const TablaPaquetes = ({ paquetes, loading, error, aviso, vista, onVolver, onRec
               {!loading && paquetesOrdenados.length === 0 && !error && (
                 <tr>
                   <td colSpan={columnas.length} className="py-6 px-2 text-center text-gray-500">
-                    No hay paquetes en este listado.
+                    {busqueda.trim()
+                      ? `Ningún paquete coincide con "${busqueda.trim()}".`
+                      : 'No hay paquetes en este listado.'}
                   </td>
                 </tr>
               )}

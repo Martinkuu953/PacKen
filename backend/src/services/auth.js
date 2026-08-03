@@ -31,11 +31,23 @@ export async function registrar({ nombre, email, password, dni, rol, idempresa }
   const hash = bcrypt.hashSync(password, SALT_ROUNDS);
   const estadoSolicitud = rol === 'transportista' ? 'pendiente' : null;
 
+  // El cliente manda el public_id de la empresa (UUID opaco), no su id
+  // interno. Lo resolvemos acá y de paso validamos que exista de verdad.
+  let idEmpresaInterno = null;
+  if (rol === 'transportista') {
+    const { rows: empresas } = await query(
+      "SELECT id FROM usuario WHERE public_id = $1 AND rol = 'empresa'",
+      [idempresa],
+    );
+    if (!empresas[0]) throw new Error('La empresa seleccionada no existe');
+    idEmpresaInterno = empresas[0].id;
+  }
+
   const { rows } = await query(
     `INSERT INTO usuario (nombre, email, password, dni, rol, idempresa, estado_solicitud)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id, public_id, nombre, rol, idempresa, estado_solicitud`,
-    [nombre, email.toLowerCase().trim(), hash, dni || null, rol, idempresa || null, estadoSolicitud],
+    [nombre, email.toLowerCase().trim(), hash, dni || null, rol, idEmpresaInterno, estadoSolicitud],
   );
   const usuario = datosSesion(rows[0]);
   const token = firmarAccessToken(usuario);

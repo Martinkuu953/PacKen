@@ -14,14 +14,21 @@ export default async function handler(req, res) {
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from('usuario')
-      .select('id, nombre, email, dni, estado_solicitud, created_at')
+      .select('public_id, nombre, dni, estado_solicitud, created_at')
       .eq('rol', 'transportista')
       .eq('idempresa', usuario.id)
       .order('created_at', { ascending: false });
 
     if (error) throw new Error(error.message);
 
-    return res.json({ solicitudes: data ?? [] });
+    // El cliente solo conoce el UUID opaco: es el identificador con el que
+    // después hace el PATCH. Ni el id interno ni el email salen de acá.
+    const solicitudes = (data ?? []).map(({ public_id, ...resto }) => ({
+      id: public_id,
+      ...resto,
+    }));
+
+    return res.json({ solicitudes });
   } catch (err) {
     console.error('[PacKen] Error en listar solicitudes:', err.message);
     return res.status(500).json({ error: err.message });

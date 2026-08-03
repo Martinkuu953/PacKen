@@ -28,6 +28,20 @@ export async function crearRefreshToken(supabase, usuarioId) {
   return { token, expiresAt, id: data.id };
 }
 
+// Borra los tokens ya vencidos del usuario para que la tabla no crezca sin
+// límite. Los revocados pero NO vencidos se conservan: son justamente los que
+// permiten detectar el reuso de un token robado.
+async function limpiarVencidos(supabase, usuarioId) {
+  const { error } = await supabase
+    .from('refresh_tokens')
+    .delete()
+    .eq('usuario_id', usuarioId)
+    .lt('expires_at', new Date().toISOString());
+
+  // Best-effort: si falla, la sesión igual es válida. Solo lo logueamos.
+  if (error) console.warn('[PacKen] No se pudieron limpiar refresh tokens vencidos:', error.message);
+}
+
 export async function rotarRefreshToken(supabase, tokenPlano) {
   const { data: fila, error } = await supabase
     .from('refresh_tokens')
@@ -39,11 +53,15 @@ export async function rotarRefreshToken(supabase, tokenPlano) {
   if (!fila) return { status: 'invalid' };
 
   if (fila.revoked_at) {
-    await supabase
+    const { error: revErr } = await supabase
       .from('refresh_tokens')
       .update({ revoked_at: new Date().toISOString() })
       .eq('usuario_id', fila.usuario_id)
       .is('revoked_at', null);
+
+    // Si no pudimos cortar las sesiones, no podemos responder "todo bien":
+    // el token robado seguiría sirviendo.
+    if (revErr) throw new Error(revErr.message);
     return { status: 'reused' };
   }
 
@@ -52,10 +70,18 @@ export async function rotarRefreshToken(supabase, tokenPlano) {
   }
 
   const nuevo = await crearRefreshToken(supabase, fila.usuario_id);
-  await supabase
+
+  const { error: rotErr } = await supabase
     .from('refresh_tokens')
     .update({ revoked_at: new Date().toISOString(), replaced_by: nuevo.id })
     .eq('id', fila.id);
+
+  // Sin este chequeo, un fallo acá dejaba el token viejo válido para siempre
+  // en paralelo al nuevo: rotación que no rota. Mejor abortar y que el
+  // handler limpie la cookie.
+  if (rotErr) throw new Error(rotErr.message);
+
+  await limpiarVencidos(supabase, fila.usuario_id);
 
   return { status: 'ok', usuarioId: fila.usuario_id, token: nuevo.token, expiresAt: nuevo.expiresAt };
 }

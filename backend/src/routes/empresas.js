@@ -5,8 +5,10 @@ const router = Router();
 
 router.get('/', async (_req, res) => {
   try {
+    // Endpoint público (lo consume el formulario de registro): el id interno
+    // no sale, el cliente elige la empresa por su UUID opaco.
     const { rows } = await query(
-      "SELECT id, nombre FROM usuario WHERE rol = 'empresa' ORDER BY nombre",
+      "SELECT public_id AS id, nombre FROM usuario WHERE rol = 'empresa' ORDER BY nombre",
     );
     res.json({ empresas: rows });
   } catch (err) {

@@ -14,12 +14,28 @@ function nuevaExpiracion() {
 export async function crearRefreshToken(usuarioId) {
   const token = crypto.randomBytes(64).toString('hex');
   const expiresAt = nuevaExpiracion();
-  await query(
+  const { rows } = await query(
     `INSERT INTO refresh_tokens (usuario_id, token_hash, expires_at)
-     VALUES ($1, $2, $3)`,
+     VALUES ($1, $2, $3)
+     RETURNING id`,
     [usuarioId, hash(token), expiresAt],
   );
-  return { token, expiresAt };
+  return { token, expiresAt, id: rows[0].id };
+}
+
+// Borra los tokens ya vencidos del usuario para que la tabla no crezca sin
+// límite. Los revocados pero NO vencidos se conservan: son justamente los que
+// permiten detectar el reuso de un token robado.
+async function limpiarVencidos(usuarioId) {
+  try {
+    await query(
+      'DELETE FROM refresh_tokens WHERE usuario_id = $1 AND expires_at < NOW()',
+      [usuarioId],
+    );
+  } catch (err) {
+    // Best-effort: si falla, la sesión igual es válida.
+    console.warn('[PacKen] No se pudieron limpiar refresh tokens vencidos:', err.message);
+  }
 }
 
 export async function rotarRefreshToken(tokenPlano) {
@@ -44,12 +60,13 @@ export async function rotarRefreshToken(tokenPlano) {
     return { status: 'expired' };
   }
 
-  const { token: nuevoToken, expiresAt } = await crearRefreshToken(fila.usuario_id);
-  const nuevaFila = await query('SELECT id FROM refresh_tokens WHERE token_hash = $1', [hash(nuevoToken)]);
+  const { token: nuevoToken, expiresAt, id: nuevoId } = await crearRefreshToken(fila.usuario_id);
   await query(
     'UPDATE refresh_tokens SET revoked_at = NOW(), replaced_by = $1 WHERE id = $2',
-    [nuevaFila.rows[0].id, fila.id],
+    [nuevoId, fila.id],
   );
+
+  await limpiarVencidos(fila.usuario_id);
 
   return { status: 'ok', usuarioId: fila.usuario_id, token: nuevoToken, expiresAt };
 }
