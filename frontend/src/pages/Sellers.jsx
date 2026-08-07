@@ -1,19 +1,40 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { apiFetch } from '../services/api';
 import Buscador from '../components/Buscador';
 import { filtrarPorTexto } from '../utils/busqueda';
 
-const Sellers = () => {
-  const [sellersData] = useState([
-    { nombre: 'Baby Movil', totales: 100, enCamino: 40, demorados: 11, entregados: 32, cancelados: 5, reprogramados: 12 },
-    { nombre: 'Baby Movil', totales: 100, enCamino: 40, demorados: 11, entregados: 32, cancelados: 5, reprogramados: 12 },
-    { nombre: 'Baby Movil', totales: 100, enCamino: 40, demorados: 11, entregados: 31, cancelados: 5, reprogramados: 12 },
-    { nombre: 'Baby Movil', totales: 100, enCamino: 40, demorados: 11, entregados: 32, cancelados: 5, reprogramados: 12 },
-    { nombre: 'Baby Movil', totales: 100, enCamino: 40, demorados: 10, entregados: 32, cancelados: 5, reprogramados: 12 },
-    { nombre: 'Baby Movil', totales: 100, enCamino: 39, demorados: 11, entregados: 32, cancelados: 5, reprogramados: 12 },
-    { nombre: 'Baby Movil', totales: 100, enCamino: 40, demorados: 11, entregados: 32, cancelados: 5, reprogramados: 12 },
-  ]);
+const ENDPOINT = '/api/sellers';
 
+const Sellers = () => {
+  const [sellersData, setSellersData] = useState([]);
+  const [montoTotal, setMontoTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [busqueda, setBusqueda] = useState('');
+
+  const aplicar = useCallback((res) => {
+    setSellersData(res.sellers ?? []);
+    setMontoTotal(res.montoTotal ?? 0);
+    setError('');
+  }, []);
+
+  useEffect(() => {
+    let cancelado = false;
+    apiFetch(ENDPOINT)
+      .then((res) => {
+        if (!cancelado) aplicar(res);
+      })
+      .catch((err) => {
+        if (!cancelado) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelado) setLoading(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [aplicar]);
 
   const sellersFiltrados = useMemo(
     () => filtrarPorTexto(sellersData, busqueda, ['nombre']),
@@ -24,20 +45,28 @@ const Sellers = () => {
   // seller, el resumen de abajo es el de ese seller.
   const totalPaquetes = sellersFiltrados.reduce((sum, seller) => sum + seller.totales, 0);
   const totalEnCamino = sellersFiltrados.reduce((sum, seller) => sum + seller.enCamino, 0);
-  const montoTotal = 300000;
+  const montoFiltrado = sellersFiltrados.reduce((sum, seller) => sum + seller.monto, 0);
 
   return (
     <div className="max-w-7xl mx-auto">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
         <h2 className="text-2xl font-bold text-gray-800 mb-6">Sellers</h2>
 
-        <Buscador
-          valor={busqueda}
-          onChange={setBusqueda}
-          placeholder="Buscar seller por nombre..."
-          resultados={sellersFiltrados.length}
-          total={sellersData.length}
-        />
+        {error && (
+          <p className="mb-4 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+            {error}
+          </p>
+        )}
+
+        {!loading && sellersData.length > 0 && (
+          <Buscador
+            valor={busqueda}
+            onChange={setBusqueda}
+            placeholder="Buscar seller por nombre..."
+            resultados={sellersFiltrados.length}
+            total={sellersData.length}
+          />
+        )}
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -53,24 +82,34 @@ const Sellers = () => {
               </tr>
             </thead>
             <tbody>
-              {sellersFiltrados.length === 0 && (
+              {loading && (
                 <tr>
                   <td colSpan={7} className="py-6 px-4 text-center text-gray-500">
-                    Ningún seller coincide con &quot;{busqueda.trim()}&quot;.
+                    Cargando sellers...
                   </td>
                 </tr>
               )}
-              {sellersFiltrados.map((seller, index) => (
-                <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4 font-medium text-gray-800">{seller.nombre}</td>
-                  <td className="py-3 px-4 text-gray-600">{seller.totales}</td>
-                  <td className="py-3 px-4 text-gray-600">{seller.enCamino}</td>
-                  <td className="py-3 px-4 text-red-500 font-medium">{seller.demorados}</td>
-                  <td className="py-3 px-4 text-green-500 font-medium">{seller.entregados}</td>
-                  <td className="py-3 px-4 text-gray-500">{seller.cancelados}</td>
-                  <td className="py-3 px-4 text-orange-500">{seller.reprogramados}</td>
+              {!loading && sellersFiltrados.length === 0 && !error && (
+                <tr>
+                  <td colSpan={7} className="py-6 px-4 text-center text-gray-500">
+                    {busqueda.trim()
+                      ? `Ningún seller coincide con "${busqueda.trim()}".`
+                      : 'Todavía no tenés sellers cargados.'}
+                  </td>
                 </tr>
-              ))}
+              )}
+              {!loading &&
+                sellersFiltrados.map((seller) => (
+                  <tr key={seller.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-4 font-medium text-gray-800">{seller.nombre}</td>
+                    <td className="py-3 px-4 text-gray-600">{seller.totales}</td>
+                    <td className="py-3 px-4 text-gray-600">{seller.enCamino}</td>
+                    <td className="py-3 px-4 text-red-500 font-medium">{seller.demorados}</td>
+                    <td className="py-3 px-4 text-green-500 font-medium">{seller.entregados}</td>
+                    <td className="py-3 px-4 text-gray-500">{seller.cancelados}</td>
+                    <td className="py-3 px-4 text-orange-500">{seller.reprogramados}</td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
@@ -86,7 +125,7 @@ const Sellers = () => {
           </div>
           <div>
             <p className="text-2xl font-bold text-green-600">
-              ${montoTotal.toLocaleString()}
+              ${(busqueda.trim() ? montoFiltrado : montoTotal).toLocaleString()}
             </p>
           </div>
         </div>

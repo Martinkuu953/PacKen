@@ -8,7 +8,7 @@ const CAMPOS_BUSQUEDA = ['nombre', 'dni'];
 
 // Reusamos /api/solicitudes: ya devuelve todos los transportistas de la
 // empresa con su estado. Un endpoint propio sería otra Serverless Function y
-// el plan Hobby de Vercel permite 12 (hoy hay 11).
+// el plan Hobby de Vercel permite 12 (hoy ya se llegó al límite con /api/sellers).
 const ENDPOINT = '/api/solicitudes';
 
 const formatearFecha = (iso) => {
