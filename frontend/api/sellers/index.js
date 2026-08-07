@@ -39,15 +39,18 @@ export default async function handler(req, res) {
     const supabase = getSupabase();
     const idempresa = usuario.id;
 
-    const [sellers, paquetes, precios] = await Promise.all([
-      supabase.from('seller').select('id, public_id, nombre').eq('idempresa', idempresa).order('nombre'),
-      supabase.from('paquete').select('idseller, idzona, estado').eq('idempresa', idempresa),
-      supabase.from('lista_precios').select('idseller, idzona, precio').eq('idempresa', idempresa),
-    ]);
+    const sellers = await supabase
+      .from('seller')
+      .select('id, public_id, nombre')
+      .eq('idempresa', idempresa)
+      .order('nombre');
+    if (sellers.error) throw new Error(`seller: ${sellers.error.message}`);
 
-    for (const r of [sellers, paquetes, precios]) {
-      if (r.error) throw new Error(r.error.message);
-    }
+    const paquetes = await supabase.from('paquete').select('idseller, idzona, estado').eq('idempresa', idempresa);
+    if (paquetes.error) throw new Error(`paquete: ${paquetes.error.message}`);
+
+    const precios = await supabase.from('lista_precios').select('idseller, idzona, precio').eq('idempresa', idempresa);
+    if (precios.error) throw new Error(`lista_precios: ${precios.error.message}`);
 
     // Precio vigente por (seller, zona): sirve para valorizar los entregados
     // sin guardar el monto en cada paquete.
