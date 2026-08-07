@@ -16,7 +16,6 @@ const [, , sellerIdArg, refreshTokenArg, nombreArg] = process.argv;
 const sellerId = sellerIdArg;
 // refresh_token: arg de CLI, si no, el de .env
 const refreshToken = refreshTokenArg || process.env.VITE_ML_REFRESH_TOKEN;
-const nombre = nombreArg || `Seller ${sellerId}`;
 const idEmpresa = 1; // empresa por defecto (existe en la DB)
 
 // Credenciales de la app de ML (acepta nombres con o sin prefijo VITE_)
@@ -68,7 +67,38 @@ function enmascarar(t) {
   return `${t.slice(0, 12)}…${t.slice(-6)} (len=${t.length})`;
 }
 
-// ── 1) Asegurar que el seller exista ──────────────────────────────────────
+// Trae el nombre real de la cuenta desde la API de ML. nickname es lo que
+// el vendedor ve como su propio nombre público; si no vino, caemos a
+// first_name + last_name.
+async function obtenerNombreSeller(accessToken) {
+  console.log('👤 Pidiendo datos del vendedor a MercadoLibre...');
+  const res = await fetch(`${ML_API}/users/me`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(`ML API error ${res.status} en /users/me: ${data.message || JSON.stringify(data)}`);
+  }
+
+  return data.nickname || [data.first_name, data.last_name].filter(Boolean).join(' ') || null;
+}
+
+// ── 1) Pedir access_token a ML (lo necesitamos para leer el nombre real) ──
+const data = await pedirRefreshAML(refreshToken);
+const accessToken = data.access_token;
+const nuevoRefreshToken = data.refresh_token || refreshToken;
+const expiresAt = new Date(Date.now() + (data.expires_in - 60) * 1000);
+
+console.log('🔑 access_token   :', enmascarar(accessToken));
+console.log('🔁 refresh_token  :', enmascarar(nuevoRefreshToken));
+console.log('⏰ expira         :', expiresAt.toISOString());
+
+// ── 2) Nombre del seller: el que se pasó a mano, o el real de ML ──────────
+const nombre = nombreArg || (await obtenerNombreSeller(accessToken)) || `Seller ${sellerId}`;
+console.log(`📛 Nombre: ${nombre}${nombreArg ? ' (a mano)' : ' (desde ML)'}`);
+
+// ── 3) Asegurar que el seller exista, o actualizar su nombre ──────────────
 const { rows: sellerRows } = await query(
   'SELECT id FROM seller WHERE idmercadolibre = $1 LIMIT 1',
   [String(sellerId)]
@@ -77,7 +107,8 @@ const { rows: sellerRows } = await query(
 let idSellerInterno;
 if (sellerRows.length > 0) {
   idSellerInterno = sellerRows[0].id;
-  console.log(`✅ Seller ya existe: idmercadolibre=${sellerId} → id interno=${idSellerInterno}`);
+  await query('UPDATE seller SET nombre = $1 WHERE id = $2', [nombre, idSellerInterno]);
+  console.log(`✅ Seller ya existe: idmercadolibre=${sellerId} → id interno=${idSellerInterno} (nombre actualizado)`);
 } else {
   const { rows } = await query(
     `INSERT INTO seller (idempresa, nombre, idmercadolibre)
@@ -89,17 +120,7 @@ if (sellerRows.length > 0) {
   console.log(`🆕 Seller creado: idmercadolibre=${sellerId} → id interno=${idSellerInterno}`);
 }
 
-// ── 2) Pedir access_token a ML ────────────────────────────────────────────
-const data = await pedirRefreshAML(refreshToken);
-const accessToken = data.access_token;
-const nuevoRefreshToken = data.refresh_token || refreshToken;
-const expiresAt = new Date(Date.now() + (data.expires_in - 60) * 1000);
-
-console.log('🔑 access_token   :', enmascarar(accessToken));
-console.log('🔁 refresh_token  :', enmascarar(nuevoRefreshToken));
-console.log('⏰ expira         :', expiresAt.toISOString());
-
-// ── 3) Guardar (upsert) en meli_token ─────────────────────────────────────
+// ── 4) Guardar (upsert) en meli_token ─────────────────────────────────────
 const { rows: tokenRows } = await query(
   'SELECT id FROM meli_token WHERE idseller = $1 LIMIT 1',
   [idSellerInterno]
@@ -123,7 +144,7 @@ if (tokenRows.length > 0) {
   console.log(`💾 Token INSERTADO en meli_token (id=${rows[0].id})`);
 }
 
-// ── 4) Verificación: releer de la DB ──────────────────────────────────────
+// ── 5) Verificación: releer de la DB ──────────────────────────────────────
 const { rows: check } = await query(
   'SELECT id, idseller, expires_at, fechaactualizacion FROM meli_token WHERE idseller = $1',
   [idSellerInterno]
