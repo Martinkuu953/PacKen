@@ -175,6 +175,100 @@ export async function resolverSellerInterno(supabase, sellerIdMl) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Conexión inicial de un seller (OAuth "authorization_code")
+// ──────────────────────────────────────────────────────────────────────────
+
+// Canjea el "code" que ML manda por redirect_uri por el primer access_token
+// + refresh_token del seller. A diferencia de refreshMLToken (grant
+// "refresh_token", usado en cada renovación), este solo se usa una vez, al
+// conectar la cuenta.
+export async function pedirTokenPorCodigo(code, redirectUri) {
+  const params = new URLSearchParams({
+    grant_type: 'authorization_code',
+    client_id: process.env.ML_CLIENT_ID,
+    client_secret: process.env.ML_CLIENT_SECRET,
+    code,
+    redirect_uri: redirectUri,
+  });
+
+  const res = await fetch(`${ML_API}/oauth/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params,
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(`Error canjeando code por token: ${data.message || res.status}`);
+  }
+  return data;
+}
+
+export async function obtenerUsuarioML(accessToken) {
+  return callMLAPI('/users/me', accessToken);
+}
+
+// Crea el seller (o actualiza su nombre/empresa si ya existía por otro
+// medio, ej. registrar-seller.mjs) y guarda su primer token.
+export async function guardarSellerYToken(
+  supabase,
+  { idempresa, idMercadoLibre, nombre, accessToken, refreshToken, expiresIn },
+) {
+  const { data: sellerExistente, error: selErr } = await supabase
+    .from('seller')
+    .select('id')
+    .eq('idmercadolibre', String(idMercadoLibre))
+    .maybeSingle();
+  if (selErr) throw new Error(selErr.message);
+
+  let idSellerInterno;
+  if (sellerExistente) {
+    idSellerInterno = sellerExistente.id;
+    const { error } = await supabase
+      .from('seller')
+      .update({ nombre, idempresa })
+      .eq('id', idSellerInterno);
+    if (error) throw new Error(error.message);
+  } else {
+    const { data, error } = await supabase
+      .from('seller')
+      .insert({ idempresa, nombre, idmercadolibre: String(idMercadoLibre) })
+      .select('id')
+      .single();
+    if (error) throw new Error(error.message);
+    idSellerInterno = data.id;
+  }
+
+  const expiresAt = new Date(Date.now() + (expiresIn - 60) * 1000).toISOString();
+  const { data: tokenExistente, error: tokErr } = await supabase
+    .from('meli_token')
+    .select('id')
+    .eq('idseller', idSellerInterno)
+    .maybeSingle();
+  if (tokErr) throw new Error(tokErr.message);
+
+  if (tokenExistente) {
+    const { error } = await supabase
+      .from('meli_token')
+      .update({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        expires_at: expiresAt,
+        fechaactualizacion: new Date().toISOString(),
+      })
+      .eq('id', tokenExistente.id);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase
+      .from('meli_token')
+      .insert({ access_token: accessToken, refresh_token: refreshToken, expires_at: expiresAt, idseller: idSellerInterno });
+    if (error) throw new Error(error.message);
+  }
+
+  return { idSellerInterno, yaExistia: Boolean(sellerExistente) };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Mapeo del shipment de ML → datos del paquete
 // ──────────────────────────────────────────────────────────────────────────
 function limpiarTelefono(tel) {

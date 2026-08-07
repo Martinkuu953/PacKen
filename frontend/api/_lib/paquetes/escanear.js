@@ -3,8 +3,8 @@ import {
   resolverSellerInterno,
   obtenerShipment,
   ESTADO_POR_TIPO,
-} from '../_lib/ml.js';
-import { autenticar } from '../_lib/auth.js';
+} from '../ml.js';
+import { autenticar } from '../auth.js';
 
 // POST /api/paquetes/escanear  { shipmentId, sellerId, tipo }
 export default async function handler(req, res) {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../services/api';
 import Buscador from '../components/Buscador';
 import { filtrarPorTexto } from '../utils/busqueda';
@@ -11,12 +12,20 @@ const Sellers = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busqueda, setBusqueda] = useState('');
+  const [conectando, setConectando] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const aplicar = useCallback((res) => {
     setSellersData(res.sellers ?? []);
     setMontoTotal(res.montoTotal ?? 0);
     setError('');
   }, []);
+
+  // Refresco silencioso (sin volver a mostrar "Cargando...") para después de
+  // conectar un seller nuevo: la tabla ya tiene datos, solo hay que actualizarla.
+  const recargar = useCallback(() => {
+    return apiFetch(ENDPOINT).then(aplicar).catch((err) => setError(err.message));
+  }, [aplicar]);
 
   useEffect(() => {
     let cancelado = false;
@@ -36,6 +45,38 @@ const Sellers = () => {
     };
   }, [aplicar]);
 
+  // Al volver del login de Mercado Libre, /api/ml/callback nos manda acá con
+  // ?ml=ok o ?ml=error. Guardamos el resultado una sola vez (al montar) para
+  // que el cartel no desaparezca apenas limpiamos el query param de la URL.
+  const [resultadoConexion] = useState(() => searchParams.get('ml'));
+  useEffect(() => {
+    if (!resultadoConexion) return;
+    if (resultadoConexion === 'ok') recargar();
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('ml');
+        return next;
+      },
+      { replace: true },
+    );
+    // Solo al montar: resultadoConexion no cambia después de la inicialización.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const conectarSeller = useCallback(() => {
+    setConectando(true);
+    setError('');
+    apiFetch('/api/ml/conectar')
+      .then((res) => {
+        window.location.href = res.url;
+      })
+      .catch((err) => {
+        setError(err.message);
+        setConectando(false);
+      });
+  }, []);
+
   const sellersFiltrados = useMemo(
     () => filtrarPorTexto(sellersData, busqueda, ['nombre']),
     [sellersData, busqueda],
@@ -50,7 +91,23 @@ const Sellers = () => {
   return (
     <div className="max-w-7xl mx-auto">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Sellers</h2>
+        <div className="flex items-start justify-between gap-3 mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Sellers</h2>
+          <button
+            type="button"
+            onClick={conectarSeller}
+            disabled={conectando}
+            className="text-sm px-3 py-1.5 bg-blue-100 text-blue-800 border border-blue-200 rounded-lg hover:bg-blue-200 transition-colors duration-150 font-medium whitespace-nowrap disabled:opacity-60"
+          >
+            {conectando ? 'Redirigiendo...' : 'Conectar con Mercado Libre'}
+          </button>
+        </div>
+
+        {resultadoConexion === 'error' && (
+          <p className="mb-4 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+            No se pudo conectar el seller con Mercado Libre. Probá de nuevo.
+          </p>
+        )}
 
         {error && (
           <p className="mb-4 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-2">

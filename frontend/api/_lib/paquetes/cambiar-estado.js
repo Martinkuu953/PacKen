@@ -1,5 +1,5 @@
-import { getSupabase } from '../_lib/ml.js';
-import { autenticar, requiereRol } from '../_lib/auth.js';
+import { getSupabase } from '../ml.js';
+import { autenticar } from '../auth.js';
 
 const ESTADOS_VALIDOS = ['Ingresado', 'En camino', 'Entregado', 'Cancelado', 'Reprogramado'];
 
