@@ -85,6 +85,7 @@ const Sellers = () => {
   // Los totales se calculan sobre lo que se está viendo: si filtrás por un
   // seller, el resumen de abajo es el de ese seller.
   const totalPaquetes = sellersFiltrados.reduce((sum, seller) => sum + seller.totales, 0);
+  const totalIngresados = sellersFiltrados.reduce((sum, seller) => sum + seller.ingresados, 0);
   const totalEnCamino = sellersFiltrados.reduce((sum, seller) => sum + seller.enCamino, 0);
   const montoFiltrado = sellersFiltrados.reduce((sum, seller) => sum + seller.monto, 0);
 
@@ -131,6 +132,7 @@ const Sellers = () => {
               <tr className="border-b border-gray-200 bg-gray-50">
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Nombre</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Totales</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">Ingresado</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">En camino</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Demorados</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Entregados</th>
@@ -141,14 +143,14 @@ const Sellers = () => {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={7} className="py-6 px-4 text-center text-gray-500">
+                  <td colSpan={8} className="py-6 px-4 text-center text-gray-500">
                     Cargando sellers...
                   </td>
                 </tr>
               )}
               {!loading && sellersFiltrados.length === 0 && !error && (
                 <tr>
-                  <td colSpan={7} className="py-6 px-4 text-center text-gray-500">
+                  <td colSpan={8} className="py-6 px-4 text-center text-gray-500">
                     {busqueda.trim()
                       ? `Ningún seller coincide con "${busqueda.trim()}".`
                       : 'Todavía no tenés sellers cargados.'}
@@ -160,6 +162,7 @@ const Sellers = () => {
                   <tr key={seller.id} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="py-3 px-4 font-medium text-gray-800">{seller.nombre}</td>
                     <td className="py-3 px-4 text-gray-600">{seller.totales}</td>
+                    <td className="py-3 px-4 text-blue-500 font-medium">{seller.ingresados}</td>
                     <td className="py-3 px-4 text-gray-600">{seller.enCamino}</td>
                     <td className="py-3 px-4 text-red-500 font-medium">{seller.demorados}</td>
                     <td className="py-3 px-4 text-green-500 font-medium">{seller.entregados}</td>
@@ -175,6 +178,9 @@ const Sellers = () => {
           <div className="space-y-1">
             <p className="text-gray-600">
               <span className="font-semibold">Total:</span> {totalPaquetes}
+            </p>
+            <p className="text-gray-600">
+              <span className="font-semibold">Ingresados total:</span> {totalIngresados}
             </p>
             <p className="text-gray-600">
               <span className="font-semibold">En camino total:</span> {totalEnCamino}

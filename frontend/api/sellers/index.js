@@ -13,12 +13,22 @@ function normalizarEstado(estado) {
 }
 
 function resumenVacio() {
-  return { totales: 0, enCamino: 0, demorados: 0, entregados: 0, cancelados: 0, reprogramados: 0, monto: 0 };
+  return {
+    totales: 0,
+    ingresados: 0,
+    enCamino: 0,
+    demorados: 0,
+    entregados: 0,
+    cancelados: 0,
+    reprogramados: 0,
+    monto: 0,
+  };
 }
 
 function acumular(resumen, estado) {
   const e = normalizarEstado(estado);
   resumen.totales += 1;
+  if (e.includes('ingresad')) resumen.ingresados += 1;
   if (e.includes('atrasad') || e.includes('demorad')) resumen.demorados += 1;
   if (e.includes('camino')) resumen.enCamino += 1;
   if (e.includes('entregad')) resumen.entregados += 1;
@@ -39,21 +49,33 @@ export default async function handler(req, res) {
     const supabase = getSupabase();
     const idempresa = usuario.id;
 
-    const [sellers, paquetes, precios] = await Promise.all([
-      supabase.from('seller').select('id, public_id, nombre').eq('idempresa', idempresa).order('nombre'),
+    const [sellers, paquetes, listasPrecio] = await Promise.all([
+      supabase
+        .from('seller')
+        .select('id, public_id, nombre, idlistaprecio')
+        .eq('idempresa', idempresa)
+        .order('nombre'),
       supabase.from('paquete').select('idseller, idzona, estado').eq('idempresa', idempresa),
-      supabase.from('lista_precios').select('idseller, idzona, precio').eq('idempresa', idempresa),
+      supabase.from('listaprecio').select('id').eq('idempresa', idempresa).eq('tipo', 'precio'),
     ]);
 
     if (sellers.error) throw new Error(`seller: ${sellers.error.message}`);
     if (paquetes.error) throw new Error(`paquete: ${paquetes.error.message}`);
-    if (precios.error) throw new Error(`lista_precios: ${precios.error.message}`);
+    if (listasPrecio.error) throw new Error(`listaprecio: ${listasPrecio.error.message}`);
 
-    // Precio vigente por (seller, zona): sirve para valorizar los entregados
-    // sin guardar el monto en cada paquete.
-    const precioPorSellerZona = new Map(
-      (precios.data ?? []).map((p) => [`${p.idseller}-${p.idzona}`, Number(p.precio)]),
+    const listaIds = (listasPrecio.data ?? []).map((l) => l.id);
+    const detalle = listaIds.length
+      ? await supabase.from('listaprecio_detalle').select('idlistaprecio, idzona, precio').in('idlistaprecio', listaIds)
+      : { data: [], error: null };
+    if (detalle.error) throw new Error(`listaprecio_detalle: ${detalle.error.message}`);
+
+    // Precio vigente por (lista, zona): sirve para valorizar los entregados
+    // sin guardar el monto en cada paquete. La lista de un seller sale de
+    // seller.idlistaprecio.
+    const precioPorListaZona = new Map(
+      (detalle.data ?? []).map((d) => [`${d.idlistaprecio}-${d.idzona}`, Number(d.precio)]),
     );
+    const idlistaPorSeller = new Map((sellers.data ?? []).map((s) => [s.id, s.idlistaprecio]));
 
     const resumenPorSeller = new Map();
     for (const p of paquetes.data ?? []) {
@@ -62,7 +84,10 @@ export default async function handler(req, res) {
       acumular(resumen, p.estado);
 
       if (normalizarEstado(p.estado).includes('entregad')) {
-        resumen.monto += precioPorSellerZona.get(`${p.idseller}-${p.idzona}`) ?? 0;
+        const idlista = idlistaPorSeller.get(p.idseller);
+        if (idlista != null) {
+          resumen.monto += precioPorListaZona.get(`${idlista}-${p.idzona}`) ?? 0;
+        }
       }
     }
 
