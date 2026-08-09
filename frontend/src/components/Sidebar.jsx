@@ -11,7 +11,6 @@ const allMenuItems = [
   { name: 'Estadísticas', path: '/estadisticas', roles: ['empresa'] },
   { name: 'Mi Perfil', path: '/perfil', roles: ['empresa', 'transportista'] },
   { name: 'Listas de precios', path: '/listas-precios', roles: ['empresa'] },
-  { name: 'Listas de costos', path: '/listas-costos', roles: ['empresa'] },
   { name: 'Liquidaciones', path: '/liquidaciones', roles: ['empresa'] },
 ];
 
