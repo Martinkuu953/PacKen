@@ -9,7 +9,6 @@ import Paquetes from './pages/Paquetes';
 import Solicitudes from './pages/Solicitudes';
 import Sellers from './pages/Sellers';
 import ListasPrecios from './pages/ListasPrecios';
-import ListasCostos from './pages/ListasCostos';
 import Transportistas from './pages/Transportistas';
 
 function RutaProtegida({ children, rolesPermitidos }) {
@@ -88,11 +87,6 @@ function AppRoutes() {
       <Route path="/listas-precios" element={
         <RutaProtegida rolesPermitidos={['empresa']}>
           <ListasPrecios />
-        </RutaProtegida>
-      } />
-      <Route path="/listas-costos" element={
-        <RutaProtegida rolesPermitidos={['empresa']}>
-          <ListasCostos />
         </RutaProtegida>
       } />
       <Route path="/liquidaciones" element={
