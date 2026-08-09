@@ -3,8 +3,9 @@ import { autenticar, requiereRol } from '../_lib/auth.js';
 
 // GET /api/sellers — un seller por fila con sus paquetes agrupados por
 // estado y el monto facturado (entregados), todo calculado en el momento a
-// partir de paquete + lista_precios: no hay columnas de estadísticas
-// precalculadas en "seller".
+// partir de paquete + la lista de precios (tipo='precio') a la que
+// pertenezca el seller: no hay columnas de estadísticas precalculadas en
+// "seller".
 //
 // Todo filtrado por la empresa del token, mismo criterio que /api/precios.
 
@@ -13,12 +14,13 @@ function normalizarEstado(estado) {
 }
 
 function resumenVacio() {
-  return { totales: 0, enCamino: 0, demorados: 0, entregados: 0, cancelados: 0, reprogramados: 0, monto: 0 };
+  return { totales: 0, ingresados: 0, enCamino: 0, demorados: 0, entregados: 0, cancelados: 0, reprogramados: 0, monto: 0 };
 }
 
 function acumular(resumen, estado) {
   const e = normalizarEstado(estado);
   resumen.totales += 1;
+  if (e.includes('ingresad')) resumen.ingresados += 1;
   if (e.includes('atrasad') || e.includes('demorad')) resumen.demorados += 1;
   if (e.includes('camino')) resumen.enCamino += 1;
   if (e.includes('entregad')) resumen.entregados += 1;
@@ -39,20 +41,34 @@ export default async function handler(req, res) {
     const supabase = getSupabase();
     const idempresa = usuario.id;
 
-    const [sellers, paquetes, precios] = await Promise.all([
+    // Las listas de precios de esta empresa: hacen falta primero para poder
+    // traer solo sus miembros y montos por zona.
+    const listasPrecio = await supabase.from('lista').select('id').eq('idempresa', idempresa).eq('tipo', 'precio');
+    if (listasPrecio.error) throw new Error(`lista: ${listasPrecio.error.message}`);
+    const idListas = (listasPrecio.data ?? []).map((l) => l.id);
+
+    const [sellers, paquetes, miembros, montos] = await Promise.all([
       supabase.from('seller').select('id, public_id, nombre').eq('idempresa', idempresa).order('nombre'),
       supabase.from('paquete').select('idseller, idzona, estado').eq('idempresa', idempresa),
-      supabase.from('lista_precios').select('idseller, idzona, precio').eq('idempresa', idempresa),
+      idListas.length > 0
+        ? supabase.from('lista_miembro_seller').select('idlista, idseller').in('idlista', idListas)
+        : Promise.resolve({ data: [], error: null }),
+      idListas.length > 0
+        ? supabase.from('lista_zona_monto').select('idlista, idzona, monto').in('idlista', idListas)
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
     if (sellers.error) throw new Error(`seller: ${sellers.error.message}`);
     if (paquetes.error) throw new Error(`paquete: ${paquetes.error.message}`);
-    if (precios.error) throw new Error(`lista_precios: ${precios.error.message}`);
+    if (miembros.error) throw new Error(`lista_miembro_seller: ${miembros.error.message}`);
+    if (montos.error) throw new Error(`lista_zona_monto: ${montos.error.message}`);
 
-    // Precio vigente por (seller, zona): sirve para valorizar los entregados
-    // sin guardar el monto en cada paquete.
-    const precioPorSellerZona = new Map(
-      (precios.data ?? []).map((p) => [`${p.idseller}-${p.idzona}`, Number(p.precio)]),
+    // Lista de precios a la que pertenece cada seller, y precio vigente por
+    // (lista, zona): sirve para valorizar los entregados sin guardar el
+    // monto en cada paquete.
+    const listaPorSeller = new Map((miembros.data ?? []).map((m) => [m.idseller, m.idlista]));
+    const precioPorListaZona = new Map(
+      (montos.data ?? []).map((m) => [`${m.idlista}-${m.idzona}`, Number(m.monto)]),
     );
 
     const resumenPorSeller = new Map();
@@ -62,7 +78,8 @@ export default async function handler(req, res) {
       acumular(resumen, p.estado);
 
       if (normalizarEstado(p.estado).includes('entregad')) {
-        resumen.monto += precioPorSellerZona.get(`${p.idseller}-${p.idzona}`) ?? 0;
+        const idlista = listaPorSeller.get(p.idseller);
+        resumen.monto += (idlista != null ? precioPorListaZona.get(`${idlista}-${p.idzona}`) : undefined) ?? 0;
       }
     }
 
