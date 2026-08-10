@@ -7,13 +7,14 @@
 // exponen como endpoints en Vercel, pero sí se pueden importar.
 
 import { createClient } from '@supabase/supabase-js';
+import { ESTADOS } from '../../shared/estados.js';
 
 const ML_API = 'https://api.mercadolibre.com';
 
 // Estado operativo del courier según la acción de escaneo.
 export const ESTADO_POR_TIPO = {
-  colecta: 'Ingresado',
-  reparto: 'En camino',
+  colecta: ESTADOS.INGRESADO,
+  reparto: ESTADOS.EN_CAMINO,
 };
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -35,17 +36,17 @@ export function getSupabase() {
 export function traducirEstadoML(status) {
   switch (status) {
     case 'delivered':
-      return 'Entregado';
+      return ESTADOS.ENTREGADO;
     case 'cancelled':
-      return 'Cancelado';
+      return ESTADOS.CANCELADO;
     case 'not_delivered':
-      return 'Reprogramado';
+      return ESTADOS.REPROGRAMADO;
     case 'shipped':
-      return 'En camino';
+      return ESTADOS.EN_CAMINO;
     case 'pending':
     case 'handling':
     case 'ready_to_ship':
-      return 'Ingresado';
+      return ESTADOS.INGRESADO;
     default:
       return null;
   }

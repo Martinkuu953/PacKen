@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../services/api';
 import Buscador from '../components/Buscador';
+import FormNuevoSeller from '../components/FormNuevoSeller';
 import { filtrarPorTexto } from '../utils/busqueda';
 
 const ENDPOINT = '/api/sellers';
@@ -13,6 +14,7 @@ const Sellers = () => {
   const [error, setError] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [conectando, setConectando] = useState(false);
+  const [creando, setCreando] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const aplicar = useCallback((res) => {
@@ -93,15 +95,34 @@ const Sellers = () => {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-start justify-between gap-3 mb-6">
           <h2 className="text-2xl font-bold text-gray-800">Sellers</h2>
-          <button
-            type="button"
-            onClick={conectarSeller}
-            disabled={conectando}
-            className="text-sm px-3 py-1.5 bg-blue-100 text-blue-800 border border-blue-200 rounded-lg hover:bg-blue-200 transition-colors duration-150 font-medium whitespace-nowrap disabled:opacity-60"
-          >
-            {conectando ? 'Redirigiendo...' : 'Conectar con Mercado Libre'}
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setCreando((prev) => !prev)}
+              className="text-sm px-3 py-1.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors duration-150 font-medium whitespace-nowrap"
+            >
+              Nuevo seller
+            </button>
+            <button
+              type="button"
+              onClick={conectarSeller}
+              disabled={conectando}
+              className="text-sm px-3 py-1.5 bg-blue-100 text-blue-800 border border-blue-200 rounded-lg hover:bg-blue-200 transition-colors duration-150 font-medium whitespace-nowrap disabled:opacity-60"
+            >
+              {conectando ? 'Redirigiendo...' : 'Conectar con Mercado Libre'}
+            </button>
+          </div>
         </div>
+
+        {creando && (
+          <FormNuevoSeller
+            onCreado={() => {
+              setCreando(false);
+              recargar();
+            }}
+            onCancelar={() => setCreando(false)}
+          />
+        )}
 
         {resultadoConexion === 'error' && (
           <p className="mb-4 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-2">

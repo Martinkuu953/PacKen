@@ -1,7 +1,6 @@
 import { getSupabase } from '../ml.js';
 import { autenticar } from '../auth.js';
-
-const ESTADOS_VALIDOS = ['Ingresado', 'En camino', 'Entregado', 'Cancelado', 'Reprogramado'];
+import { ESTADOS, canonizarEstado } from '../../../shared/estados.js';
 
 // POST /api/paquetes/cambiar-estado  { id, estado }
 export default async function handler(req, res) {
@@ -18,7 +17,8 @@ export default async function handler(req, res) {
     if (!id || !estado) {
       return res.status(400).json({ error: 'id y estado son requeridos' });
     }
-    if (!ESTADOS_VALIDOS.includes(estado)) {
+    const estadoCanonico = canonizarEstado(estado);
+    if (!estadoCanonico) {
       return res.status(400).json({ error: `Estado inválido: "${estado}"` });
     }
 
@@ -44,8 +44,8 @@ export default async function handler(req, res) {
       }
     }
 
-    const updateData = { estado };
-    if (estado === 'Entregado') {
+    const updateData = { estado: estadoCanonico };
+    if (estadoCanonico === ESTADOS.ENTREGADO) {
       updateData.fechaentrega = new Date().toISOString();
     }
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch } from '../services/api';
 import Buscador from '../components/Buscador';
+import FormNuevoTransportista from '../components/FormNuevoTransportista';
 import { filtrarPorTexto } from '../utils/busqueda';
 
 const CAMPOS_BUSQUEDA = ['nombre', 'dni'];
@@ -24,11 +25,17 @@ const Transportistas = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busqueda, setBusqueda] = useState('');
+  const [creando, setCreando] = useState(false);
 
   const aplicar = useCallback((res) => {
     setTransportistas(res.solicitudes ?? []);
     setError('');
   }, []);
+
+  const recargar = useCallback(
+    () => apiFetch(ENDPOINT).then(aplicar).catch((err) => setError(err.message)),
+    [aplicar],
+  );
 
   useEffect(() => {
     let cancelado = false;
@@ -75,15 +82,34 @@ const Transportistas = () => {
               {loading ? 'Cargando...' : `${activos.length} activo${activos.length === 1 ? '' : 's'}`}
             </p>
           </div>
-          {pendientes > 0 && (
-            <Link
-              to="/solicitudes"
-              className="text-xs sm:text-sm px-3 py-1.5 bg-amber-100 text-amber-800 border border-amber-200 rounded-lg hover:bg-amber-200 transition-colors duration-150 font-medium whitespace-nowrap"
+          <div className="flex items-center gap-2">
+            {pendientes > 0 && (
+              <Link
+                to="/solicitudes"
+                className="text-xs sm:text-sm px-3 py-1.5 bg-amber-100 text-amber-800 border border-amber-200 rounded-lg hover:bg-amber-200 transition-colors duration-150 font-medium whitespace-nowrap"
+              >
+                {pendientes} pendiente{pendientes === 1 ? '' : 's'} →
+              </Link>
+            )}
+            <button
+              type="button"
+              onClick={() => setCreando((prev) => !prev)}
+              className="text-xs sm:text-sm px-3 py-1.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors duration-150 font-medium whitespace-nowrap"
             >
-              {pendientes} pendiente{pendientes === 1 ? '' : 's'} →
-            </Link>
-          )}
+              Nuevo transportista
+            </button>
+          </div>
         </div>
+
+        {creando && (
+          <FormNuevoTransportista
+            onCreado={() => {
+              setCreando(false);
+              recargar();
+            }}
+            onCancelar={() => setCreando(false)}
+          />
+        )}
 
         {error && (
           <p className="mb-4 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-2">

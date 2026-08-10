@@ -27,8 +27,52 @@ function acumular(resumen, estado) {
   if (e.includes('reprogram')) resumen.reprogramados += 1;
 }
 
+// POST /api/sellers { nombre, idmercadolibre, listaId }
+// Alta manual de un seller: las cuentas las crea la empresa, no se
+// autorregistran. listaId es el public_id de una lista de precios y queda
+// asignado en el alta para no tener que hacerlo en un segundo paso.
+async function crear(req, res, supabase, idempresa) {
+  const { nombre, idmercadolibre, listaId } = req.body ?? {};
+
+  const nom = String(nombre ?? '').trim();
+  if (!nom) return res.status(400).json({ error: 'El nombre es requerido' });
+
+  let idlista = null;
+  if (listaId) {
+    const { data: lista } = await supabase
+      .from('lista')
+      .select('id')
+      .eq('public_id', listaId)
+      .eq('idempresa', idempresa)
+      .eq('tipo', 'precio')
+      .maybeSingle();
+    if (!lista) return res.status(404).json({ error: 'Lista de precios no encontrada' });
+    idlista = lista.id;
+  }
+
+  const { data, error } = await supabase
+    .from('seller')
+    .insert({
+      nombre: nom,
+      idmercadolibre: idmercadolibre ? String(idmercadolibre).trim() : null,
+      idempresa,
+      idlista,
+    })
+    .select('public_id, nombre')
+    .single();
+
+  if (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Ya existe un seller con ese ID de Mercado Libre' });
+    }
+    throw new Error(error.message);
+  }
+
+  return res.status(201).json({ seller: { id: data.public_id, nombre: data.nombre } });
+}
+
 export default async function handler(req, res) {
-  if (req.method !== 'GET') {
+  if (!['GET', 'POST'].includes(req.method)) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -37,6 +81,10 @@ export default async function handler(req, res) {
   if (!requiereRol(res, usuario, 'empresa')) return;
 
   try {
+    if (req.method === 'POST') {
+      return await crear(req, res, getSupabase(), usuario.id);
+    }
+
     const supabase = getSupabase();
     const idempresa = usuario.id;
 
@@ -89,7 +137,7 @@ export default async function handler(req, res) {
 
     return res.json({ sellers: listado, montoTotal });
   } catch (err) {
-    console.error('[PacKen] Error en listar sellers:', err.message);
-    return res.status(500).json({ error: err.message });
+    console.error('[PacKen] Error en /api/sellers:', err.message);
+    return res.status(req.method === 'POST' ? 400 : 500).json({ error: err.message });
   }
 }

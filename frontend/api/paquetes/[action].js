@@ -1,5 +1,6 @@
 import cambiarEstado from '../_lib/paquetes/cambiar-estado.js';
 import escanear from '../_lib/paquetes/escanear.js';
+import reasignar from '../_lib/paquetes/reasignar.js';
 import simularEntregas from '../_lib/paquetes/simular-entregas.js';
 
 // Dispatcher único para /api/paquetes/<action> — consolida 3 rutas en una
@@ -9,6 +10,7 @@ import simularEntregas from '../_lib/paquetes/simular-entregas.js';
 const rutas = {
   'cambiar-estado': cambiarEstado,
   escanear,
+  reasignar,
   'simular-entregas': simularEntregas,
 };
 

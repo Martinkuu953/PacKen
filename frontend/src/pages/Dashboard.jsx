@@ -11,20 +11,21 @@ import {
   FaTruck,
 } from 'react-icons/fa';
 import { usePaquetes } from '../hooks/usePaquetes';
-import { colorEstado, normalizarEstado, prioridadEstado } from '../utils/estados';
+import { ESTADOS, canonizarEstado, colorEstado, prioridadEstado } from '../utils/estados';
 import { useAuth } from '../context/AuthContext';
 
 function calcularResumen(paquetes) {
-  const contar = (predicado) => paquetes.filter((p) => predicado(normalizarEstado(p.estado))).length;
+  const contar = (...estados) =>
+    paquetes.filter((p) => estados.includes(canonizarEstado(p.estado))).length;
 
   return {
     total: paquetes.length,
-    entregados: contar((e) => e.includes('entregad')),
-    demorados: contar((e) => e.includes('atrasad') || e.includes('demorad')),
-    enCamino: contar((e) => e.includes('camino')),
-    ingresados: contar((e) => e.includes('ingresad')),
-    reprogramados: contar((e) => e.includes('reprogram')),
-    cancelados: contar((e) => e.includes('cancel')),
+    entregados: contar(ESTADOS.ENTREGADO),
+    demorados: contar(ESTADOS.ATRASADO, ESTADOS.DEMORADO),
+    enCamino: contar(ESTADOS.EN_CAMINO),
+    ingresados: contar(ESTADOS.INGRESADO),
+    reprogramados: contar(ESTADOS.REPROGRAMADO),
+    cancelados: contar(ESTADOS.CANCELADO),
   };
 }
 

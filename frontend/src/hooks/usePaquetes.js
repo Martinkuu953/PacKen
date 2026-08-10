@@ -1,15 +1,20 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getPaquetes } from '../services/paquetes';
 
-export function usePaquetes() {
+export function usePaquetes(filtros = {}) {
   const [paquetes, setPaquetes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [aviso, setAviso] = useState(null);
 
+  // Los filtros llegan como objeto literal nuevo en cada render: sin esto el
+  // efecto se dispararía en loop.
+  const clave = JSON.stringify(filtros);
+  const filtrosEstables = useMemo(() => JSON.parse(clave), [clave]);
+
   const cargar = useCallback(() => {
     setLoading(true);
-    getPaquetes()
+    getPaquetes(filtrosEstables)
       .then((data) => {
         setPaquetes(data.paquetes ?? []);
         setAviso(data.aviso ?? null);
@@ -32,7 +37,7 @@ export function usePaquetes() {
       .finally(() => {
         setLoading(false);
       });
-  }, []);
+  }, [filtrosEstables]);
 
   useEffect(() => {
     cargar();

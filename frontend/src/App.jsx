@@ -11,6 +11,7 @@ import Sellers from './pages/Sellers';
 import ListasPrecios from './pages/ListasPrecios';
 import EstablecerZonas from './pages/EstablecerZonas';
 import Transportistas from './pages/Transportistas';
+import Estadisticas from './pages/Estadisticas';
 
 function RutaProtegida({ children, rolesPermitidos }) {
   const { autenticado, usuario, aprobado } = useAuth();
@@ -82,7 +83,7 @@ function AppRoutes() {
       } />
       <Route path="/estadisticas" element={
         <RutaProtegida rolesPermitidos={['empresa']}>
-          <h2>Pantalla de Estadísticas en construcción...</h2>
+          <Estadisticas />
         </RutaProtegida>
       } />
       <Route path="/listas" element={
