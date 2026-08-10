@@ -10,7 +10,7 @@ const FiltrosPaquetes = ({ valores, onChange, sellers = [], transportistas = [] 
 
   return (
     <div className="mb-4 p-3 sm:p-4 bg-gray-50 border border-gray-200 rounded-xl">
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <div>
           <label className={LABEL} htmlFor="filtro-seller">Seller</label>
           <select id="filtro-seller" className={SELECT} value={valores.sellerId} onChange={set('sellerId')}>

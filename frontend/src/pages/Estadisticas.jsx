@@ -79,9 +79,51 @@ const Estadisticas = () => {
           </p>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs sm:text-sm text-left">
-            <thead className="text-[10px] sm:text-xs text-gray-500 uppercase border-b border-gray-200">
+        {/* Mobile y tablet: una tarjeta por zona. Ocho columnas no entran en
+            pantalla y el scroll horizontal esconde justo los totales. */}
+        <div className="lg:hidden">
+          {loading && <p className="py-6 text-center text-gray-500">Cargando estadísticas...</p>}
+          {!loading && filas.length === 0 && !error && (
+            <p className="py-6 text-center text-gray-500">
+              No hay paquetes para los filtros seleccionados.
+            </p>
+          )}
+
+          <div className="space-y-3">
+            {!loading &&
+              filas.map((fila) => (
+                <div key={fila.zona} className="bg-white border border-gray-200 rounded-xl p-4">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="font-semibold text-gray-800">{fila.zona}</p>
+                    <p className="text-lg font-bold text-gray-800">{fila.total}</p>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                    {COLUMNAS_ESTADO.map((col) => (
+                      <div key={col.estado} className="flex justify-between gap-2">
+                        <span className="text-gray-500 truncate">{col.label}</span>
+                        <span className={`font-medium ${col.color}`}>{fila[col.estado] ?? 0}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between gap-2">
+                      <span className="text-gray-500">Demorados</span>
+                      <span className="font-medium text-red-500">{fila.demorados}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+          </div>
+
+          {!loading && filas.length > 0 && (
+            <div className="mt-4 pt-3 border-t-2 border-gray-200 flex items-baseline justify-between">
+              <span className="font-bold text-gray-800">Total</span>
+              <span className="text-xl font-bold text-gray-800">{totales.total}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="hidden lg:block overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="text-xs text-gray-500 uppercase border-b border-gray-200">
               <tr>
                 <th className="py-2 px-2">Zona</th>
                 <th className="py-2 px-2">Total</th>

@@ -3,3 +3,14 @@
 body {
   background-color: #F3F4F6;
 }
+
+/* iOS Safari hace zoom automático al enfocar un campo con fuente menor a 16px
+   y después no vuelve atrás, lo que descuadra toda la pantalla. Como casi
+   todos los inputs usan text-sm (14px), se fuerza 16px solo en mobile. */
+@media (max-width: 639px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

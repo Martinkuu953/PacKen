@@ -91,7 +91,7 @@ const Solicitudes = () => {
             {pendientes.map((s) => (
               <div
                 key={s.id}
-                className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl px-4 py-3"
+                className="flex flex-wrap items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3"
               >
                 <div>
                   <p className="font-semibold text-gray-800">{s.nombre}</p>
@@ -124,7 +124,7 @@ const Solicitudes = () => {
             {resueltas.map((s) => (
               <div
                 key={s.id}
-                className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-4 py-3"
+                className="flex flex-wrap items-center justify-between gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3"
               >
                 <div>
                   <p className="font-semibold text-gray-800">{s.nombre}</p>

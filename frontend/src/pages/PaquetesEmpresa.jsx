@@ -24,6 +24,8 @@ const COLUMNAS = [
 
 const CAMPOS_BUSQUEDA = ['idenvioml', 'comprador', 'direccion', 'codigopostal', 'zona', 'seller'];
 
+const ORDENABLES = COLUMNAS.filter((c) => c.campo !== 'acciones');
+
 const formatearFecha = (iso) => {
   if (!iso) return '—';
   const fecha = new Date(iso);
@@ -41,6 +43,62 @@ function compararPaquetes(a, b, campo, dir) {
   }
   return dir === 'asc' ? resultado : -resultado;
 }
+
+const SelectorTransportista = ({ paquete, transportistas, ocupado, onReasignar, className = '' }) => (
+  <select
+    value={paquete.transportistaId ?? ''}
+    disabled={ocupado}
+    onChange={(e) => onReasignar(e.target.value || null)}
+    aria-label="Transportista asignado"
+    className={`text-xs border border-gray-200 rounded-lg px-1.5 py-1 bg-white disabled:opacity-50 ${className}`}
+  >
+    <option value="">Sin asignar</option>
+    {transportistas.map((t) => (
+      <option key={t.id} value={t.id}>{t.nombre}</option>
+    ))}
+  </select>
+);
+
+// Debajo de lg la tabla de diez columnas no entra en pantalla ni con scroll
+// horizontal usable, así que cada paquete se muestra como tarjeta.
+const TarjetaPaquete = ({ paquete, transportistas, ocupado, onReasignar, onEntregar }) => (
+  <div className="bg-white border border-gray-200 rounded-xl p-4">
+    <div className="flex items-start justify-between gap-3">
+      <p className="font-semibold text-gray-800 leading-tight flex-1">{paquete.direccion}</p>
+      <span className={`text-xs font-bold whitespace-nowrap ${colorEstado(paquete.estado)}`}>
+        {paquete.estado}
+      </span>
+    </div>
+
+    <p className="text-sm text-gray-500 mt-1">
+      {paquete.comprador || 'Sin comprador'} · CP {paquete.codigopostal || '—'}
+    </p>
+
+    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
+      <span className="font-mono">{paquete.idenvioml}</span>
+      <span>Zona: <span className="text-gray-700">{paquete.zona || '—'}</span></span>
+      <span>Seller: <span className="text-gray-700">{paquete.seller || '—'}</span></span>
+      <span>Ingreso: <span className="text-gray-700">{formatearFecha(paquete.fechaingreso)}</span></span>
+    </div>
+
+    <div className="mt-3 flex items-center gap-2">
+      <SelectorTransportista
+        paquete={paquete}
+        transportistas={transportistas}
+        ocupado={ocupado}
+        onReasignar={onReasignar}
+        className="flex-1 min-w-0 py-2"
+      />
+      <button
+        onClick={onEntregar}
+        disabled={ocupado}
+        className="text-sm px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 transition-colors duration-150 font-medium whitespace-nowrap"
+      >
+        {ocupado ? '...' : 'Entregar'}
+      </button>
+    </div>
+  </div>
+);
 
 const PaquetesEmpresa = () => {
   const [filtros, setFiltros] = useState(FILTROS_VACIOS);
@@ -101,10 +159,15 @@ const PaquetesEmpresa = () => {
     }
   };
 
+  const vacio = !loading && paquetesOrdenados.length === 0 && !error;
+  const mensajeVacio = busqueda.trim()
+    ? `Ningún paquete coincide con "${busqueda.trim()}".`
+    : 'No hay paquetes para los filtros seleccionados.';
+
   return (
     <div className="max-w-7xl mx-auto">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-6">
-        <div className="flex items-center justify-between mb-4 sm:mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 sm:mb-6">
           <h2 className="text-lg sm:text-2xl font-bold text-gray-800">Paquetes</h2>
           <div className="flex items-center gap-3">
             <button
@@ -114,7 +177,7 @@ const PaquetesEmpresa = () => {
             >
               {simulando ? 'Simulando...' : 'Entregar todos'}
             </button>
-            <span className="text-xs sm:text-sm text-gray-500">
+            <span className="text-xs sm:text-sm text-gray-500 whitespace-nowrap">
               {loading ? 'Cargando...' : `${paquetes.length} envíos`}
             </span>
           </div>
@@ -141,20 +204,70 @@ const PaquetesEmpresa = () => {
         <Buscador
           valor={busqueda}
           onChange={setBusqueda}
-          placeholder="Buscar por ID de envío, comprador, dirección, CP, zona o seller..."
+          placeholder="Buscar por ID, comprador, dirección, CP, zona o seller..."
           resultados={paquetesBuscados.length}
           total={paquetes.length}
         />
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs sm:text-sm text-left">
-            <thead className="text-[10px] sm:text-xs text-gray-500 uppercase border-b border-gray-200">
+        {/* Mobile y tablet: tarjetas + un selector de orden, porque los th no
+            son clickeables cuando no hay tabla. */}
+        <div className="lg:hidden">
+          {!vacio && !loading && (
+            <div className="flex items-center gap-2 mb-3">
+              <label htmlFor="orden-mobile" className="text-xs text-gray-500 whitespace-nowrap">
+                Ordenar por
+              </label>
+              <select
+                id="orden-mobile"
+                value={orden.campo}
+                onChange={(e) => setOrden({ campo: e.target.value, dir: 'asc' })}
+                className="flex-1 min-w-0 text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white"
+              >
+                {ORDENABLES.map((col) => (
+                  <option key={col.campo} value={col.campo}>{col.label}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setOrden((prev) => ({ ...prev, dir: prev.dir === 'asc' ? 'desc' : 'asc' }))}
+                aria-label="Invertir orden"
+                className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white text-gray-600"
+              >
+                {orden.dir === 'asc' ? '▲' : '▼'}
+              </button>
+            </div>
+          )}
+
+          {loading && <p className="py-6 text-center text-gray-500">Cargando paquetes...</p>}
+          {vacio && <p className="py-6 text-center text-gray-500">{mensajeVacio}</p>}
+
+          <div className="space-y-3">
+            {!loading &&
+              paquetesOrdenados.map((paquete, index) => (
+                <TarjetaPaquete
+                  key={paquete.id ?? `${paquete.idenvioml}-${index}`}
+                  paquete={paquete}
+                  transportistas={transportistas}
+                  ocupado={ocupado === paquete.id}
+                  onReasignar={(destino) =>
+                    ejecutar(paquete.id, () => reasignarTransportista(paquete.id, destino))
+                  }
+                  onEntregar={() => ejecutar(paquete.id, () => marcarEntregado(paquete.id))}
+                />
+              ))}
+          </div>
+        </div>
+
+        {/* Escritorio: la tabla completa. */}
+        <div className="hidden lg:block overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="text-xs text-gray-500 uppercase border-b border-gray-200">
               <tr>
                 {COLUMNAS.map((col) => (
                   <th
                     key={col.campo}
                     onClick={() => cambiarOrden(col.campo)}
-                    className="py-2 px-1 sm:px-2 cursor-pointer select-none hover:text-gray-800 whitespace-nowrap"
+                    className="py-2 px-2 cursor-pointer select-none hover:text-gray-800 whitespace-nowrap"
                   >
                     {col.label}
                     {flecha(col.campo)}
@@ -170,12 +283,10 @@ const PaquetesEmpresa = () => {
                   </td>
                 </tr>
               )}
-              {!loading && paquetesOrdenados.length === 0 && !error && (
+              {vacio && (
                 <tr>
                   <td colSpan={COLUMNAS.length} className="py-6 px-2 text-center text-gray-500">
-                    {busqueda.trim()
-                      ? `Ningún paquete coincide con "${busqueda.trim()}".`
-                      : 'No hay paquetes para los filtros seleccionados.'}
+                    {mensajeVacio}
                   </td>
                 </tr>
               )}
@@ -185,36 +296,30 @@ const PaquetesEmpresa = () => {
                     key={paquete.id ?? `${paquete.idenvioml}-${index}`}
                     className="border-b border-gray-100 last:border-0 hover:bg-gray-50"
                   >
-                    <td className="py-2 px-1 sm:px-2 font-mono truncate">{paquete.idenvioml}</td>
-                    <td className="py-2 px-1 sm:px-2 text-gray-700">{paquete.comprador || '—'}</td>
-                    <td className="py-2 px-1 sm:px-2 text-gray-600 truncate max-w-[14rem]">{paquete.direccion}</td>
-                    <td className="py-2 px-1 sm:px-2 text-gray-600">{paquete.codigopostal || '—'}</td>
-                    <td className="py-2 px-1 sm:px-2 text-gray-600">{paquete.zona || '—'}</td>
-                    <td className="py-2 px-1 sm:px-2 text-gray-600">{paquete.seller || '—'}</td>
-                    <td className="py-2 px-1 sm:px-2 text-gray-600 whitespace-nowrap">
+                    <td className="py-2 px-2 font-mono truncate">{paquete.idenvioml}</td>
+                    <td className="py-2 px-2 text-gray-700">{paquete.comprador || '—'}</td>
+                    <td className="py-2 px-2 text-gray-600 truncate max-w-[14rem]">{paquete.direccion}</td>
+                    <td className="py-2 px-2 text-gray-600">{paquete.codigopostal || '—'}</td>
+                    <td className="py-2 px-2 text-gray-600">{paquete.zona || '—'}</td>
+                    <td className="py-2 px-2 text-gray-600">{paquete.seller || '—'}</td>
+                    <td className="py-2 px-2 text-gray-600 whitespace-nowrap">
                       {formatearFecha(paquete.fechaingreso)}
                     </td>
-                    <td className={`py-2 px-1 sm:px-2 font-bold truncate ${colorEstado(paquete.estado)}`}>
+                    <td className={`py-2 px-2 font-bold truncate ${colorEstado(paquete.estado)}`}>
                       {paquete.estado}
                     </td>
-                    <td className="py-2 px-1 sm:px-2">
-                      <select
-                        value={paquete.transportistaId ?? ''}
-                        disabled={ocupado === paquete.id}
-                        onChange={(e) =>
-                          ejecutar(paquete.id, () =>
-                            reasignarTransportista(paquete.id, e.target.value || null),
-                          )
+                    <td className="py-2 px-2">
+                      <SelectorTransportista
+                        paquete={paquete}
+                        transportistas={transportistas}
+                        ocupado={ocupado === paquete.id}
+                        onReasignar={(destino) =>
+                          ejecutar(paquete.id, () => reasignarTransportista(paquete.id, destino))
                         }
-                        className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 bg-white max-w-[10rem] disabled:opacity-50"
-                      >
-                        <option value="">Sin asignar</option>
-                        {transportistas.map((t) => (
-                          <option key={t.id} value={t.id}>{t.nombre}</option>
-                        ))}
-                      </select>
+                        className="max-w-[10rem]"
+                      />
                     </td>
-                    <td className="py-2 px-1 sm:px-2">
+                    <td className="py-2 px-2">
                       <button
                         onClick={() => ejecutar(paquete.id, () => marcarEntregado(paquete.id))}
                         disabled={ocupado === paquete.id}

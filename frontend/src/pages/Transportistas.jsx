@@ -75,7 +75,7 @@ const Transportistas = () => {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
-        <div className="flex items-start justify-between mb-4 sm:mb-6 gap-3">
+        <div className="flex flex-wrap items-start justify-between mb-4 sm:mb-6 gap-3">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Transportistas</h2>
             <p className="text-sm text-gray-500 mt-1">

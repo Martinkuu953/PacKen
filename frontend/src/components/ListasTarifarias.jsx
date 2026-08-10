@@ -260,7 +260,7 @@ const ListasTarifarias = () => {
               return (
                 <div key={lista.id} className="border border-gray-200 rounded-xl overflow-hidden">
                   {/* Cabecera de la lista */}
-                  <div className="flex items-center gap-2 px-4 py-3 bg-gray-50">
+                  <div className="flex flex-wrap items-center gap-2 px-4 py-3 bg-gray-50">
                     {renombrando === lista.id ? (
                       <>
                         <input
@@ -292,7 +292,7 @@ const ListasTarifarias = () => {
                         <button
                           type="button"
                           onClick={() => setExpandida(abierta ? null : lista.id)}
-                          className="flex-1 flex items-center gap-2 text-left font-semibold text-gray-800"
+                          className="flex-1 min-w-0 flex items-center gap-2 text-left font-semibold text-gray-800"
                         >
                           <span className="text-gray-400 text-xs">{abierta ? '▼' : '▶'}</span>
                           {lista.nombre}
@@ -422,8 +422,8 @@ const ListasTarifarias = () => {
                         ) : (
                           <div className="space-y-2 mb-2">
                             {asignadas.map((e) => (
-                              <div key={e.id} className="flex items-center gap-2">
-                                <span className="flex-1 text-sm text-gray-800">{e.nombre}</span>
+                              <div key={e.id} className="flex flex-wrap items-center gap-2">
+                                <span className="flex-1 min-w-0 text-sm text-gray-800">{e.nombre}</span>
                                 <select
                                   value=""
                                   onChange={(ev) => ev.target.value && asignar(e.id, ev.target.value)}

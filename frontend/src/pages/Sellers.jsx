@@ -7,6 +7,14 @@ import { filtrarPorTexto } from '../utils/busqueda';
 
 const ENDPOINT = '/api/sellers';
 
+const ESTADOS_SELLER = [
+  { campo: 'enCamino', label: 'En camino', color: 'text-yellow-600' },
+  { campo: 'entregados', label: 'Entregados', color: 'text-green-500' },
+  { campo: 'demorados', label: 'Demorados', color: 'text-red-500' },
+  { campo: 'reprogramados', label: 'Reprogramados', color: 'text-orange-500' },
+  { campo: 'cancelados', label: 'Cancelados', color: 'text-gray-500' },
+];
+
 const Sellers = () => {
   const [sellersData, setSellersData] = useState([]);
   const [montoTotal, setMontoTotal] = useState(0);
@@ -92,10 +100,10 @@ const Sellers = () => {
 
   return (
     <div className="max-w-7xl mx-auto">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-start justify-between gap-3 mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">Sellers</h2>
-          <div className="flex gap-2">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-4 sm:mb-6">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Sellers</h2>
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setCreando((prev) => !prev)}
@@ -146,7 +154,40 @@ const Sellers = () => {
           />
         )}
 
-        <div className="overflow-x-auto">
+        {/* Mobile y tablet: una tarjeta por seller. Las siete columnas de
+            estados no entran en pantalla. */}
+        <div className="lg:hidden">
+          {loading && <p className="py-6 text-center text-gray-500">Cargando sellers...</p>}
+          {!loading && sellersFiltrados.length === 0 && !error && (
+            <p className="py-6 text-center text-gray-500">
+              {busqueda.trim()
+                ? `Ningún seller coincide con "${busqueda.trim()}".`
+                : 'Todavía no tenés sellers cargados.'}
+            </p>
+          )}
+
+          <div className="space-y-3">
+            {!loading &&
+              sellersFiltrados.map((seller) => (
+                <div key={seller.id} className="bg-white border border-gray-200 rounded-xl p-4">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="font-semibold text-gray-800">{seller.nombre}</p>
+                    <p className="text-lg font-bold text-gray-800">{seller.totales}</p>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                    {ESTADOS_SELLER.map((col) => (
+                      <div key={col.campo} className="flex justify-between gap-2">
+                        <span className="text-gray-500 truncate">{col.label}</span>
+                        <span className={`font-medium ${col.color}`}>{seller[col.campo]}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
@@ -192,20 +233,18 @@ const Sellers = () => {
           </table>
         </div>
 
-        <div className="mt-6 pt-4 border-t border-gray-200 flex justify-between items-center">
+        <div className="mt-6 pt-4 border-t border-gray-200 flex flex-wrap justify-between items-center gap-3">
           <div className="space-y-1">
-            <p className="text-gray-600">
+            <p className="text-sm sm:text-base text-gray-600">
               <span className="font-semibold">Total:</span> {totalPaquetes}
             </p>
-            <p className="text-gray-600">
+            <p className="text-sm sm:text-base text-gray-600">
               <span className="font-semibold">En camino total:</span> {totalEnCamino}
             </p>
           </div>
-          <div>
-            <p className="text-2xl font-bold text-green-600">
-              ${(busqueda.trim() ? montoFiltrado : montoTotal).toLocaleString()}
-            </p>
-          </div>
+          <p className="text-xl sm:text-2xl font-bold text-green-600">
+            ${(busqueda.trim() ? montoFiltrado : montoTotal).toLocaleString()}
+          </p>
         </div>
       </div>
     </div>
