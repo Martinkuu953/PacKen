@@ -9,42 +9,22 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { nombre, email, password, dni, rol, idempresa } = req.body ?? {};
+    const { nombre, email, password, rol } = req.body ?? {};
 
     if (!nombre || !email || !password || !rol) {
       return res.status(400).json({ error: 'nombre, email, password y rol son requeridos' });
     }
-    if (!['transportista', 'empresa'].includes(rol)) {
-      return res.status(400).json({ error: 'rol debe ser "transportista" o "empresa"' });
-    }
-    if (rol === 'transportista' && !dni) {
-      return res.status(400).json({ error: 'DNI es requerido para transportistas' });
-    }
-    if (rol === 'transportista' && !idempresa) {
-      return res.status(400).json({ error: 'Debe seleccionar una empresa' });
+    // El registro público es solo para empresas. Las cuentas de transportista
+    // las crea la empresa desde su panel (POST /api/transportistas): un
+    // transportista no puede darse de alta solo.
+    if (rol !== 'empresa') {
+      return res.status(403).json({
+        error: 'Solo las empresas pueden registrarse. Pedile a tu empresa que te cree la cuenta.',
+      });
     }
 
     const supabase = getSupabase();
-
-    // El cliente manda el public_id de la empresa (UUID opaco), no su id
-    // interno. Lo resolvemos acá y de paso validamos que exista de verdad.
-    let idEmpresaInterno = null;
-    if (rol === 'transportista') {
-      const { data: empresa } = await supabase
-        .from('usuario')
-        .select('id')
-        .eq('public_id', idempresa)
-        .eq('rol', 'empresa')
-        .maybeSingle();
-
-      if (!empresa) {
-        return res.status(400).json({ error: 'La empresa seleccionada no existe' });
-      }
-      idEmpresaInterno = empresa.id;
-    }
-
     const hash = hashPassword(password);
-    const estadoSolicitud = rol === 'transportista' ? 'pendiente' : null;
 
     const { data, error } = await supabase
       .from('usuario')
@@ -52,10 +32,10 @@ export default async function handler(req, res) {
         nombre,
         email: email.toLowerCase().trim(),
         password: hash,
-        dni: dni || null,
-        rol,
-        idempresa: idEmpresaInterno,
-        estado_solicitud: estadoSolicitud,
+        dni: null,
+        rol: 'empresa',
+        idempresa: null,
+        estado_solicitud: null,
       })
       .select('id, public_id, nombre, rol, idempresa, estado_solicitud')
       .single();

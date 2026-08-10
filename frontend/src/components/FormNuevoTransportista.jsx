@@ -18,7 +18,7 @@ const FormNuevoTransportista = ({ onCreado, onCancelar }) => {
     setGuardando(true);
     setError('');
     try {
-      await apiFetch('/api/solicitudes', { method: 'POST', body: JSON.stringify(valores) });
+      await apiFetch('/api/transportistas', { method: 'POST', body: JSON.stringify(valores) });
       setValores(VACIO);
       onCreado();
     } catch (err) {

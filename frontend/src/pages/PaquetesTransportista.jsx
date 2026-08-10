@@ -11,13 +11,11 @@ const VISTAS = {
     titulo: 'Colecta',
     detalle: 'Paquetes que retirás',
     estado: ESTADOS.INGRESADO,
-    entregable: false,
   },
   reparto: {
     titulo: 'Reparto',
     detalle: 'Paquetes que salís a repartir',
     estado: ESTADOS.EN_CAMINO,
-    entregable: true,
   },
 };
 
@@ -99,7 +97,7 @@ const Listado = ({ vista, paquetes, loading, error, onVolver, onEscanear, onReca
               {paquete.comprador || 'Sin comprador'} · CP {paquete.codigopostal || '—'}
             </p>
             <p className={`text-sm font-bold mt-1 ${colorEstado(paquete.estado)}`}>{paquete.estado}</p>
-            {vista.entregable && (
+            {canonizarEstado(paquete.estado) === ESTADOS.EN_CAMINO && (
               <button
                 onClick={() => handleEntregar(paquete.id)}
                 disabled={entregando === paquete.id}

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { apiFetch } from '../services/api';
 import Buscador from '../components/Buscador';
 import FormNuevoTransportista from '../components/FormNuevoTransportista';
@@ -7,12 +6,7 @@ import { filtrarPorTexto } from '../utils/busqueda';
 
 const CAMPOS_BUSQUEDA = ['nombre', 'dni'];
 
-// Reusamos /api/solicitudes: ya devuelve todos los transportistas de la
-// empresa con su estado. Un endpoint propio sería otra Serverless Function y
-// el plan Hobby de Vercel permite 12 (hoy hay 11: ver los dispatchers
-// /api/auth, /api/paquetes y /api/ml, que agrupan varias rutas en una sola
-// función cada uno).
-const ENDPOINT = '/api/solicitudes';
+const ENDPOINT = '/api/transportistas';
 
 const formatearFecha = (iso) => {
   if (!iso) return '—';
@@ -28,7 +22,7 @@ const Transportistas = () => {
   const [creando, setCreando] = useState(false);
 
   const aplicar = useCallback((res) => {
-    setTransportistas(res.solicitudes ?? []);
+    setTransportistas(res.transportistas ?? []);
     setError('');
   }, []);
 
@@ -55,21 +49,11 @@ const Transportistas = () => {
     };
   }, [aplicar]);
 
-  // Esta pantalla es la flota activa. Los pendientes y rechazados se manejan
-  // en Solicitudes.
-  const activos = useMemo(
-    () => transportistas.filter((t) => t.estado_solicitud === 'aceptado'),
-    [transportistas],
-  );
-
-  const pendientes = useMemo(
-    () => transportistas.filter((t) => t.estado_solicitud === 'pendiente').length,
-    [transportistas],
-  );
-
+  // Todos los transportistas de la empresa son activos: las cuentas las crea
+  // ella misma, no hay solicitudes que aprobar.
   const encontrados = useMemo(
-    () => filtrarPorTexto(activos, busqueda, CAMPOS_BUSQUEDA),
-    [activos, busqueda],
+    () => filtrarPorTexto(transportistas, busqueda, CAMPOS_BUSQUEDA),
+    [transportistas, busqueda],
   );
 
   return (
@@ -79,18 +63,12 @@ const Transportistas = () => {
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Transportistas</h2>
             <p className="text-sm text-gray-500 mt-1">
-              {loading ? 'Cargando...' : `${activos.length} activo${activos.length === 1 ? '' : 's'}`}
+              {loading
+                ? 'Cargando...'
+                : `${transportistas.length} activo${transportistas.length === 1 ? '' : 's'}`}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {pendientes > 0 && (
-              <Link
-                to="/solicitudes"
-                className="text-xs sm:text-sm px-3 py-1.5 bg-amber-100 text-amber-800 border border-amber-200 rounded-lg hover:bg-amber-200 transition-colors duration-150 font-medium whitespace-nowrap"
-              >
-                {pendientes} pendiente{pendientes === 1 ? '' : 's'} →
-              </Link>
-            )}
             <button
               type="button"
               onClick={() => setCreando((prev) => !prev)}
@@ -117,13 +95,13 @@ const Transportistas = () => {
           </p>
         )}
 
-        {!loading && activos.length > 0 && (
+        {!loading && transportistas.length > 0 && (
           <Buscador
             valor={busqueda}
             onChange={setBusqueda}
             placeholder="Buscar transportista por nombre o DNI..."
             resultados={encontrados.length}
-            total={activos.length}
+            total={transportistas.length}
           />
         )}
 
@@ -149,7 +127,7 @@ const Transportistas = () => {
                   <td colSpan={3} className="py-6 px-2 text-center text-gray-500">
                     {busqueda.trim()
                       ? `Ningún transportista coincide con "${busqueda.trim()}".`
-                      : 'Todavía no tenés transportistas aceptados.'}
+                      : 'Todavía no creaste ningún transportista.'}
                   </td>
                 </tr>
               )}

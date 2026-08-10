@@ -12,14 +12,12 @@ export function useCatalogos() {
 
     Promise.all([
       apiFetch('/api/sellers').catch(() => ({ sellers: [] })),
-      apiFetch('/api/solicitudes').catch(() => ({ solicitudes: [] })),
-    ]).then(([resSellers, resSolicitudes]) => {
+      apiFetch('/api/transportistas').catch(() => ({ transportistas: [] })),
+    ]).then(([resSellers, resTransportistas]) => {
       if (cancelado) return;
       setSellers((resSellers.sellers ?? []).map((s) => ({ id: s.id, nombre: s.nombre })));
       setTransportistas(
-        (resSolicitudes.solicitudes ?? [])
-          .filter((t) => t.estado_solicitud === 'aceptado')
-          .map((t) => ({ id: t.id, nombre: t.nombre })),
+        (resTransportistas.transportistas ?? []).map((t) => ({ id: t.id, nombre: t.nombre })),
       );
     });
 

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { usePaquetes } from '../hooks/usePaquetes';
 import { useCatalogos } from '../hooks/useCatalogos';
-import { colorEstado, prioridadEstado } from '../utils/estados';
+import { ESTADOS, canonizarEstado, colorEstado, prioridadEstado } from '../utils/estados';
 import { filtrarPorTexto } from '../utils/busqueda';
 import { marcarEntregado, reasignarTransportista, simularEntregas } from '../services/paquetes';
 import Buscador from '../components/Buscador';
@@ -25,6 +25,10 @@ const COLUMNAS = [
 const CAMPOS_BUSQUEDA = ['idenvioml', 'comprador', 'direccion', 'codigopostal', 'zona', 'seller'];
 
 const ORDENABLES = COLUMNAS.filter((c) => c.campo !== 'acciones');
+
+// Un paquete solo se entrega si salió a reparto. El backend lo rechaza igual,
+// pero mostrar el botón en un paquete que sigue en depósito invita al error.
+const sePuedeEntregar = (paquete) => canonizarEstado(paquete.estado) === ESTADOS.EN_CAMINO;
 
 const formatearFecha = (iso) => {
   if (!iso) return '—';
@@ -89,13 +93,15 @@ const TarjetaPaquete = ({ paquete, transportistas, ocupado, onReasignar, onEntre
         onReasignar={onReasignar}
         className="flex-1 min-w-0 py-2"
       />
-      <button
-        onClick={onEntregar}
-        disabled={ocupado}
-        className="text-sm px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 transition-colors duration-150 font-medium whitespace-nowrap"
-      >
-        {ocupado ? '...' : 'Entregar'}
-      </button>
+      {sePuedeEntregar(paquete) && (
+        <button
+          onClick={onEntregar}
+          disabled={ocupado}
+          className="text-sm px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 transition-colors duration-150 font-medium whitespace-nowrap"
+        >
+          {ocupado ? '...' : 'Entregar'}
+        </button>
+      )}
     </div>
   </div>
 );
@@ -320,13 +326,15 @@ const PaquetesEmpresa = () => {
                       />
                     </td>
                     <td className="py-2 px-2">
-                      <button
-                        onClick={() => ejecutar(paquete.id, () => marcarEntregado(paquete.id))}
-                        disabled={ocupado === paquete.id}
-                        className="text-xs px-2.5 py-1 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 transition-colors duration-150 font-medium whitespace-nowrap"
-                      >
-                        {ocupado === paquete.id ? '...' : 'Entregar'}
-                      </button>
+                      {sePuedeEntregar(paquete) && (
+                        <button
+                          onClick={() => ejecutar(paquete.id, () => marcarEntregado(paquete.id))}
+                          disabled={ocupado === paquete.id}
+                          className="text-xs px-2.5 py-1 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 transition-colors duration-150 font-medium whitespace-nowrap"
+                        >
+                          {ocupado === paquete.id ? '...' : 'Entregar'}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

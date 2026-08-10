@@ -1,29 +1,30 @@
 import { getSupabase } from '../_lib/ml.js';
 import { autenticar, requiereRol, hashPassword } from '../_lib/auth.js';
 
+// GET /api/transportistas — la flota de la empresa.
 async function listar(res, supabase, idempresa) {
   const { data, error } = await supabase
     .from('usuario')
-    .select('public_id, nombre, dni, estado_solicitud, created_at')
+    .select('public_id, nombre, dni, created_at')
     .eq('rol', 'transportista')
     .eq('idempresa', idempresa)
     .order('created_at', { ascending: false });
 
   if (error) throw new Error(error.message);
 
-  // El cliente solo conoce el UUID opaco: es el identificador con el que
-  // después hace el PATCH. Ni el id interno ni el email salen de acá.
-  const solicitudes = (data ?? []).map(({ public_id, ...resto }) => ({
+  // El cliente solo conoce el UUID opaco. Ni el id interno ni el email salen
+  // de acá.
+  const transportistas = (data ?? []).map(({ public_id, ...resto }) => ({
     id: public_id,
     ...resto,
   }));
 
-  return res.json({ solicitudes });
+  return res.json({ transportistas });
 }
 
-// POST /api/solicitudes { nombre, email, dni, password }
-// Alta de un transportista hecha por la empresa. Nace aceptado: no tiene
-// sentido que la empresa se apruebe a sí misma la cuenta que acaba de crear.
+// POST /api/transportistas { nombre, email, dni, password }
+// Alta de un transportista hecha por la empresa: es la única forma de crear
+// una cuenta de transportista, no existe autorregistro. Nace aceptado.
 async function crear(req, res, supabase, idempresa) {
   const { nombre, email, dni, password } = req.body ?? {};
 
@@ -42,7 +43,7 @@ async function crear(req, res, supabase, idempresa) {
       idempresa,
       estado_solicitud: 'aceptado',
     })
-    .select('public_id, nombre, dni, estado_solicitud, created_at')
+    .select('public_id, nombre, dni, created_at')
     .single();
 
   if (error) {
@@ -70,7 +71,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST') return await crear(req, res, supabase, usuario.id);
     return await listar(res, supabase, usuario.id);
   } catch (err) {
-    console.error('[PacKen] Error en /api/solicitudes:', err.message);
+    console.error('[PacKen] Error en /api/transportistas:', err.message);
     return res.status(req.method === 'POST' ? 400 : 500).json({ error: err.message });
   }
 }

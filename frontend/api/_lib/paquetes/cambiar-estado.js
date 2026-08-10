@@ -24,23 +24,34 @@ export default async function handler(req, res) {
 
     const supabase = getSupabase();
 
-    if (usuario.rol === 'transportista') {
-      const { data: paquete } = await supabase
-        .from('paquete')
-        .select('idtransportista')
-        .eq('id', Number(id))
-        .single();
-      if (!paquete || paquete.idtransportista !== usuario.id) {
-        return res.status(403).json({ error: 'No tenés permiso para modificar este paquete' });
-      }
-    } else if (usuario.rol === 'empresa') {
-      const { data: paquete } = await supabase
-        .from('paquete')
-        .select('idempresa')
-        .eq('id', Number(id))
-        .single();
-      if (!paquete || paquete.idempresa !== usuario.id) {
-        return res.status(403).json({ error: 'No tenés permiso para modificar este paquete' });
+    const { data: paquete } = await supabase
+      .from('paquete')
+      .select('estado, idempresa, idtransportista')
+      .eq('id', Number(id))
+      .maybeSingle();
+
+    if (!paquete) {
+      return res.status(404).json({ error: `Paquete con id=${id} no encontrado` });
+    }
+
+    const propio =
+      usuario.rol === 'transportista'
+        ? paquete.idtransportista === usuario.id
+        : usuario.rol !== 'empresa' || paquete.idempresa === usuario.id;
+
+    if (!propio) {
+      return res.status(403).json({ error: 'No tenés permiso para modificar este paquete' });
+    }
+
+    // Un paquete solo se entrega si salió a reparto: marcar como entregado algo
+    // que sigue en depósito (o que ya se entregó) descuadra la facturación,
+    // porque el monto se calcula sobre los entregados.
+    if (estadoCanonico === ESTADOS.ENTREGADO) {
+      const estadoActual = canonizarEstado(paquete.estado);
+      if (estadoActual !== ESTADOS.EN_CAMINO) {
+        return res.status(409).json({
+          error: `Solo se puede entregar un paquete en camino (este está "${paquete.estado}")`,
+        });
       }
     }
 
