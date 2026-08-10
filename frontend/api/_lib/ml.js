@@ -278,6 +278,17 @@ function limpiarTelefono(tel) {
   return tel;
 }
 
+// Normaliza un texto a una clave estable de matcheo (sin acentos, minúsculas):
+// se usa como ml_ref de un barrio cuando ML no da un id numérico.
+export function normalizarRef(texto) {
+  if (!texto) return null;
+  return String(texto)
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(new RegExp('[\\u0300-\\u036f]', 'g'), ''); // saca acentos combinantes
+}
+
 export function mapShipment(shipment) {
   // Soporta ambos formatos de respuesta de ML:
   //  - legacy (default): datos planos en receiver_address + sender_id
@@ -285,6 +296,13 @@ export function mapShipment(shipment) {
   const dest = shipment.destination || {};
   const dir = shipment.receiver_address || dest.shipping_address || {};
   const hist = shipment.status_history || {};
+
+  // "Parte" de Flex: el barrio (CABA) o municipio (GBA/interior) del destino.
+  // Preferimos neighborhood > municipality > city. barrioRef es la clave de
+  // matcheo con area_flex: el id de ML si viene, si no el nombre normalizado.
+  const barrioObj = dir.neighborhood || dest.neighborhood || dir.municipality || dest.municipality || null;
+  const barrio = barrioObj?.name || dir.city?.name || dest.city?.name || null;
+  const barrioRef = barrioObj?.id != null ? String(barrioObj.id) : normalizarRef(barrio);
 
   return {
     idEnvioMl: String(shipment.id),
@@ -296,6 +314,8 @@ export function mapShipment(shipment) {
     codigoPostal: dir.zip_code || null,
     ciudad: dir.city?.name || null,
     provincia: dir.state?.name || null,
+    barrio,
+    barrioRef,
     telefono: limpiarTelefono(dir.receiver_phone || dest.receiver_phone),
     comentario: dir.comment || dest.comments || null,
 
@@ -322,4 +342,76 @@ export function mapShipment(shipment) {
 export async function obtenerShipment(supabase, idSellerInterno, shipmentId) {
   const shipment = await mlFetchConReintento(supabase, idSellerInterno, `/shipments/${shipmentId}`);
   return mapShipment(shipment);
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Mercado Envíos Flex — áreas de cobertura (barrios/municipios)
+// ──────────────────────────────────────────────────────────────────────────
+// Best-effort: el esquema exacto de estos endpoints está en la doc de ML
+// (protegida por WAF), así que parseamos de forma tolerante. Flujo:
+//   1) service_id de Flex desde las shipping_preferences del seller
+//   2) zonas de cobertura con show_availables=true
+//   3) aplanar todo a una lista de { ref, nombre } deduplicada
+// Si algo falla, tira un error claro y el caller cae en el auto-descubrimiento
+// por escaneo (que puebla area_flex igual).
+
+const SITE_ID = 'MLA';
+
+function extraerFlexServiceId(prefs) {
+  const servicios = prefs?.services || prefs?.logistics || [];
+  for (const s of servicios) {
+    const tipo = String(s?.type || s?.mode || s?.logistic_type || s?.name || '').toLowerCase();
+    if (tipo.includes('self_service') || tipo.includes('flex')) {
+      return s.id ?? s.service_id ?? s.shipping_service_id ?? null;
+    }
+  }
+  // Fallback: si hay un único service, usarlo.
+  if (servicios.length === 1) return servicios[0].id ?? servicios[0].service_id ?? null;
+  return null;
+}
+
+function aplanarAreasFlex(data) {
+  // Junta "zones" (configuradas) y "availables" (agregables, con
+  // show_availables=true). Cada elemento puede traer sub-áreas
+  // (barrios/municipios); aplanamos un nivel y deduplicamos por ref.
+  const salida = new Map();
+  const empujar = (item) => {
+    if (!item) return;
+    const nombre = item.name || item.nombre || item.description || null;
+    const ref = item.id ?? item.zip_code ?? nombre;
+    if (!nombre || ref == null) return;
+    salida.set(String(ref), { ref: String(ref), nombre: String(nombre) });
+  };
+  const recorrer = (coleccion) => {
+    for (const z of coleccion || []) {
+      const hijos = z.areas || z.neighborhoods || z.municipalities || z.localities || z.children;
+      if (Array.isArray(hijos) && hijos.length) hijos.forEach(empujar);
+      else empujar(z);
+    }
+  };
+  recorrer(data?.zones);
+  recorrer(Array.isArray(data?.availables) ? data.availables : data?.availables?.zones);
+  return [...salida.values()];
+}
+
+// Devuelve las áreas de cobertura Flex del seller como [{ ref, nombre }].
+export async function obtenerAreasFlex(supabase, idSellerInterno, sellerMlId) {
+  const prefs = await mlFetchConReintento(
+    supabase,
+    idSellerInterno,
+    `/users/${sellerMlId}/shipping_preferences`,
+  );
+  const serviceId = extraerFlexServiceId(prefs);
+  if (!serviceId) {
+    throw new Error('No se encontró un servicio de Flex en la cuenta de ML del seller.');
+  }
+
+  const path = `/flex/sites/${SITE_ID}/users/${sellerMlId}/services/${serviceId}/configurations/coverage/zones/v1?show_availables=true`;
+  const data = await mlFetchConReintento(supabase, idSellerInterno, path);
+
+  const areas = aplanarAreasFlex(data);
+  if (!areas.length) {
+    throw new Error('Flex no devolvió barrios/áreas de cobertura para sincronizar.');
+  }
+  return areas;
 }

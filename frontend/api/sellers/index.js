@@ -3,7 +3,8 @@ import { autenticar, requiereRol } from '../_lib/auth.js';
 
 // GET /api/sellers — un seller por fila con sus paquetes agrupados por
 // estado y el monto facturado (entregados), todo calculado en el momento a
-// partir de paquete + lista_precios: no hay columnas de estadísticas
+// partir de paquete + la lista de precios asignada al seller
+// (lista + lista_zona_tarifa): no hay columnas de estadísticas
 // precalculadas en "seller".
 //
 // Todo filtrado por la empresa del token, mismo criterio que /api/precios.
@@ -39,21 +40,33 @@ export default async function handler(req, res) {
     const supabase = getSupabase();
     const idempresa = usuario.id;
 
-    const [sellers, paquetes, precios] = await Promise.all([
-      supabase.from('seller').select('id, public_id, nombre').eq('idempresa', idempresa).order('nombre'),
+    const [sellers, paquetes, listas] = await Promise.all([
+      supabase.from('seller').select('id, public_id, nombre, idlista').eq('idempresa', idempresa).order('nombre'),
       supabase.from('paquete').select('idseller, idzona, estado').eq('idempresa', idempresa),
-      supabase.from('lista_precios').select('idseller, idzona, precio').eq('idempresa', idempresa),
+      supabase.from('lista').select('id').eq('idempresa', idempresa).eq('tipo', 'precio'),
     ]);
 
     if (sellers.error) throw new Error(`seller: ${sellers.error.message}`);
     if (paquetes.error) throw new Error(`paquete: ${paquetes.error.message}`);
-    if (precios.error) throw new Error(`lista_precios: ${precios.error.message}`);
+    if (listas.error) throw new Error(`lista: ${listas.error.message}`);
 
-    // Precio vigente por (seller, zona): sirve para valorizar los entregados
-    // sin guardar el monto en cada paquete.
-    const precioPorSellerZona = new Map(
-      (precios.data ?? []).map((p) => [`${p.idseller}-${p.idzona}`, Number(p.precio)]),
+    // Tarifas de todas las listas de precio de la empresa: sirve para valorizar
+    // los entregados sin guardar el monto en cada paquete. El precio de un
+    // paquete = tarifa(lista del seller, zona del paquete).
+    const listaIds = (listas.data ?? []).map((l) => l.id);
+    let tarifas = [];
+    if (listaIds.length) {
+      const { data, error } = await supabase
+        .from('lista_zona_tarifa')
+        .select('idlista, idzona, importe')
+        .in('idlista', listaIds);
+      if (error) throw new Error(`lista_zona_tarifa: ${error.message}`);
+      tarifas = data ?? [];
+    }
+    const tarifaPorListaZona = new Map(
+      tarifas.map((t) => [`${t.idlista}-${t.idzona}`, Number(t.importe)]),
     );
+    const listaPorSeller = new Map((sellers.data ?? []).map((s) => [s.id, s.idlista]));
 
     const resumenPorSeller = new Map();
     for (const p of paquetes.data ?? []) {
@@ -62,7 +75,8 @@ export default async function handler(req, res) {
       acumular(resumen, p.estado);
 
       if (normalizarEstado(p.estado).includes('entregad')) {
-        resumen.monto += precioPorSellerZona.get(`${p.idseller}-${p.idzona}`) ?? 0;
+        const idlista = listaPorSeller.get(p.idseller);
+        if (idlista) resumen.monto += tarifaPorListaZona.get(`${idlista}-${p.idzona}`) ?? 0;
       }
     }
 

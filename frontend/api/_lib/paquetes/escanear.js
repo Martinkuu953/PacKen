@@ -6,6 +6,31 @@ import {
 } from '../ml.js';
 import { autenticar } from '../auth.js';
 
+// Registra el barrio del envío en area_flex (si es nuevo, sin zona) y devuelve
+// la zona que la empresa le mapeó. Si no hay empresa, ni barrio, ni asignación,
+// cae en la zona General (id=1), que es el fallback histórico.
+async function resolverZonaYRegistrarArea(supabase, idEmpresa, envio) {
+  const ref = envio.barrioRef;
+  if (idEmpresa == null || !ref) return 1;
+
+  // ignoreDuplicates: si el barrio ya existe no lo pisamos (preserva su zona).
+  await supabase
+    .from('area_flex')
+    .upsert(
+      { idempresa: idEmpresa, nombre: envio.barrio || ref, ml_ref: ref },
+      { onConflict: 'idempresa,ml_ref', ignoreDuplicates: true },
+    );
+
+  const { data } = await supabase
+    .from('area_flex')
+    .select('idzona')
+    .eq('idempresa', idEmpresa)
+    .eq('ml_ref', ref)
+    .maybeSingle();
+
+  return data?.idzona ?? 1;
+}
+
 // POST /api/paquetes/escanear  { shipmentId, sellerId, tipo }
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -62,11 +87,17 @@ export default async function handler(req, res) {
     // empresa del transportista que escanea. Necesario para aislar por empresa.
     const idEmpresa = usuario.rol === 'empresa' ? usuario.id : (usuario.idempresa ?? null);
 
+    // Zona por el barrio/municipio del envío (mapeo barrio→zona de la empresa).
+    // Para un paquete ya existente usamos su empresa; si no, la del escaneo.
+    const idEmpresaPaquete = existente?.idempresa ?? idEmpresa;
+    const idzonaResuelta = await resolverZonaYRegistrarArea(supabase, idEmpresaPaquete, envio);
+
     const paqueteData = {
       comprador: envio.comprador,
       direccion: envio.direccion,
       estado,
       codigopostal: envio.codigoPostal,
+      idzona: idzonaResuelta,
       fechaentrega: estado === 'Entregado' ? envio.fechaEntrega : null,
     };
 
@@ -92,7 +123,6 @@ export default async function handler(req, res) {
         .insert({
           idenvioml: envio.idEnvioMl,
           idseller: idSellerInterno,
-          idzona: 1,
           idtransportista: idTransportista,
           idempresa: idEmpresa,
           ...paqueteData,

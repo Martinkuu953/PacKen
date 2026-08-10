@@ -9,7 +9,7 @@ import Paquetes from './pages/Paquetes';
 import Solicitudes from './pages/Solicitudes';
 import Sellers from './pages/Sellers';
 import ListasPrecios from './pages/ListasPrecios';
-import ListasCostos from './pages/ListasCostos';
+import EstablecerZonas from './pages/EstablecerZonas';
 import Transportistas from './pages/Transportistas';
 
 function RutaProtegida({ children, rolesPermitidos }) {
@@ -85,14 +85,17 @@ function AppRoutes() {
           <h2>Pantalla de Estadísticas en construcción...</h2>
         </RutaProtegida>
       } />
-      <Route path="/listas-precios" element={
+      <Route path="/listas" element={
         <RutaProtegida rolesPermitidos={['empresa']}>
           <ListasPrecios />
         </RutaProtegida>
       } />
-      <Route path="/listas-costos" element={
+      {/* Alias histórico → pantalla unificada de precios/costos */}
+      <Route path="/listas-precios" element={<Navigate to="/listas" replace />} />
+      <Route path="/listas-costos" element={<Navigate to="/listas" replace />} />
+      <Route path="/zonas" element={
         <RutaProtegida rolesPermitidos={['empresa']}>
-          <ListasCostos />
+          <EstablecerZonas />
         </RutaProtegida>
       } />
       <Route path="/liquidaciones" element={

@@ -10,8 +10,8 @@ const allMenuItems = [
   { name: 'Paquetes', path: '/paquetes', roles: ['empresa', 'transportista'] },
   { name: 'Estadísticas', path: '/estadisticas', roles: ['empresa'] },
   { name: 'Mi Perfil', path: '/perfil', roles: ['empresa', 'transportista'] },
-  { name: 'Listas de precios', path: '/listas-precios', roles: ['empresa'] },
-  { name: 'Listas de costos', path: '/listas-costos', roles: ['empresa'] },
+  { name: 'Listas de precios/costos', path: '/listas', roles: ['empresa'] },
+  { name: 'Establecer zonas', path: '/zonas', roles: ['empresa'] },
   { name: 'Liquidaciones', path: '/liquidaciones', roles: ['empresa'] },
 ];
 
