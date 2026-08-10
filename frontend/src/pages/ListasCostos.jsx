@@ -3,16 +3,16 @@ import { apiFetch } from '../services/api';
 import Buscador from '../components/Buscador';
 import { filtrarPorTexto } from '../utils/busqueda';
 
-const CAMPOS_BUSQUEDA = ['sellerNombre', 'zonaNombre'];
+const CAMPOS_BUSQUEDA = ['transportistaNombre', 'zonaNombre'];
 
-const FORM_VACIO = { sellerId: '', zonaId: '', precio: '' };
+const FORM_VACIO = { transportistaId: '', zonaId: '', costo: '' };
 
 const moneda = (valor) =>
   `$${Number(valor).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const ListasPrecios = () => {
-  const [precios, setPrecios] = useState([]);
-  const [sellers, setSellers] = useState([]);
+const ListasCostos = () => {
+  const [costos, setCostos] = useState([]);
+  const [transportistas, setTransportistas] = useState([]);
   const [zonas, setZonas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -22,8 +22,8 @@ const ListasPrecios = () => {
   const [borrando, setBorrando] = useState(null);
 
   const aplicar = useCallback((res) => {
-    setPrecios(res.precios ?? []);
-    setSellers(res.sellers ?? []);
+    setCostos(res.costos ?? []);
+    setTransportistas(res.transportistas ?? []);
     setZonas(res.zonas ?? []);
     setError('');
   }, []);
@@ -32,7 +32,7 @@ const ListasPrecios = () => {
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      aplicar(await apiFetch('/api/precios'));
+      aplicar(await apiFetch('/api/costos'));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -45,7 +45,7 @@ const ListasPrecios = () => {
   // desmonta antes de que responda la API.
   useEffect(() => {
     let cancelado = false;
-    apiFetch('/api/precios')
+    apiFetch('/api/costos')
       .then((res) => {
         if (!cancelado) aplicar(res);
       })
@@ -62,20 +62,20 @@ const ListasPrecios = () => {
   }, [aplicar]);
 
   const encontrados = useMemo(
-    () => filtrarPorTexto(precios, busqueda, CAMPOS_BUSQUEDA),
-    [precios, busqueda],
+    () => filtrarPorTexto(costos, busqueda, CAMPOS_BUSQUEDA),
+    [costos, busqueda],
   );
 
   const totales = useMemo(
-    () => encontrados.reduce((acc, p) => acc + p.precio, 0),
+    () => encontrados.reduce((acc, c) => acc + c.costo, 0),
     [encontrados],
   );
 
-  const editar = (precio) => {
+  const editar = (costo) => {
     setForm({
-      sellerId: precio.sellerId ?? '',
-      zonaId: precio.zonaId ?? '',
-      precio: String(precio.precio),
+      transportistaId: costo.transportistaId ?? '',
+      zonaId: costo.zonaId ?? '',
+      costo: String(costo.costo),
     });
   };
 
@@ -83,7 +83,7 @@ const ListasPrecios = () => {
     e.preventDefault();
     setGuardando(true);
     try {
-      await apiFetch('/api/precios', { method: 'POST', body: JSON.stringify(form) });
+      await apiFetch('/api/costos', { method: 'POST', body: JSON.stringify(form) });
       setForm(FORM_VACIO);
       setError('');
       await cargar();
@@ -97,7 +97,7 @@ const ListasPrecios = () => {
   const handleBorrar = async (id) => {
     setBorrando(id);
     try {
-      await apiFetch(`/api/precios?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      await apiFetch(`/api/costos?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
       setError('');
       await cargar();
     } catch (err) {
@@ -113,9 +113,10 @@ const ListasPrecios = () => {
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-1">Listas de precios</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-1">Listas de costos</h2>
         <p className="text-sm text-gray-500 mb-4">
-          Tarifa por seller y zona: el <strong>precio</strong> es lo que le cobrás al seller.
+          Tarifa por transportista y zona: el <strong>costo</strong> es lo que le pagás al
+          transportista.
         </p>
 
         {error && (
@@ -126,16 +127,16 @@ const ListasPrecios = () => {
 
         <form onSubmit={handleGuardar} className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-6">
           <select
-            value={form.sellerId}
-            onChange={(e) => setForm({ ...form, sellerId: e.target.value })}
+            value={form.transportistaId}
+            onChange={(e) => setForm({ ...form, transportistaId: e.target.value })}
             required
-            aria-label="Seller"
+            aria-label="Transportista"
             className={inputClass}
           >
-            <option value="">Seller...</option>
-            {sellers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.nombre}
+            <option value="">Transportista...</option>
+            {transportistas.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.nombre}
               </option>
             ))}
           </select>
@@ -160,44 +161,45 @@ const ListasPrecios = () => {
             type="number"
             min="0"
             step="0.01"
-            value={form.precio}
-            onChange={(e) => setForm({ ...form, precio: e.target.value })}
-            placeholder="Precio"
+            value={form.costo}
+            onChange={(e) => setForm({ ...form, costo: e.target.value })}
+            placeholder="Costo"
             required
-            aria-label="Precio"
+            aria-label="Costo"
             className={inputClass}
           />
 
           <button
             type="submit"
-            disabled={guardando || sellers.length === 0 || zonas.length === 0}
+            disabled={guardando || transportistas.length === 0 || zonas.length === 0}
             className="py-2 bg-[#FDE047] text-gray-800 font-semibold rounded-xl hover:bg-yellow-300 disabled:opacity-50 transition-colors duration-150 text-sm"
           >
             {guardando ? 'Guardando...' : 'Guardar tarifa'}
           </button>
         </form>
 
-        {!loading && sellers.length === 0 && (
+        {!loading && transportistas.length === 0 && (
           <p className="mb-4 text-amber-800 text-sm bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
-            No tenés sellers cargados todavía: sin sellers no se puede armar la lista.
+            No tenés transportistas aceptados todavía: sin transportistas no se puede armar la
+            lista.
           </p>
         )}
 
         <Buscador
           valor={busqueda}
           onChange={setBusqueda}
-          placeholder="Buscar por seller o zona..."
+          placeholder="Buscar por transportista o zona..."
           resultados={encontrados.length}
-          total={precios.length}
+          total={costos.length}
         />
 
         <div className="overflow-x-auto">
           <table className="w-full text-xs sm:text-sm text-left">
             <thead className="text-[10px] sm:text-xs text-gray-500 uppercase border-b border-gray-200">
               <tr>
-                <th className="py-2 px-2">Seller</th>
+                <th className="py-2 px-2">Transportista</th>
                 <th className="py-2 px-2">Zona</th>
-                <th className="py-2 px-2 text-right">Precio</th>
+                <th className="py-2 px-2 text-right">Costo</th>
                 <th className="py-2 px-2" />
               </tr>
             </thead>
@@ -219,25 +221,25 @@ const ListasPrecios = () => {
                 </tr>
               )}
               {!loading &&
-                encontrados.map((p) => (
-                  <tr key={p.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                    <td className="py-2 px-2 font-medium text-gray-800">{p.sellerNombre}</td>
-                    <td className="py-2 px-2 text-gray-600">{p.zonaNombre}</td>
-                    <td className="py-2 px-2 text-right text-gray-800">{moneda(p.precio)}</td>
+                encontrados.map((c) => (
+                  <tr key={c.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                    <td className="py-2 px-2 font-medium text-gray-800">{c.transportistaNombre}</td>
+                    <td className="py-2 px-2 text-gray-600">{c.zonaNombre}</td>
+                    <td className="py-2 px-2 text-right text-gray-800">{moneda(c.costo)}</td>
                     <td className="py-2 px-2">
                       <div className="flex gap-2 justify-end">
                         <button
-                          onClick={() => editar(p)}
+                          onClick={() => editar(c)}
                           className="text-xs px-2.5 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors duration-150 font-medium"
                         >
                           Editar
                         </button>
                         <button
-                          onClick={() => handleBorrar(p.id)}
-                          disabled={borrando === p.id}
+                          onClick={() => handleBorrar(c.id)}
+                          disabled={borrando === c.id}
                           className="text-xs px-2.5 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 transition-colors duration-150 font-medium"
                         >
-                          {borrando === p.id ? '...' : 'Borrar'}
+                          {borrando === c.id ? '...' : 'Borrar'}
                         </button>
                       </div>
                     </td>
@@ -262,4 +264,4 @@ const ListasPrecios = () => {
   );
 };
 
-export default ListasPrecios;
+export default ListasCostos;

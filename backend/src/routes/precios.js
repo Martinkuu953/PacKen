@@ -2,9 +2,8 @@ import { Router } from 'express';
 import { query } from '../lib/db.js';
 import { requiereRol } from '../middleware/auth.js';
 
-// Lista de costos y precios por seller + zona.
-//   costo  = lo que la empresa le paga al transportista
-//   precio = lo que le cobra al seller
+// Lista de precios por seller + zona: precio = lo que la empresa le cobra
+// al seller por esa entrega.
 // Todo filtrado por la empresa del token: cada una ve y toca solo su lista.
 
 const router = Router();
@@ -29,7 +28,7 @@ router.get('/', async (req, res) => {
         `SELECT lp.public_id AS id,
                 s.public_id  AS "sellerId", s.nombre AS "sellerNombre",
                 z.public_id  AS "zonaId",   z.nombre AS "zonaNombre",
-                lp.costo, lp.precio
+                lp.precio
            FROM lista_precios lp
            JOIN seller s ON s.id = lp.idseller
            JOIN zona   z ON z.id = lp.idzona
@@ -48,7 +47,6 @@ router.get('/', async (req, res) => {
     res.json({
       precios: tarifas.rows.map((t) => ({
         ...t,
-        costo: Number(t.costo),
         precio: Number(t.precio),
       })),
       sellers: sellers.rows,
@@ -59,15 +57,14 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/precios { sellerId, zonaId, costo, precio }
+// POST /api/precios { sellerId, zonaId, precio }
 router.post('/', async (req, res) => {
   try {
-    const { sellerId, zonaId, costo, precio } = req.body ?? {};
+    const { sellerId, zonaId, precio } = req.body ?? {};
     if (!sellerId || !zonaId) {
       return res.status(400).json({ error: 'sellerId y zonaId son requeridos' });
     }
 
-    const costoNum = parsearImporte(costo, 'costo');
     const precioNum = parsearImporte(precio, 'precio');
 
     // El seller tiene que ser de esta empresa: si no, se podrían tarifar
@@ -85,12 +82,12 @@ router.post('/', async (req, res) => {
 
     // Volver a cargar la misma combinación actualiza la tarifa, no la duplica.
     const { rows } = await query(
-      `INSERT INTO lista_precios (idempresa, idseller, idzona, costo, precio)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO lista_precios (idempresa, idseller, idzona, precio)
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT (idempresa, idseller, idzona)
-       DO UPDATE SET costo = EXCLUDED.costo, precio = EXCLUDED.precio, updated_at = NOW()
+       DO UPDATE SET precio = EXCLUDED.precio, updated_at = NOW()
        RETURNING public_id AS id`,
-      [req.usuario.id, sellers[0].id, zonas[0].id, costoNum, precioNum],
+      [req.usuario.id, sellers[0].id, zonas[0].id, precioNum],
     );
 
     res.json({ ok: true, id: rows[0].id });

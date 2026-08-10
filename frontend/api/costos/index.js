@@ -1,13 +1,17 @@
 import { getSupabase } from '../_lib/ml.js';
 import { autenticar, requiereRol } from '../_lib/auth.js';
 
-// /api/precios — lista de precios por seller + zona.
+// /api/costos — lista de costos por transportista + zona.
 //
-//   GET     → { precios, sellers, zonas }   (sellers y zonas para los selects
-//                                            del alta: evita endpoints extra,
-//                                            el plan Hobby permite 12 funciones)
-//   POST    → alta/edición de una tarifa    { sellerId, zonaId, precio }
+//   GET     → { costos, transportistas, zonas }  (transportistas y zonas
+//                                            para los selects del alta: evita
+//                                            endpoints extra, el plan Hobby
+//                                            permite 12 funciones)
+//   POST    → alta/edición de una tarifa    { transportistaId, zonaId, costo }
 //   DELETE  → baja de una tarifa            ?id=<public_id>
+//
+// Los transportistas no tienen tabla propia: son filas de "usuario" con
+// rol = 'transportista' (mismo criterio que /api/solicitudes).
 //
 // Todo filtrado por la empresa del token: una empresa solo ve y toca su lista.
 
@@ -21,45 +25,52 @@ function parsearImporte(valor, campo) {
 }
 
 async function listar(supabase, idempresa, res) {
-  const [tarifas, sellers, zonas] = await Promise.all([
+  const [tarifas, transportistas, zonas] = await Promise.all([
     supabase
-      .from('lista_precios')
-      .select('public_id, idseller, idzona, precio')
+      .from('lista_costos')
+      .select('public_id, idtransportista, idzona, costo')
       .eq('idempresa', idempresa),
-    supabase.from('seller').select('id, public_id, nombre').eq('idempresa', idempresa).order('nombre'),
+    supabase
+      .from('usuario')
+      .select('id, public_id, nombre')
+      .eq('idempresa', idempresa)
+      .eq('rol', 'transportista')
+      .eq('estado_solicitud', 'aceptado')
+      .order('nombre'),
     supabase.from('zona').select('id, public_id, nombre, cp_desde, cp_hasta').order('nombre'),
   ]);
 
-  for (const r of [tarifas, sellers, zonas]) {
+  for (const r of [tarifas, transportistas, zonas]) {
     if (r.error) throw new Error(r.error.message);
   }
 
   // Resolvemos los nombres en memoria en lugar de con joins embebidos de
   // PostgREST: son tablas chicas y así el id interno nunca sale de acá.
-  const sellerPorId = new Map((sellers.data ?? []).map((s) => [s.id, s]));
+  const transportistaPorId = new Map((transportistas.data ?? []).map((t) => [t.id, t]));
   const zonaPorId = new Map((zonas.data ?? []).map((z) => [z.id, z]));
 
-  const precios = (tarifas.data ?? [])
+  const costos = (tarifas.data ?? [])
     .map((t) => {
-      const seller = sellerPorId.get(t.idseller);
+      const transportista = transportistaPorId.get(t.idtransportista);
       const zona = zonaPorId.get(t.idzona);
       return {
         id: t.public_id,
-        sellerId: seller?.public_id ?? null,
-        sellerNombre: seller?.nombre ?? '—',
+        transportistaId: transportista?.public_id ?? null,
+        transportistaNombre: transportista?.nombre ?? '—',
         zonaId: zona?.public_id ?? null,
         zonaNombre: zona?.nombre ?? '—',
-        precio: Number(t.precio),
+        costo: Number(t.costo),
       };
     })
     .sort(
       (a, b) =>
-        a.sellerNombre.localeCompare(b.sellerNombre) || a.zonaNombre.localeCompare(b.zonaNombre),
+        a.transportistaNombre.localeCompare(b.transportistaNombre) ||
+        a.zonaNombre.localeCompare(b.zonaNombre),
     );
 
   return res.json({
-    precios,
-    sellers: (sellers.data ?? []).map((s) => ({ id: s.public_id, nombre: s.nombre })),
+    costos,
+    transportistas: (transportistas.data ?? []).map((t) => ({ id: t.public_id, nombre: t.nombre })),
     zonas: (zonas.data ?? []).map((z) => ({
       id: z.public_id,
       nombre: z.nombre,
@@ -70,24 +81,27 @@ async function listar(supabase, idempresa, res) {
 }
 
 async function guardar(supabase, idempresa, req, res) {
-  const { sellerId, zonaId, precio } = req.body ?? {};
+  const { transportistaId, zonaId, costo } = req.body ?? {};
 
-  if (!sellerId || !zonaId) {
-    return res.status(400).json({ error: 'sellerId y zonaId son requeridos' });
+  if (!transportistaId || !zonaId) {
+    return res.status(400).json({ error: 'transportistaId y zonaId son requeridos' });
   }
 
-  const precioNum = parsearImporte(precio, 'precio');
+  const costoNum = parsearImporte(costo, 'costo');
 
-  // El seller tiene que ser de esta empresa: si no, una empresa podría
-  // tarifar sellers ajenos pasando cualquier UUID.
-  const { data: seller } = await supabase
-    .from('seller')
+  // El transportista tiene que ser de esta empresa: si no, una empresa
+  // podría tarifar transportistas ajenos pasando cualquier UUID.
+  const { data: transportista } = await supabase
+    .from('usuario')
     .select('id')
-    .eq('public_id', sellerId)
+    .eq('public_id', transportistaId)
     .eq('idempresa', idempresa)
+    .eq('rol', 'transportista')
     .maybeSingle();
 
-  if (!seller) return res.status(404).json({ error: 'El seller no existe o no es de tu empresa' });
+  if (!transportista) {
+    return res.status(404).json({ error: 'El transportista no existe o no es de tu empresa' });
+  }
 
   const { data: zona } = await supabase
     .from('zona')
@@ -97,19 +111,19 @@ async function guardar(supabase, idempresa, req, res) {
 
   if (!zona) return res.status(404).json({ error: 'La zona no existe' });
 
-  // Upsert sobre (idempresa, idseller, idzona): volver a cargar la misma
-  // combinación actualiza la tarifa en vez de duplicarla.
+  // Upsert sobre (idempresa, idtransportista, idzona): volver a cargar la
+  // misma combinación actualiza la tarifa en vez de duplicarla.
   const { data, error } = await supabase
-    .from('lista_precios')
+    .from('lista_costos')
     .upsert(
       {
         idempresa,
-        idseller: seller.id,
+        idtransportista: transportista.id,
         idzona: zona.id,
-        precio: precioNum,
+        costo: costoNum,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: 'idempresa,idseller,idzona' },
+      { onConflict: 'idempresa,idtransportista,idzona' },
     )
     .select('public_id')
     .single();
@@ -124,7 +138,7 @@ async function borrar(supabase, idempresa, req, res) {
   if (!id) return res.status(400).json({ error: 'id es requerido' });
 
   const { data, error } = await supabase
-    .from('lista_precios')
+    .from('lista_costos')
     .delete()
     .eq('public_id', id)
     .eq('idempresa', idempresa)
@@ -151,7 +165,7 @@ export default async function handler(req, res) {
 
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (err) {
-    console.error('[PacKen] Error en /api/precios:', err.message);
+    console.error('[PacKen] Error en /api/costos:', err.message);
     return res.status(400).json({ error: err.message });
   }
 }

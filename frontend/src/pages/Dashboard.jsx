@@ -8,6 +8,7 @@ import {
   FaFileInvoiceDollar,
   FaMobileAlt,
   FaClipboardList,
+  FaTruck,
 } from 'react-icons/fa';
 import { usePaquetes } from '../hooks/usePaquetes';
 import { colorEstado, normalizarEstado, prioridadEstado } from '../utils/estados';
@@ -43,6 +44,7 @@ const ALL_SHORTCUTS = [
   { path: '/facturas', label: 'Facturas', Icon: FaFileInvoiceDollar, roles: ['empresa'] },
   { path: '/liquidaciones', label: 'Liquidaciones', Icon: FaMobileAlt, roles: ['empresa'] },
   { path: '/listas-precios', label: 'Lista de Precios', Icon: FaClipboardList, roles: ['empresa'] },
+  { path: '/listas-costos', label: 'Lista de Costos', Icon: FaTruck, roles: ['empresa'] },
   { path: '/paquetes', label: 'Paquetes', Icon: FaBoxOpen, roles: ['transportista'] },
 ];
 
