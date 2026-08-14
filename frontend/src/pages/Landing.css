@@ -1,0 +1,98 @@
+/* Animaciones de la landing. Fuera de Tailwind porque son keyframes con
+   nombre propio referenciados vía clases utilitarias arbitrarias
+   (animate-[nombre_duración_...]) en Landing.jsx. */
+
+@keyframes floatUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes revealUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes revealScale {
+  from { opacity: 0; transform: translateY(34px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@keyframes glowFloat {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(24px, -22px) scale(1.12); }
+}
+@keyframes glowFloat2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-28px, 20px) scale(1.08); }
+}
+@keyframes softPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.82); }
+}
+@keyframes livePulse {
+  0% { box-shadow: 0 0 0 0 rgba(30, 122, 59, 0.45); }
+  100% { box-shadow: 0 0 0 8px rgba(30, 122, 59, 0); }
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes floatChip {
+  0%, 100% { transform: translateY(0) rotate(var(--r, 0deg)); }
+  50% { transform: translateY(-16px) rotate(var(--r, 0deg)); }
+}
+@keyframes wordUp {
+  from { opacity: 0; transform: translateY(26px) rotate(2deg); }
+  to { opacity: 1; transform: translateY(0) rotate(0); }
+}
+@keyframes moveX {
+  0% { left: 2%; }
+  100% { left: 98%; }
+}
+@keyframes tick {
+  0% { opacity: 0.4; transform: translateY(-5px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes growX {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.pk-landing .reveal {
+  opacity: 0;
+  transform: translateY(30px);
+}
+.pk-landing .reveal.is-visible {
+  animation: revealUp 0.9s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.pk-landing .reveal-pop {
+  opacity: 0;
+  transform: translateY(34px) scale(0.97);
+}
+.pk-landing .reveal-pop.is-visible {
+  animation: revealScale 1s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.pk-landing .word {
+  display: inline-block;
+  animation: wordUp 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pk-landing .reveal,
+  .pk-landing .reveal-pop,
+  .pk-landing .word {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .pk-landing .hero-chip,
+  .pk-landing .marquee-track,
+  .pk-landing .glow,
+  .pk-landing .shimmer-text,
+  .pk-landing .route-runner,
+  .pk-landing .live-dot {
+    animation: none !important;
+  }
+}

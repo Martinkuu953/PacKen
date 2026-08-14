@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Registro from './pages/Registro';
 import SinAcceso from './pages/SinAcceso';
@@ -26,6 +27,17 @@ function RutaPublica({ children }) {
   const { autenticado } = useAuth();
   if (autenticado) return <Navigate to="/" replace />;
   return children;
+}
+
+// La home pública: sin sesión se ve la landing, no el redirect a /login que
+// usa el resto de las rutas protegidas.
+function Inicio() {
+  const { autenticado, aprobado } = useAuth();
+
+  if (!autenticado) return <Landing />;
+  if (!aprobado) return <Navigate to="/sin-acceso" replace />;
+
+  return <Layout><Dashboard /></Layout>;
 }
 
 function RutaSinAcceso() {
@@ -57,7 +69,7 @@ function AppRoutes() {
       <Route path="/registro" element={<RutaPublica><Registro /></RutaPublica>} />
       <Route path="/sin-acceso" element={<RutaSinAcceso />} />
 
-      <Route path="/" element={<RutaProtegida><Dashboard /></RutaProtegida>} />
+      <Route path="/" element={<Inicio />} />
       <Route path="/paquetes" element={<RutaProtegida><Paquetes /></RutaProtegida>} />
 
       <Route path="/sellers" element={
