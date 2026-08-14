@@ -144,14 +144,23 @@ const Dashboard = () => {
 
       {/* El transportista solo tiene esta pantalla: la usa siempre desde el
           celular, así que el botón ocupa casi toda la pantalla en vez de
-          compartir grilla con los accesos de la empresa. */}
+          compartir grilla con los accesos de la empresa. Mismo estilo que
+          los botones de Colecta/Reparto de /paquetes. */}
       {usuario?.rol === 'transportista' && (
         <button
           onClick={() => handleNavigation('/paquetes')}
-          className="w-full flex flex-col items-center justify-center bg-white border-2 border-gray-200 rounded-2xl py-12 px-6 hover:border-yellow-400 hover:bg-yellow-50 active:bg-yellow-100 shadow-sm transition-colors duration-150 cursor-pointer group"
+          className="w-full py-8 px-6 text-left bg-white border-2 border-gray-200 rounded-2xl hover:border-yellow-400 hover:bg-yellow-50 active:bg-yellow-100 transition-colors duration-150 shadow-sm"
         >
-          <FaBoxOpen size={72} className="text-gray-600 group-hover:text-yellow-500 transition-colors mb-4" />
-          <span className="font-bold text-gray-800 text-2xl">Paquetes</span>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <FaBoxOpen size={40} className="text-yellow-500 shrink-0" />
+              <div>
+                <p className="text-2xl font-bold text-gray-800">Paquetes</p>
+                <p className="text-sm text-gray-500 mt-1">Colecta y reparto</p>
+              </div>
+            </div>
+            <span className="text-3xl font-bold text-yellow-500">{loading ? '…' : resumen.total}</span>
+          </div>
         </button>
       )}
 
