@@ -71,8 +71,37 @@ async function crear(req, res, supabase, idempresa) {
   return res.status(201).json({ seller: { id: data.public_id, nombre: data.nombre } });
 }
 
+// DELETE /api/sellers?sellerId=<public_id>
+// Solo se puede borrar si no tiene paquetes ni la cuenta de Mercado Libre
+// conectada (FK desde paquete/meli_token): se lo comunicamos al usuario en
+// vez de dejar que reviente como error 500.
+async function borrar(req, res, supabase, idempresa) {
+  const { sellerId } = req.query;
+  if (!sellerId) return res.status(400).json({ error: 'sellerId es requerido' });
+
+  const { data, error } = await supabase
+    .from('seller')
+    .delete()
+    .eq('public_id', sellerId)
+    .eq('idempresa', idempresa)
+    .select('public_id')
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === '23503') {
+      return res.status(409).json({
+        error: 'No se puede eliminar: el seller tiene paquetes o una cuenta de Mercado Libre conectada.',
+      });
+    }
+    throw new Error(error.message);
+  }
+  if (!data) return res.status(404).json({ error: 'Seller no encontrado' });
+
+  return res.json({ ok: true });
+}
+
 export default async function handler(req, res) {
-  if (!['GET', 'POST'].includes(req.method)) {
+  if (!['GET', 'POST', 'DELETE'].includes(req.method)) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -83,6 +112,9 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'POST') {
       return await crear(req, res, getSupabase(), usuario.id);
+    }
+    if (req.method === 'DELETE') {
+      return await borrar(req, res, getSupabase(), usuario.id);
     }
 
     const supabase = getSupabase();

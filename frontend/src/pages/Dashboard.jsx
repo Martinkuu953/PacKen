@@ -46,7 +46,6 @@ const ALL_SHORTCUTS = [
   { path: '/liquidaciones', label: 'Liquidaciones', Icon: FaMobileAlt, roles: ['empresa'] },
   { path: '/listas-precios', label: 'Lista de Precios', Icon: FaClipboardList, roles: ['empresa'] },
   { path: '/listas-costos', label: 'Lista de Costos', Icon: FaTruck, roles: ['empresa'] },
-  { path: '/paquetes', label: 'Paquetes', Icon: FaBoxOpen, roles: ['transportista'] },
 ];
 
 const Dashboard = () => {
@@ -143,21 +142,36 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6">
-        {ALL_SHORTCUTS.filter((s) => s.roles.includes(usuario?.rol)).map((shortcut) => (
-          <button
-            key={shortcut.path}
-            onClick={() => handleNavigation(shortcut.path)}
-            className="flex flex-col items-center justify-center bg-white border border-gray-200 rounded-2xl p-4 sm:p-8 hover:shadow-md hover:border-yellow-400 transition-all cursor-pointer group"
-          >
-            <div className="text-gray-600 group-hover:text-yellow-500 transition-colors mb-2 sm:mb-4">
-              <shortcut.Icon size={28} className="sm:hidden" />
-              <shortcut.Icon size={40} className="hidden sm:block" />
-            </div>
-            <span className="font-semibold text-gray-800 text-sm sm:text-base">{shortcut.label}</span>
-          </button>
-        ))}
-      </div>
+      {/* El transportista solo tiene esta pantalla: la usa siempre desde el
+          celular, así que el botón ocupa casi toda la pantalla en vez de
+          compartir grilla con los accesos de la empresa. */}
+      {usuario?.rol === 'transportista' && (
+        <button
+          onClick={() => handleNavigation('/paquetes')}
+          className="w-full flex flex-col items-center justify-center bg-white border-2 border-gray-200 rounded-2xl py-12 px-6 hover:border-yellow-400 hover:bg-yellow-50 active:bg-yellow-100 shadow-sm transition-colors duration-150 cursor-pointer group"
+        >
+          <FaBoxOpen size={72} className="text-gray-600 group-hover:text-yellow-500 transition-colors mb-4" />
+          <span className="font-bold text-gray-800 text-2xl">Paquetes</span>
+        </button>
+      )}
+
+      {usuario?.rol === 'empresa' && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6">
+          {ALL_SHORTCUTS.map((shortcut) => (
+            <button
+              key={shortcut.path}
+              onClick={() => handleNavigation(shortcut.path)}
+              className="flex flex-col items-center justify-center bg-white border border-gray-200 rounded-2xl p-4 sm:p-8 hover:shadow-md hover:border-yellow-400 transition-all cursor-pointer group"
+            >
+              <div className="text-gray-600 group-hover:text-yellow-500 transition-colors mb-2 sm:mb-4">
+                <shortcut.Icon size={28} className="sm:hidden" />
+                <shortcut.Icon size={40} className="hidden sm:block" />
+              </div>
+              <span className="font-semibold text-gray-800 text-sm sm:text-base">{shortcut.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

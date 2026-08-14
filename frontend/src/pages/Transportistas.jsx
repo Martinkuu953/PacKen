@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../services/api';
 import Buscador from '../components/Buscador';
 import FormNuevoTransportista from '../components/FormNuevoTransportista';
+import DetalleTransportista from '../components/DetalleTransportista';
 import { filtrarPorTexto } from '../utils/busqueda';
 
 const CAMPOS_BUSQUEDA = ['nombre', 'dni'];
@@ -20,6 +21,7 @@ const Transportistas = () => {
   const [error, setError] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [creando, setCreando] = useState(false);
+  const [transportistaSeleccionado, setTransportistaSeleccionado] = useState(null);
 
   const aplicar = useCallback((res) => {
     setTransportistas(res.transportistas ?? []);
@@ -48,6 +50,11 @@ const Transportistas = () => {
       cancelado = true;
     };
   }, [aplicar]);
+
+  const transportistaEliminado = useCallback((transportistaId) => {
+    setTransportistas((prev) => prev.filter((t) => t.id !== transportistaId));
+    setTransportistaSeleccionado(null);
+  }, []);
 
   // Todos los transportistas de la empresa son activos: las cuentas las crea
   // ella misma, no hay solicitudes que aprobar.
@@ -133,7 +140,11 @@ const Transportistas = () => {
               )}
               {!loading &&
                 encontrados.map((t) => (
-                  <tr key={t.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                  <tr
+                    key={t.id}
+                    onClick={() => setTransportistaSeleccionado(t)}
+                    className="border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer"
+                  >
                     <td className="py-2 px-2 font-medium text-gray-800">{t.nombre}</td>
                     <td className="py-2 px-2 text-gray-600">{t.dni || '—'}</td>
                     <td className="py-2 px-2 text-gray-600">{formatearFecha(t.created_at)}</td>
@@ -143,6 +154,14 @@ const Transportistas = () => {
           </table>
         </div>
       </div>
+
+      {transportistaSeleccionado && (
+        <DetalleTransportista
+          transportista={transportistaSeleccionado}
+          onCerrar={() => setTransportistaSeleccionado(null)}
+          onEliminado={transportistaEliminado}
+        />
+      )}
     </div>
   );
 };

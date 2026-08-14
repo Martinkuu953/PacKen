@@ -57,8 +57,38 @@ async function crear(req, res, supabase, idempresa) {
   return res.status(201).json({ transportista: { id: public_id, ...resto } });
 }
 
+// DELETE /api/transportistas?transportistaId=<public_id>
+// Solo se puede borrar si no tiene paquetes asignados ni listas de costos con
+// tarifas (FK desde paquete/lista_costos): se lo comunicamos al usuario en
+// vez de dejar que reviente como error 500.
+async function borrar(req, res, supabase, idempresa) {
+  const { transportistaId } = req.query;
+  if (!transportistaId) return res.status(400).json({ error: 'transportistaId es requerido' });
+
+  const { data, error } = await supabase
+    .from('usuario')
+    .delete()
+    .eq('public_id', transportistaId)
+    .eq('rol', 'transportista')
+    .eq('idempresa', idempresa)
+    .select('public_id')
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === '23503') {
+      return res.status(409).json({
+        error: 'No se puede eliminar: el transportista tiene paquetes u otros datos asociados.',
+      });
+    }
+    throw new Error(error.message);
+  }
+  if (!data) return res.status(404).json({ error: 'Transportista no encontrado' });
+
+  return res.json({ ok: true });
+}
+
 export default async function handler(req, res) {
-  if (!['GET', 'POST'].includes(req.method)) {
+  if (!['GET', 'POST', 'DELETE'].includes(req.method)) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -69,6 +99,7 @@ export default async function handler(req, res) {
   try {
     const supabase = getSupabase();
     if (req.method === 'POST') return await crear(req, res, supabase, usuario.id);
+    if (req.method === 'DELETE') return await borrar(req, res, supabase, usuario.id);
     return await listar(res, supabase, usuario.id);
   } catch (err) {
     console.error('[PacKen] Error en /api/transportistas:', err.message);

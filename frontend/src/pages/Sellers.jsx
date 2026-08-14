@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../services/api';
 import Buscador from '../components/Buscador';
 import FormNuevoSeller from '../components/FormNuevoSeller';
+import DetalleSeller from '../components/DetalleSeller';
 import { filtrarPorTexto } from '../utils/busqueda';
 
 const ENDPOINT = '/api/sellers';
@@ -23,6 +24,7 @@ const Sellers = () => {
   const [busqueda, setBusqueda] = useState('');
   const [conectando, setConectando] = useState(false);
   const [creando, setCreando] = useState(false);
+  const [sellerSeleccionado, setSellerSeleccionado] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const aplicar = useCallback((res) => {
@@ -85,6 +87,11 @@ const Sellers = () => {
         setError(err.message);
         setConectando(false);
       });
+  }, []);
+
+  const sellerEliminado = useCallback((sellerId) => {
+    setSellersData((prev) => prev.filter((s) => s.id !== sellerId));
+    setSellerSeleccionado(null);
   }, []);
 
   const sellersFiltrados = useMemo(
@@ -169,7 +176,14 @@ const Sellers = () => {
           <div className="space-y-3">
             {!loading &&
               sellersFiltrados.map((seller) => (
-                <div key={seller.id} className="bg-white border border-gray-200 rounded-xl p-4">
+                <div
+                  key={seller.id}
+                  onClick={() => setSellerSeleccionado(seller)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && setSellerSeleccionado(seller)}
+                  className="bg-white border border-gray-200 rounded-xl p-4 cursor-pointer hover:border-yellow-400 active:bg-gray-50 transition-colors duration-150"
+                >
                   <div className="flex items-baseline justify-between gap-3">
                     <p className="font-semibold text-gray-800">{seller.nombre}</p>
                     <p className="text-lg font-bold text-gray-800">{seller.totales}</p>
@@ -219,7 +233,11 @@ const Sellers = () => {
               )}
               {!loading &&
                 sellersFiltrados.map((seller) => (
-                  <tr key={seller.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr
+                    key={seller.id}
+                    onClick={() => setSellerSeleccionado(seller)}
+                    className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                  >
                     <td className="py-3 px-4 font-medium text-gray-800">{seller.nombre}</td>
                     <td className="py-3 px-4 text-gray-600">{seller.totales}</td>
                     <td className="py-3 px-4 text-gray-600">{seller.enCamino}</td>
@@ -247,6 +265,14 @@ const Sellers = () => {
           </p>
         </div>
       </div>
+
+      {sellerSeleccionado && (
+        <DetalleSeller
+          seller={sellerSeleccionado}
+          onCerrar={() => setSellerSeleccionado(null)}
+          onEliminado={sellerEliminado}
+        />
+      )}
     </div>
   );
 };
