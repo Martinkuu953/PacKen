@@ -10,7 +10,6 @@ const RUTAS_PUBLICAS = [
   { method: 'POST', path: '/api/auth/registro' },
   { method: 'POST', path: '/api/auth/refresh' },
   { method: 'POST', path: '/api/auth/logout' },
-  { method: 'GET', path: '/api/empresas' },
   // Lo llama MercadoLibre desde afuera; GET responde el healthcheck del webhook.
   { method: 'POST', path: '/api/webhooks/mercadolibre' },
   { method: 'GET', path: '/api/webhooks/mercadolibre' },

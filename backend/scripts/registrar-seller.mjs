@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { query, dbConfigurado } from '../src/lib/db.js';
+import { query, dbConfigurado } from './lib/db.js';
 import { pedirTokenPorRefresh, obtenerUsuarioML, nombreDesdeUsuarioML, guardarSellerYToken, enmascarar } from './lib/ml-oauth.mjs';
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -18,16 +18,17 @@ const [, , sellerIdArg, refreshTokenArg, nombreArg] = process.argv;
 
 const sellerId = sellerIdArg;
 // refresh_token: arg de CLI, si no, el de .env
-const refreshToken = refreshTokenArg || process.env.VITE_ML_REFRESH_TOKEN;
+const refreshToken = refreshTokenArg || process.env.ML_REFRESH_TOKEN;
 const idEmpresa = 1; // empresa por defecto (existe en la DB)
 
-// Credenciales de la app de ML (acepta nombres con o sin prefijo VITE_)
-const ML_CLIENT_ID = process.env.ML_CLIENT_ID || process.env.VITE_ML_CLIENT_ID;
-const ML_CLIENT_SECRET = process.env.ML_CLIENT_SECRET || process.env.VITE_ML_CLIENT_SECRET;
+// Credenciales de la app de ML. Sin fallbacks VITE_: ese prefijo hace que
+// Vite empaquete la variable en el bundle publico del frontend.
+const ML_CLIENT_ID = process.env.ML_CLIENT_ID;
+const ML_CLIENT_SECRET = process.env.ML_CLIENT_SECRET;
 
 if (!sellerId || !refreshToken) {
   console.error('❌ Uso: node scripts/registrar-seller.mjs <idMercadoLibre> <refreshToken> [nombre]');
-  console.error('   (el refreshToken también se toma de VITE_ML_REFRESH_TOKEN si no se pasa)');
+  console.error('   (el refreshToken también se toma de ML_REFRESH_TOKEN si no se pasa)');
   process.exit(1);
 }
 
@@ -38,7 +39,7 @@ if (!dbConfigurado()) {
 
 if (!ML_CLIENT_ID || !ML_CLIENT_SECRET) {
   console.error('❌ Falta el client_id o client_secret de la app de ML.');
-  console.error('   Agregá ML_CLIENT_ID y ML_CLIENT_SECRET (o VITE_ML_CLIENT_ID / VITE_ML_CLIENT_SECRET) en backend/.env');
+  console.error('   Agregá ML_CLIENT_ID y ML_CLIENT_SECRET en backend/.env');
   console.error(`   Detectado → client_id: ${ML_CLIENT_ID ? 'OK' : 'FALTA'}, client_secret: ${ML_CLIENT_SECRET ? 'OK' : 'FALTA'}`);
   process.exit(1);
 }

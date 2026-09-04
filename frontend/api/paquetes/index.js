@@ -1,6 +1,7 @@
 import { getSupabase } from '../_lib/ml.js';
 import { autenticar } from '../_lib/auth.js';
 import { canonizarEstado } from '../../shared/estados.js';
+import { responderError } from '../_lib/errores.js';
 
 // El cliente solo conoce UUIDs opacos (public_id). Los filtros llegan con ese
 // UUID y hay que traducirlo al id interno antes de consultar paquete.
@@ -105,8 +106,7 @@ export default async function handler(req, res) {
       origen: 'supabase',
     });
   } catch (err) {
-    console.error('[PacKen] Error en listar paquetes:', err.message);
-    return res.status(500).json({ error: err.message });
+    return responderError(res, err, 500, '/api/paquetes');
   }
 }
 

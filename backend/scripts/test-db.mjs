@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { probarConexionDb, query } from '../src/lib/db.js';
+import { probarConexionDb, query } from './lib/db.js';
 
 const ping = await probarConexionDb();
 console.log('Conexión:', JSON.stringify(ping, null, 2));

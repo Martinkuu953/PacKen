@@ -1,5 +1,12 @@
 import { getSupabase } from '../_lib/ml.js';
-import { autenticar, requiereRol, hashPassword } from '../_lib/auth.js';
+import { responderError } from '../_lib/errores.js';
+import {
+  autenticar,
+  requiereRol,
+  hashPassword,
+  validarPassword,
+  validarEmail,
+} from '../_lib/auth.js';
 
 // GET /api/transportistas — la flota de la empresa.
 async function listar(res, supabase, idempresa) {
@@ -30,6 +37,16 @@ async function crear(req, res, supabase, idempresa) {
 
   if (!nombre || !email || !password || !dni) {
     return res.status(400).json({ error: 'nombre, email, dni y password son requeridos' });
+  }
+
+  const errorEmail = validarEmail(email);
+  if (errorEmail) return res.status(400).json({ error: errorEmail });
+
+  const errorPassword = validarPassword(password);
+  if (errorPassword) return res.status(400).json({ error: errorPassword });
+
+  if (!/^\d{6,}$/.test(String(dni).trim())) {
+    return res.status(400).json({ error: 'El DNI debe ser numérico' });
   }
 
   const { data, error } = await supabase
@@ -102,7 +119,6 @@ export default async function handler(req, res) {
     if (req.method === 'DELETE') return await borrar(req, res, supabase, usuario.id);
     return await listar(res, supabase, usuario.id);
   } catch (err) {
-    console.error('[PacKen] Error en /api/transportistas:', err.message);
-    return res.status(req.method === 'POST' ? 400 : 500).json({ error: err.message });
+    return responderError(res, err, req.method === 'POST' ? 400 : 500, '/api/transportistas');
   }
 }

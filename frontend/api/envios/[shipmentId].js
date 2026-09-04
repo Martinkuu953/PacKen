@@ -1,5 +1,6 @@
 import { getSupabase, resolverSellerInterno, obtenerShipment } from '../_lib/ml.js';
 import { autenticar, requiereRol } from '../_lib/auth.js';
+import { responderError } from '../_lib/errores.js';
 
 // GET /api/envios/:shipmentId?sellerId=<idMercadoLibre>
 // Devuelve todos los datos del envío desde MercadoLibre usando el access token.
@@ -24,14 +25,14 @@ export default async function handler(req, res) {
     }
 
     const supabase = getSupabase();
-    const idSellerInterno = await resolverSellerInterno(supabase, sellerId);
+    // requiereRol ya garantizó que es una empresa: su id es el de la empresa.
+    const idSellerInterno = await resolverSellerInterno(supabase, sellerId, usuario.id);
 
     console.log(`[PacKen] GET envío ${shipmentId} (seller ML ${sellerId} → interno ${idSellerInterno})`);
     const envio = await obtenerShipment(supabase, idSellerInterno, shipmentId);
 
     return res.status(200).json({ ok: true, envio });
   } catch (err) {
-    console.error('[PacKen] Error en /api/envios:', err.message);
-    return res.status(400).json({ error: err.message });
+    return responderError(res, err, 400, '/api/envios');
   }
 }

@@ -1,5 +1,6 @@
 import { getSupabase, obtenerAreasFlex } from './ml.js';
 import { autenticar, requiereRol } from './auth.js';
+import { ErrorPublico, responderError } from './errores.js';
 
 // Lógica compartida por /api/precios (tipo 'precio', entidad = seller) y
 // /api/costos (tipo 'costo', entidad = transportista). Vive en _lib para no
@@ -18,9 +19,9 @@ import { autenticar, requiereRol } from './auth.js';
 function parsearImporte(valor, campo, { permitirNegativo = false } = {}) {
   const numero = Number(valor);
   if (valor === null || valor === undefined || valor === '' || Number.isNaN(numero)) {
-    throw new Error(`${campo} debe ser un número`);
+    throw new ErrorPublico(`${campo} debe ser un número`);
   }
-  if (!permitirNegativo && numero < 0) throw new Error(`${campo} no puede ser negativo`);
+  if (!permitirNegativo && numero < 0) throw new ErrorPublico(`${campo} no puede ser negativo`);
   return numero;
 }
 
@@ -480,7 +481,6 @@ export async function manejarListas(req, res, tipo) {
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (err) {
     const nombre = tipo === 'precio' ? 'precios' : 'costos';
-    console.error(`[PacKen] Error en /api/${nombre}:`, err.message);
-    return res.status(400).json({ error: err.message });
+    return responderError(res, err, 400, `/api/${nombre}`);
   }
 }

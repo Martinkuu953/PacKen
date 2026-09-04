@@ -8,6 +8,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { ESTADOS } from '../../shared/estados.js';
+import { ErrorPublico } from './errores.js';
 
 const ML_API = 'https://api.mercadolibre.com';
 
@@ -20,13 +21,18 @@ export const ESTADO_POR_TIPO = {
 // ──────────────────────────────────────────────────────────────────────────
 // Supabase (service role → bypasea RLS, necesario para leer/escribir meli_token)
 // ──────────────────────────────────────────────────────────────────────────
+// Sin fallbacks con prefijo VITE_ a propósito: Vite empaqueta en el bundle
+// público toda variable que empiece con VITE_, así que aceptarlas acá invita a
+// que un secreto de servidor termine servido al navegador. Además el fallback
+// a la publishable key era peor que un error: la API habría arrancado con la
+// key anónima y fallado recién al chocar contra RLS, en runtime y sin decir
+// por qué.
 export function getSupabase() {
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_KEY ||
-    process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) throw new Error('SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY no configurados en Vercel');
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+  if (!url || !key) {
+    throw new Error('SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY no configurados en Vercel');
+  }
   return createClient(url, key);
 }
 
@@ -159,18 +165,30 @@ export async function mlFetchConReintento(supabase, idSellerInterno, path) {
 // ──────────────────────────────────────────────────────────────────────────
 // Resolución del seller interno a partir del sender_id de ML
 // ──────────────────────────────────────────────────────────────────────────
-export async function resolverSellerInterno(supabase, sellerIdMl) {
-  const { data: seller, error } = await supabase
+// El sellerId de MercadoLibre no es secreto: viaja en el QR del paquete y en
+// las URLs de ML. Por eso la búsqueda SIEMPRE se acota a la empresa que hace
+// el pedido; si no, cualquier usuario autenticado podría leer o escribir
+// paquetes de otra empresa pasando un sender_id ajeno.
+//
+// idEmpresa es obligatorio a propósito: que sea un parámetro que hay que
+// pasar sí o sí evita que un caller nuevo se olvide de acotar.
+export async function resolverSellerInterno(supabase, sellerIdMl, idEmpresa) {
+  if (idEmpresa == null) {
+    throw new Error('resolverSellerInterno requiere idEmpresa');
+  }
+
+  const { data: seller } = await supabase
     .from('seller')
     .select('id')
     .eq('idmercadolibre', String(sellerIdMl))
+    .eq('idempresa', idEmpresa)
     .limit(1)
-    .single();
+    .maybeSingle();
 
-  if (error || !seller) {
-    throw new Error(
-      `No existe seller con idmercadolibre = ${sellerIdMl}. Cargalo en la tabla "seller" primero.`
-    );
+  // Mensaje deliberadamente vago: distinguir "no existe" de "no es tuyo" deja
+  // enumerar qué sellers hay en el sistema iterando ids.
+  if (!seller) {
+    throw new ErrorPublico('Seller no encontrado', 404);
   }
   return seller.id;
 }
@@ -404,7 +422,7 @@ export async function obtenerAreasFlex(supabase, idSellerInterno, sellerMlId) {
   );
   const serviceId = extraerFlexServiceId(prefs);
   if (!serviceId) {
-    throw new Error('No se encontró un servicio de Flex en la cuenta de ML del seller.');
+    throw new ErrorPublico('No se encontró un servicio de Flex en la cuenta de ML del seller.');
   }
 
   const path = `/flex/sites/${SITE_ID}/users/${sellerMlId}/services/${serviceId}/configurations/coverage/zones/v1?show_availables=true`;
@@ -412,7 +430,7 @@ export async function obtenerAreasFlex(supabase, idSellerInterno, sellerMlId) {
 
   const areas = aplanarAreasFlex(data);
   if (!areas.length) {
-    throw new Error('Flex no devolvió barrios/áreas de cobertura para sincronizar.');
+    throw new ErrorPublico('Flex no devolvió barrios/áreas de cobertura para sincronizar.');
   }
   return areas;
 }

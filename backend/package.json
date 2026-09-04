@@ -4,16 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/index.js",
-    "start": "node src/index.js"
+    "db:test": "node scripts/test-db.mjs",
+    "seller:conectar": "node scripts/conectar-seller.mjs",
+    "seller:registrar": "node scripts/registrar-seller.mjs"
   },
   "dependencies": {
-    "bcryptjs": "^3.0.3",
-    "cookie-parser": "^1.4.7",
-    "cors": "^2.8.6",
     "dotenv": "^16.4.7",
-    "express": "^4.21.2",
-    "jsonwebtoken": "^9.0.3",
     "pg": "^8.14.1"
   }
 }

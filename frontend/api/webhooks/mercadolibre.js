@@ -1,4 +1,4 @@
-import { getSupabase, mlFetchConReintento, traducirEstadoML, resolverSellerInterno } from '../_lib/ml.js';
+import { getSupabase, mlFetchConReintento, traducirEstadoML } from '../_lib/ml.js';
 
 // POST /api/webhooks/mercadolibre
 // ML envía notificaciones con topic "shipments" cuando cambia el estado de un envío.
@@ -67,7 +67,10 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ ok: true, ignored: true, reason: `Estado ML "${shipment.status}" no es delivered` });
   } catch (err) {
-    console.error('[PacKen Webhook] Error:', err.message);
-    return res.status(200).json({ ok: false, error: err.message });
+    // Este endpoint es público: el detalle del error va al log de la función,
+    // nunca al cuerpo de la respuesta. Se responde 200 igual para que ML no
+    // encole reintentos de una notificación que no vamos a poder procesar.
+    console.error('[PacKen Webhook] Error:', err);
+    return res.status(200).json({ ok: false });
   }
 }

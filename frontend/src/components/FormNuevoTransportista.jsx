@@ -59,6 +59,8 @@ const FormNuevoTransportista = ({ onCreado, onCancelar }) => {
             className={INPUT}
             value={valores.password}
             onChange={set('password')}
+            placeholder="Mínimo 8 caracteres"
+            minLength={8}
             required
           />
         </div>

@@ -1,7 +1,8 @@
 import { getSupabase } from '../ml.js';
-import { hashPassword, generateToken, perfilPublico } from '../auth.js';
+import { hashPassword, generateToken, perfilPublico, validarPassword, validarEmail } from '../auth.js';
 import { crearRefreshToken } from '../refreshTokens.js';
 import { setRefreshCookie } from '../cookies.js';
+import { responderError } from '../errores.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -21,6 +22,16 @@ export default async function handler(req, res) {
       return res.status(403).json({
         error: 'Solo las empresas pueden registrarse. Pedile a tu empresa que te cree la cuenta.',
       });
+    }
+
+    const errorEmail = validarEmail(email);
+    if (errorEmail) return res.status(400).json({ error: errorEmail });
+
+    const errorPassword = validarPassword(password);
+    if (errorPassword) return res.status(400).json({ error: errorPassword });
+
+    if (String(nombre).trim().length < 2) {
+      return res.status(400).json({ error: 'El nombre es demasiado corto' });
     }
 
     const supabase = getSupabase();
@@ -52,7 +63,6 @@ export default async function handler(req, res) {
     setRefreshCookie(res, refreshToken, expiresAt);
     return res.status(201).json({ usuario: perfilPublico(data), token });
   } catch (err) {
-    console.error('[PacKen] Error en registro:', err.message);
-    return res.status(400).json({ error: err.message });
+    return responderError(res, err, 400, 'registro');
   }
 }

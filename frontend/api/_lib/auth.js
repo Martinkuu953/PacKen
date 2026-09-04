@@ -6,6 +6,39 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '15m';
 const SALT_ROUNDS = 10;
 
+// Fallar acá, al importar el módulo, en vez de en el primer jwt.sign(): sin
+// esto una función desplegada sin JWT_SECRET arranca "bien" y recién revienta
+// cuando alguien intenta loguearse, con un error que no dice qué falta.
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  throw new Error(
+    'JWT_SECRET no está configurado o es demasiado corto (mínimo 32 caracteres). ' +
+      'Configuralo en las Environment Variables de Vercel.',
+  );
+}
+
+export const PASSWORD_MIN = 8;
+
+// La validación tiene que estar en el servidor: el minLength del formulario se
+// saltea llamando la API directo con curl.
+export function validarPassword(password) {
+  if (typeof password !== 'string' || password.length < PASSWORD_MIN) {
+    return `La contraseña debe tener al menos ${PASSWORD_MIN} caracteres`;
+  }
+  if (password.length > 200) {
+    return 'La contraseña es demasiado larga';
+  }
+  // bcrypt solo mira los primeros 72 bytes; más allá de eso da falsa sensación
+  // de fortaleza, pero no lo rechazamos porque no rompe nada.
+  return null;
+}
+
+export function validarEmail(email) {
+  if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    return 'El email no es válido';
+  }
+  return null;
+}
+
 // Lo que necesita el servidor para autorizar. Sale de la DB en cada request,
 // nunca del token.
 const CAMPOS_SESION = 'id, nombre, rol, idempresa, estado_solicitud';

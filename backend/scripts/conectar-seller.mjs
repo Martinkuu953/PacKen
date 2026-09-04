@@ -2,7 +2,7 @@ import 'dotenv/config';
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { exec } from 'node:child_process';
-import { query, dbConfigurado } from '../src/lib/db.js';
+import { query, dbConfigurado } from './lib/db.js';
 import { pedirTokenPorCodigo, obtenerUsuarioML, nombreDesdeUsuarioML, guardarSellerYToken, enmascarar } from './lib/ml-oauth.mjs';
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -22,8 +22,8 @@ import { pedirTokenPorCodigo, obtenerUsuarioML, nombreDesdeUsuarioML, guardarSel
 
 const idEmpresa = 1; // empresa por defecto (existe en la DB), igual que registrar-seller.mjs
 
-const ML_CLIENT_ID = process.env.ML_CLIENT_ID || process.env.VITE_ML_CLIENT_ID;
-const ML_CLIENT_SECRET = process.env.ML_CLIENT_SECRET || process.env.VITE_ML_CLIENT_SECRET;
+const ML_CLIENT_ID = process.env.ML_CLIENT_ID;
+const ML_CLIENT_SECRET = process.env.ML_CLIENT_SECRET;
 const REDIRECT_URI = process.env.ML_REDIRECT_URI;
 // Dominio de autorización según el país de la cuenta de ML (por defecto Argentina).
 const ML_AUTH_DOMAIN = process.env.ML_AUTH_DOMAIN || 'auth.mercadolibre.com.ar';
@@ -35,7 +35,7 @@ if (!dbConfigurado()) {
 
 if (!ML_CLIENT_ID || !ML_CLIENT_SECRET) {
   console.error('❌ Falta el client_id o client_secret de la app de ML.');
-  console.error('   Agregá ML_CLIENT_ID y ML_CLIENT_SECRET (o VITE_ML_CLIENT_ID / VITE_ML_CLIENT_SECRET) en backend/.env');
+  console.error('   Agregá ML_CLIENT_ID y ML_CLIENT_SECRET en backend/.env');
   process.exit(1);
 }
 

@@ -5,6 +5,7 @@ import {
   ESTADO_POR_TIPO,
 } from '../ml.js';
 import { autenticar } from '../auth.js';
+import { responderError } from '../errores.js';
 
 // Registra el barrio del envío en area_flex (si es nuevo, sin zona) y devuelve
 // la zona que la empresa le mapeó. Si no hay empresa, ni barrio, ni asignación,
@@ -51,16 +52,34 @@ export default async function handler(req, res) {
     }
 
     const supabase = getSupabase();
-    const idSellerInterno = await resolverSellerInterno(supabase, sellerId);
+
+    // Empresa dueña del paquete: la empresa misma si escanea directo, o la
+    // empresa del transportista que escanea. Todo lo que sigue se acota a ella.
+    const idEmpresa = usuario.rol === 'empresa' ? usuario.id : (usuario.idempresa ?? null);
+    if (idEmpresa == null) {
+      return res.status(403).json({ error: 'Tu usuario no está asociado a ninguna empresa' });
+    }
+
+    // El sellerId sale del QR escaneado, o sea de una fuente que el usuario
+    // controla: hay que validarlo contra su empresa, no confiar en el papel.
+    const idSellerInterno = await resolverSellerInterno(supabase, sellerId, idEmpresa);
 
     console.log(`[PacKen] Escaneo ${tipo} → shipment ${shipmentId}, seller ${sellerId} (interno ${idSellerInterno})`);
 
     const envio = await obtenerShipment(supabase, idSellerInterno, shipmentId);
 
+    // Acotado por empresa, pero permitiendo adoptar paquetes huérfanos
+    // (idempresa NULL): son paquetes viejos de antes de que existiera esta
+    // columna, que quedan así hasta que alguien los vuelve a escanear (ver
+    // migration-paquete-empresa.sql). Filtrar por ".eq('idempresa', idEmpresa)"
+    // a secas los deja invisibles para siempre y, peor, hace que se inserte un
+    // paquete DUPLICADO con el mismo idenvioml en cada re-escaneo. Lo que sí
+    // hay que evitar es adoptar un paquete que ya es de OTRA empresa.
     const { data: existente } = await supabase
       .from('paquete')
       .select('id, estado, idempresa')
       .eq('idenvioml', envio.idEnvioMl)
+      .or(`idempresa.eq.${idEmpresa},idempresa.is.null`)
       .limit(1)
       .maybeSingle();
 
@@ -83,9 +102,6 @@ export default async function handler(req, res) {
     );
 
     const idTransportista = usuario.rol === 'transportista' ? usuario.id : null;
-    // Empresa dueña del paquete: la empresa misma si escanea directo, o la
-    // empresa del transportista que escanea. Necesario para aislar por empresa.
-    const idEmpresa = usuario.rol === 'empresa' ? usuario.id : (usuario.idempresa ?? null);
 
     // Zona por el barrio/municipio del envío (mapeo barrio→zona de la empresa).
     // Para un paquete ya existente usamos su empresa; si no, la del escaneo.
@@ -136,7 +152,6 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ ok: true, paquete, envio });
   } catch (err) {
-    console.error('[PacKen] Error en escanear:', err.message);
-    return res.status(400).json({ error: err.message });
+    return responderError(res, err, 400, 'escanear');
   }
 }

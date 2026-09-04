@@ -22,9 +22,13 @@ export function getPool() {
   const connectionString = getConnectionString();
   if (!connectionString) return null;
 
+  // rejectUnauthorized: true valida el certificado del servidor. Con
+  // `false` cualquiera que se meta en el medio de la conexión puede hacerse
+  // pasar por la base sin que nos enteremos. Supabase presenta un certificado
+  // válido de una CA pública, así que no hace falta cargar un CA propio.
   pool = new Pool({
     connectionString,
-    ssl: { rejectUnauthorized: false },
+    ssl: { rejectUnauthorized: true },
     max: 10,
   });
 

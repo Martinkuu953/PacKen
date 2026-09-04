@@ -1,5 +1,6 @@
 import { getSupabase } from '../_lib/ml.js';
 import { autenticar, requiereRol } from '../_lib/auth.js';
+import { responderError } from '../_lib/errores.js';
 
 // GET /api/sellers — un seller por fila con sus paquetes agrupados por
 // estado y el monto facturado (entregados), todo calculado en el momento a
@@ -169,7 +170,6 @@ export default async function handler(req, res) {
 
     return res.json({ sellers: listado, montoTotal });
   } catch (err) {
-    console.error('[PacKen] Error en /api/sellers:', err.message);
-    return res.status(req.method === 'POST' ? 400 : 500).json({ error: err.message });
+    return responderError(res, err, req.method === 'POST' ? 400 : 500, '/api/sellers');
   }
 }

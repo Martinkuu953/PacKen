@@ -1,6 +1,7 @@
 import { getSupabase } from '../ml.js';
 import { autenticar, requiereRol } from '../auth.js';
 import { ESTADOS, canonizarEstado } from '../../../shared/estados.js';
+import { responderError } from '../errores.js';
 
 // POST /api/paquetes/simular-entregas
 export default async function handler(req, res) {
@@ -41,7 +42,6 @@ export default async function handler(req, res) {
     console.log(`[PacKen] Simulación: ${ids.length} paquete(s) marcados como Entregado`);
     return res.status(200).json({ ok: true, actualizados: ids.length });
   } catch (err) {
-    console.error('[PacKen] Error en simular-entregas:', err.message);
-    return res.status(500).json({ error: err.message });
+    return responderError(res, err, 500, 'simular-entregas');
   }
 }

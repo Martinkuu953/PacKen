@@ -1,6 +1,7 @@
 import { getSupabase } from '../ml.js';
 import { autenticar } from '../auth.js';
 import { ESTADOS, canonizarEstado } from '../../../shared/estados.js';
+import { ErrorPublico, responderError } from '../errores.js';
 
 // POST /api/paquetes/cambiar-estado  { id, estado }
 export default async function handler(req, res) {
@@ -68,12 +69,11 @@ export default async function handler(req, res) {
       .single();
 
     if (error) throw new Error(error.message);
-    if (!data) throw new Error(`Paquete con id=${id} no encontrado`);
+    if (!data) throw new ErrorPublico('Paquete no encontrado', 404);
 
     console.log(`[PacKen] Paquete ${id} → estado="${estado}"`);
     return res.status(200).json({ ok: true, paquete: data });
   } catch (err) {
-    console.error('[PacKen] Error en cambiar estado:', err.message);
-    return res.status(400).json({ error: err.message });
+    return responderError(res, err, 400, 'cambiar-estado');
   }
 }

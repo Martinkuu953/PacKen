@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { autenticar, requiereRol } from '../auth.js';
+import { responderError } from '../errores.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -30,7 +31,6 @@ export default async function conectar(req, res) {
 
     return res.json({ url: url.toString() });
   } catch (err) {
-    console.error('[PacKen] Error armando URL de conexión ML:', err.message);
-    return res.status(500).json({ error: err.message });
+    return responderError(res, err, 500, 'ml/conectar');
   }
 }

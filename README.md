@@ -1,6 +1,6 @@
 # PacKen — Monorepo
 
-Sistema de gestión logística (envíos Flex). El proyecto está dividido en **frontend** (React) y **backend** (API Node/Express) y se encuentra alojado íntegramente en Vercel.
+Sistema de gestión logística (envíos Flex). Todo corre en Vercel: el cliente React y la API como Serverless Functions dentro de `frontend/api`. La base es Supabase (Postgres).
 
 **🔗 Enlace de Producción:** [https://packen.vercel.app](https://packen.vercel.app)
 
@@ -8,9 +8,14 @@ Sistema de gestión logística (envíos Flex). El proyecto está dividido en **f
 
 ```text
 PacKen/
-├── frontend/     # React + Vite + Tailwind
-├── backend/      # API Express (Mercado Libre, Microsoft SQL Server)
-├── package.json  # npm workspaces
+├── frontend/
+│   ├── src/       # React + Vite + Tailwind
+│   ├── api/       # Serverless Functions (la API que corre en producción)
+│   ├── shared/    # Código común entre src/ y api/ (estados de paquete)
+│   └── middleware.js  # Edge Middleware: autentica todo /api/* por defecto
+├── backend/
+│   └── scripts/   # Migraciones SQL y utilidades de línea de comandos
+├── package.json   # npm workspaces
 └── README.md
 
 ```
@@ -23,7 +28,10 @@ Las siguientes variables de entorno deben estar configuradas en el panel de Verc
 | --- | --- |
 | `ML_CLIENT_ID` | App de Mercado Libre |
 | `ML_CLIENT_SECRET` | Secreto de la app (solo servidor) |
-| `DATABASE_URL` | Connection string de Microsoft SQL Server |
+| `SUPABASE_URL` | URL del proyecto de Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key (solo servidor; bypasea RLS) |
+| `JWT_SECRET` | Secreto de firma de los JWT (mínimo 32 caracteres) |
+| `DATABASE_URL` | Connection string de Postgres, solo para los scripts de `backend/scripts` |
 | `VITE_API_URL` | URL base de la API (ej. `https://packen.vercel.app`) |
 
 ## Rutas y Endpoints Principales
@@ -40,12 +48,16 @@ Las consultas y validaciones se realizan directamente sobre el entorno de produc
 
 Todo el ecosistema (tanto el cliente como la API) funciona mediante los despliegues de **Vercel**. El enrutamiento de la aplicación cliente está gestionado por la configuración en `frontend/vercel.json`, que asegura que las rutas internas de React funcionen redirigiendo el tráfico a `index.html`.
 
-Cada vez que se realiza un push al repositorio, Vercel se encarga de empaquetar el frontend con Vite y levantar los endpoints del backend como Serverless Functions.
+Cada vez que se realiza un push al repositorio, Vercel empaqueta el cliente con Vite y publica cada archivo de `frontend/api` como Serverless Function.
+
+> El plan Hobby de Vercel permite 12 Serverless Functions. Por eso varias rutas se agrupan en dispatchers (`/api/auth/[action]`, `/api/paquetes/[action]`, `/api/ml/[action]`) en vez de tener un archivo por endpoint.
+
+`backend/` ya no contiene un servidor: solo quedan las migraciones SQL y scripts de línea de comandos que se corren a mano.
 
 ## Stack Tecnológico
 
 * **Frontend:** React, Vite, Tailwind CSS
-* **Backend:** Express, Microsoft SQL Server
+* **Backend:** Vercel Serverless Functions, Supabase (Postgres)
 * **Integraciones:** Mercado Libre API
 
 ## Equipo

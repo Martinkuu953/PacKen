@@ -2,6 +2,7 @@ import { getSupabase } from '../ml.js';
 import { comparePassword, generateToken, perfilPublico } from '../auth.js';
 import { crearRefreshToken } from '../refreshTokens.js';
 import { setRefreshCookie } from '../cookies.js';
+import { responderError } from '../errores.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -36,7 +37,6 @@ export default async function handler(req, res) {
     setRefreshCookie(res, refreshToken, expiresAt);
     return res.json({ usuario: perfilPublico(usuario), token });
   } catch (err) {
-    console.error('[PacKen] Error en login:', err.message);
-    return res.status(401).json({ error: err.message });
+    return responderError(res, err, 401, 'login');
   }
 }

@@ -7,14 +7,9 @@
     "backend"
   ],
   "scripts": {
-    "dev": "concurrently -n front,back -c yellow,cyan \"npm run dev -w frontend\" \"npm run dev -w backend\"",
-    "dev:frontend": "npm run dev -w frontend",
-    "dev:backend": "npm run dev -w backend",
+    "dev": "npm run dev -w frontend",
     "build": "npm run build -w frontend",
     "lint": "npm run lint -w frontend"
-  },
-  "devDependencies": {
-    "concurrently": "^9.2.1"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",
