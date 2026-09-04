@@ -36,13 +36,15 @@ Las siguientes variables de entorno deben estar configuradas en el panel de Verc
 
 ## Rutas y Endpoints Principales
 
-Las consultas y validaciones se realizan directamente sobre el entorno de producción:
+No hay `/health`: era del Express viejo, que ya no existe. El diagnóstico de la API es simplemente que responda cualquiera de estas rutas (todas requieren `Authorization: Bearer <token>` salvo login/registro y el webhook de ML).
 
-* **Health check:** `GET https://packen.vercel.app/health`
-* **Listar paquetes:** `GET https://packen.vercel.app/api/paquetes`
-* **Diagnóstico de base de datos:** `GET https://packen.vercel.app/health/db`
-* **Consultar Envío ML:** `GET https://packen.vercel.app/api/envios/:shipmentId?sellerId=...`
-* **Registrar vendedor:** `POST https://packen.vercel.app/api/vendedores` (Body: `{ "sellerId", "refreshToken" }`)
+* **Login / registro / refresh / logout:** `POST /api/auth/login`, `/registro`, `/refresh`, `/logout`
+* **Listar / escanear / cambiar estado / reasignar / simular entregas paquetes:** `GET /api/paquetes`, `POST /api/paquetes/escanear`, `.../cambiar-estado`, `.../reasignar`, `.../simular-entregas`
+* **Sellers / Transportistas:** `GET|POST|DELETE /api/sellers`, `/api/transportistas`
+* **Listas de precios / costos:** `GET|POST|DELETE /api/precios`, `/api/costos`
+* **Conectar seller con Mercado Libre:** `GET /api/ml/conectar` (arranca el OAuth; el callback es `/api/ml/callback`)
+* **Consultar envío ML:** `GET /api/envios/:shipmentId?sellerId=...`
+* **Webhook de Mercado Libre (público):** `POST /api/webhooks/mercadolibre`
 
 ## Despliegue
 
