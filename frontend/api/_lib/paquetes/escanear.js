@@ -85,7 +85,8 @@ export default async function handler(req, res) {
 
     // Colecta: siempre "Ingresado". Si ya existe y se re-escanea en colecta, no cambia.
     // Reparto: pasa a "En camino" solo si el paquete ya fue ingresado.
-    // "Entregado" solo llega por webhook de ML.
+    // El escaneo nunca cierra un paquete: "Entregado", "Cancelado" y
+    // "Reprogramado" los pone ML, por el webhook o por el sync periódico.
     let estado;
     if (tipo === 'colecta') {
       estado = 'Ingresado';

@@ -1,8 +1,13 @@
-import { getSupabase, mlFetchConReintento, traducirEstadoML } from '../_lib/ml.js';
+import { getSupabase, mlFetchConReintento, decidirEstadoDesdeML } from '../_lib/ml.js';
+import { ESTADOS } from '../../shared/estados.js';
 
 // POST /api/webhooks/mercadolibre
 // ML envía notificaciones con topic "shipments" cuando cambia el estado de un envío.
 // Payload: { resource: "/shipments/12345", topic: "shipments", user_id: 123, ... }
+//
+// Es la vía rápida de actualización (segundos). La red de contención, para las
+// notificaciones que se pierdan o fallen, es POST /api/paquetes/sincronizar,
+// que corre cada 15 minutos y usa exactamente la misma política de estados.
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     return res.status(200).json({ ok: true, message: 'Webhook activo' });
@@ -41,35 +46,44 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, ignored: true, reason: 'Paquete no registrado' });
     }
 
-    if (paquete.estado === 'Entregado') {
-      console.log(`[PacKen Webhook] Paquete ${shipmentId} ya está Entregado, ignorando.`);
-      return res.status(200).json({ ok: true, ignored: true, reason: 'Ya entregado' });
-    }
-
+    // No confiamos en el body de la notificación: ML solo avisa "algo cambió en
+    // este shipment", así que el estado se lee de la API.
     const shipment = await mlFetchConReintento(supabase, paquete.idseller, `/shipments/${shipmentId}`);
-    const estadoTraducido = traducirEstadoML(shipment.status);
+    const nuevoEstado = decidirEstadoDesdeML(paquete.estado, shipment.status);
 
-    console.log(`[PacKen Webhook] Shipment ${shipmentId}: status="${shipment.status}" → "${estadoTraducido}"`);
+    console.log(
+      `[PacKen Webhook] Shipment ${shipmentId}: ML="${shipment.status}" (sub="${shipment.substatus ?? '-'}"), ` +
+        `interno="${paquete.estado}" → ${nuevoEstado ?? 'sin cambio'}`,
+    );
 
-    if (estadoTraducido === 'Entregado') {
-      const { error: upErr } = await supabase
-        .from('paquete')
-        .update({
-          estado: 'Entregado',
-          fechaentrega: shipment.status_history?.date_delivered || new Date().toISOString(),
-        })
-        .eq('id', paquete.id);
+    // El estado crudo de ML se guarda siempre, aunque el nuestro no se mueva:
+    // deja rastro de que la notificación llegó y se procesó.
+    const cambios = {
+      estadoml: shipment.status ?? null,
+      subestadoml: shipment.substatus ?? null,
+      ml_sincronizado_en: new Date().toISOString(),
+    };
 
-      if (upErr) throw new Error(upErr.message);
-      console.log(`[PacKen Webhook] Paquete ${shipmentId} marcado como Entregado por webhook`);
-      return res.status(200).json({ ok: true, updated: true, estado: 'Entregado' });
+    if (nuevoEstado) {
+      cambios.estado = nuevoEstado;
+      if (nuevoEstado === ESTADOS.ENTREGADO) {
+        cambios.fechaentrega = shipment.status_history?.date_delivered || new Date().toISOString();
+      }
     }
 
-    return res.status(200).json({ ok: true, ignored: true, reason: `Estado ML "${shipment.status}" no es delivered` });
+    const { error: upErr } = await supabase.from('paquete').update(cambios).eq('id', paquete.id);
+    if (upErr) throw new Error(upErr.message);
+
+    if (!nuevoEstado) {
+      return res.status(200).json({ ok: true, updated: false, reason: `Estado ML "${shipment.status}" no cambia el nuestro` });
+    }
+
+    console.log(`[PacKen Webhook] Paquete ${shipmentId} → "${nuevoEstado}"`);
+    return res.status(200).json({ ok: true, updated: true, estado: nuevoEstado });
   } catch (err) {
     // Este endpoint es público: el detalle del error va al log de la función,
     // nunca al cuerpo de la respuesta. Se responde 200 igual para que ML no
-    // encole reintentos de una notificación que no vamos a poder procesar.
+    // encole reintentos; el sync periódico levanta lo que se haya perdido acá.
     console.error('[PacKen Webhook] Error:', err);
     return res.status(200).json({ ok: false });
   }

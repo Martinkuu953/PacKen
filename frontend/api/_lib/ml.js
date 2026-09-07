@@ -7,7 +7,7 @@
 // exponen como endpoints en Vercel, pero sí se pueden importar.
 
 import { createClient } from '@supabase/supabase-js';
-import { ESTADOS } from '../../shared/estados.js';
+import { ESTADOS, canonizarEstado } from '../../shared/estados.js';
 import { ErrorPublico } from './errores.js';
 
 const ML_API = 'https://api.mercadolibre.com';
@@ -56,6 +56,46 @@ export function traducirEstadoML(status) {
     default:
       return null;
   }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Política de sincronización: cuándo el estado de ML pisa al nuestro
+// ──────────────────────────────────────────────────────────────────────────
+// Única fuente de verdad para el webhook y para el sync periódico: si cada uno
+// decidiera por su cuenta, terminarían dejando el mismo paquete en estados
+// distintos según por dónde llegó la novedad.
+//
+// Solo tres status de ML pisan nuestro estado. Son *hechos del envío*, cosas
+// que pasaron afuera y que nosotros no podemos saber de otra forma:
+const IMPUESTOS_POR_ML = {
+  delivered: ESTADOS.ENTREGADO,
+  cancelled: ESTADOS.CANCELADO,
+  not_delivered: ESTADOS.REPROGRAMADO,
+};
+//
+// El resto (pending, handling, ready_to_ship, shipped) se ignora a propósito,
+// aunque traducirEstadoML sepa mapearlos. Ingresado y En camino son estados
+// *nuestros*: los fija el escaneo del transportista (colecta / reparto), y en
+// Flex ese escaneo va adelante de lo que ML sabe. Aplicarlos haría que un
+// paquete que el transportista ya cargó en la camioneta volviera solo a
+// "Ingresado" en el próximo sync, o que uno que sigue en el depósito
+// apareciera como "En camino" solo porque el seller imprimió la etiqueta.
+
+// Estados de los que un paquete ya no sale. Frenan cualquier reescritura:
+// sin esto un delivered que llega tarde reabriría un paquete ya cancelado.
+const TERMINALES = [ESTADOS.ENTREGADO, ESTADOS.CANCELADO];
+
+// Devuelve el estado interno al que hay que mover el paquete, o null si no
+// corresponde tocarlo. `estadoActual` se canoniza porque en la base conviven
+// grafías viejas ("EN CAMINO", "entregado").
+export function decidirEstadoDesdeML(estadoActual, statusMl) {
+  const actual = canonizarEstado(estadoActual);
+  if (TERMINALES.includes(actual)) return null;
+
+  const destino = IMPUESTOS_POR_ML[statusMl];
+  if (!destino || destino === actual) return null;
+
+  return destino;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -145,21 +185,38 @@ async function callMLAPI(path, accessToken) {
   return res.json();
 }
 
-// Llama a la API de ML con reintento automático: si da 401, fuerza un refresh
-// del token, lo persiste, y reintenta una vez.
-export async function mlFetchConReintento(supabase, idSellerInterno, path) {
+// Cliente de ML atado a un seller: resuelve el token UNA vez y devuelve una
+// función `pedir(path)` que reintenta ante un 401 (refresca, persiste y repite).
+//
+// Existe para el sync periódico, que hace decenas de llamadas seguidas del
+// mismo seller: con mlFetchConReintento cada paquete se traía de nuevo la fila
+// de meli_token desde Supabase. El token renovado queda en el closure, así que
+// un 401 se paga una sola vez y no una por paquete.
+export async function crearClienteML(supabase, idSellerInterno) {
   let { accessToken, tokenId, refreshToken } = await getValidToken(supabase, idSellerInterno);
 
-  try {
-    return await callMLAPI(path, accessToken);
-  } catch (err) {
-    if (err.message !== '401_UNAUTHORIZED') throw err;
+  return async function pedir(path) {
+    try {
+      return await callMLAPI(path, accessToken);
+    } catch (err) {
+      if (err.message !== '401_UNAUTHORIZED') throw err;
 
-    console.log(`[PacKen] 401 en ${path}, forzando refresh de token...`);
-    const data = await refreshMLToken(refreshToken);
-    await guardarTokens(supabase, tokenId, data, refreshToken);
-    return callMLAPI(path, data.access_token);
-  }
+      console.log(`[PacKen] 401 en ${path}, forzando refresh de token...`);
+      const data = await refreshMLToken(refreshToken);
+      await guardarTokens(supabase, tokenId, data, refreshToken);
+
+      accessToken = data.access_token;
+      refreshToken = data.refresh_token || refreshToken;
+      return callMLAPI(path, accessToken);
+    }
+  };
+}
+
+// Llama a la API de ML con reintento automático: si da 401, fuerza un refresh
+// del token, lo persiste, y reintenta una vez. Para una llamada suelta.
+export async function mlFetchConReintento(supabase, idSellerInterno, path) {
+  const pedir = await crearClienteML(supabase, idSellerInterno);
+  return pedir(path);
 }
 
 // ──────────────────────────────────────────────────────────────────────────

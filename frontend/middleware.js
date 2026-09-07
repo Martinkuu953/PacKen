@@ -13,6 +13,10 @@ const RUTAS_PUBLICAS = [
   // Lo llama MercadoLibre desde afuera; GET responde el healthcheck del webhook.
   { method: 'POST', path: '/api/webhooks/mercadolibre' },
   { method: 'GET', path: '/api/webhooks/mercadolibre' },
+  // Lo llama el cron de Supabase (pg_cron), que no tiene sesión de usuario.
+  // "Pública" acá solo significa que se saltea el JWT del edge: el handler
+  // exige el header x-cron-secret o, si no viene, una sesión de empresa.
+  { method: 'POST', path: '/api/paquetes/sincronizar' },
 ];
 
 function respuesta401(error) {

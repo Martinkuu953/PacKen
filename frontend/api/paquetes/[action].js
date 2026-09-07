@@ -2,6 +2,7 @@ import cambiarEstado from '../_lib/paquetes/cambiar-estado.js';
 import escanear from '../_lib/paquetes/escanear.js';
 import reasignar from '../_lib/paquetes/reasignar.js';
 import simularEntregas from '../_lib/paquetes/simular-entregas.js';
+import sincronizar from '../_lib/paquetes/sincronizar-ml.js';
 
 // Dispatcher único para /api/paquetes/<action> — consolida 3 rutas en una
 // sola Serverless Function (mismo patrón que /api/auth), para hacer lugar a
@@ -12,7 +13,13 @@ const rutas = {
   escanear,
   reasignar,
   'simular-entregas': simularEntregas,
+  sincronizar,
 };
+
+// Los 10s por defecto no alcanzan para "sincronizar", que hace hasta 200
+// llamadas a la API de ML en una corrida. Es un techo, no una reserva: el
+// resto de las acciones sigue respondiendo en milisegundos.
+export const config = { maxDuration: 60 };
 
 export default function handler(req, res) {
   const fn = rutas[req.query.action];

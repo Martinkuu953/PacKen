@@ -32,6 +32,7 @@ Las siguientes variables de entorno deben estar configuradas en el panel de Verc
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key (solo servidor; bypasea RLS) |
 | `JWT_SECRET` | Secreto de firma de los JWT (mínimo 32 caracteres) |
 | `DATABASE_URL` | Connection string de Postgres, solo para los scripts de `backend/scripts` |
+| `CRON_SECRET` | Secreto que autentica al cron de Supabase contra `/api/paquetes/sincronizar` (`openssl rand -hex 32`) |
 | `VITE_API_URL` | URL base de la API (ej. `https://packen.vercel.app`) |
 
 ## Rutas y Endpoints Principales
@@ -45,6 +46,24 @@ No hay `/health`: era del Express viejo, que ya no existe. El diagnóstico de la
 * **Conectar seller con Mercado Libre:** `GET /api/ml/conectar` (arranca el OAuth; el callback es `/api/ml/callback`)
 * **Consultar envío ML:** `GET /api/envios/:shipmentId?sellerId=...`
 * **Webhook de Mercado Libre (público):** `POST /api/webhooks/mercadolibre`
+* **Sincronizar estados con ML:** `POST /api/paquetes/sincronizar` (cron con header `x-cron-secret`, o una empresa con `Bearer` para forzarlo a mano)
+
+## Sincronización de estados con Mercado Libre
+
+El estado de un paquete se actualiza solo cuando cambia en ML, por dos caminos que comparten la misma política (`decidirEstadoDesdeML` en `api/_lib/ml.js`):
+
+1. **Webhook** (`/api/webhooks/mercadolibre`) — ML notifica y el paquete se actualiza en segundos. Requiere tener la app de ML suscrita al topic `shipments` con esa URL de callback, en el DevCenter de Mercado Libre.
+2. **Sync periódico** (`/api/paquetes/sincronizar`) — cada 15 minutos recorre los paquetes abiertos y le pregunta a ML el estado real. Es la red de contención: recupera toda notificación que se haya perdido.
+
+Solo tres estados de ML pisan el nuestro, porque son hechos del envío: `delivered` → **Entregado**, `cancelled` → **Cancelado**, `not_delivered` → **Reprogramado**. Los demás (`pending`, `handling`, `ready_to_ship`, `shipped`) se ignoran a propósito: *Ingresado* y *En camino* los define el escaneo del transportista, que en Flex va adelante de lo que ML sabe. *Entregado* y *Cancelado* son terminales y no se reescriben.
+
+Puesta en marcha, **en este orden**:
+
+1. Correr `backend/scripts/migration-sync-ml.sql` en Supabase (agrega `estadoml`, `subestadoml`, `ml_sincronizado_en`). Va primero: sin esas columnas cada update falla.
+2. Configurar `CRON_SECRET` en Vercel y desplegar.
+3. Correr `backend/scripts/cron-sincronizar-ml.sql` en Supabase, con el mismo secreto.
+
+> El cron vive en Supabase (`pg_cron` + `pg_net`) y no en `vercel.json` porque el plan Hobby de Vercel solo permite una ejecución diaria de un cron job.
 
 ## Despliegue
 
