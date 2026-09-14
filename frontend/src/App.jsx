@@ -13,6 +13,7 @@ import EstablecerZonas from './pages/EstablecerZonas';
 import Transportistas from './pages/Transportistas';
 import Estadisticas from './pages/Estadisticas';
 import Liquidaciones from './pages/Liquidaciones';
+import Facturas from './pages/Facturas';
 
 function RutaProtegida({ children, rolesPermitidos }) {
   const { autenticado, usuario, aprobado } = useAuth();
@@ -80,7 +81,7 @@ function AppRoutes() {
       } />
       <Route path="/facturas" element={
         <RutaProtegida rolesPermitidos={['empresa']}>
-          <h2>Pantalla de Facturas en construcción...</h2>
+          <Facturas />
         </RutaProtegida>
       } />
       <Route path="/transportistas" element={

@@ -44,7 +44,7 @@ No hay `/health`: era del Express viejo, que ya no existe. El diagnóstico de la
 * **Recalcular la zona de paquetes ya cargados:** `POST /api/paquetes/rezonificar` (simula; `{"aplicar":true}` escribe)
 * **Sellers / Transportistas:** `GET|POST|DELETE /api/sellers`, `/api/transportistas`
 * **Listas de precios / costos:** `GET|POST|DELETE /api/precios`, `/api/costos`
-* **Liquidaciones:** `GET /api/liquidaciones` (transportistas liquidables), `GET /api/liquidaciones?transportistaIds=...` (+ las últimas 5 de cada uno), `POST /api/liquidaciones` (crear), `GET /api/liquidaciones?ids=...` (descargar el .xlsx), `GET /api/liquidaciones?ids=...&modo=separado` (un .zip con un .xlsx por liquidación), `GET /api/liquidaciones?ids=...&formato=json` (detalle para la vista previa)
+* **Liquidaciones y facturas:** las dos rutas tienen exactamente la misma forma — `GET /api/liquidaciones` y `GET /api/facturas` (las contrapartes emitibles), `?contraparteIds=...` (+ las últimas 5 de cada una), `POST` (crear), `?ids=...` (descargar el .xlsx), `?ids=...&modo=separado` (un .zip con un archivo por documento), `?ids=...&formato=json` (detalle para la vista previa)
 * **Conectar seller con Mercado Libre:** `GET /api/ml/conectar` (arranca el OAuth; el callback es `/api/ml/callback`)
 * **Consultar envío ML:** `GET /api/envios/:shipmentId?sellerId=...`
 * **Webhook de Mercado Libre (público):** `POST /api/webhooks/mercadolibre`
@@ -77,17 +77,31 @@ El orden correcto es: mapear los barrios en "Establecer zonas", después rezonif
 
 Rezonificar también completa `paquete.idarea` cuando falta, y de ahí sale el **partido** que lista la pantalla de Paquetes (`area_flex.nombre`: "Belgrano", "Villa Soldati"). Un paquete escaneado antes de que existiera esa columna no tiene barrio guardado y aparece con "—" hasta que se lo rezonifique.
 
-## Liquidaciones
+## Liquidaciones y facturas
 
-Lo que la empresa le paga a cada transportista. Se elige uno o varios transportistas y un rango de fechas, y se liquidan los paquetes **entregados** en ese período: el importe de cada uno sale de la lista de costos del transportista (`usuario.idlista_costo`) cruzada con la zona del paquete. Un transportista sin lista asignada no se puede liquidar, porque no habría con qué calcular.
+Son el mismo documento mirado desde puntas opuestas, y por eso comparten todo el código:
 
-El detalle se guarda congelado en `liquidacion_detalle` (dirección, seller, zona e importe) en vez de recalcularse al descargar: las tarifas y las zonas cambian con el tiempo, y una liquidación vieja tiene que poder reimprimirse igual que el día que se emitió.
+| | Liquidación | Factura |
+| --- | --- | --- |
+| A quién | al **transportista** que entregó | al **seller** que despachó |
+| Qué | se le **paga** | se le **cobra** |
+| Con qué lista | de costos (`usuario.idlista_costo`) | de precios (`seller.idlista`) |
+| Tablas | `liquidacion` / `liquidacion_detalle` | `factura` / `factura_detalle` |
+| La otra punta, en el detalle | el seller | el transportista |
 
-El historial es **las últimas 5 de cada transportista**, no las últimas 5 de la empresa: con una flota de varios, las cinco últimas de toda la empresa podían ser todas del mismo. Por eso hay que elegir primero de quién se quiere ver (`?transportistaIds=`) y el panel arranca sin historial. Una liquidación cuyo transportista se dio de baja (`idtransportista` quedó NULL) no aparece en ningún historial: sigue en la base, pero ya no hay a quién elegir para llegar a ella.
+La diferencia entre las dos por un mismo paquete es lo que gana la empresa.
 
-El `.xlsx` lo arma `api/_lib/xlsx.js`, un generador mínimo de OOXML sin dependencias. Con varios transportistas se puede bajar todo en un libro (una hoja por transportista), un archivo por transportista dentro de un `.zip` (`&modo=separado`, para mandarle a cada uno el suyo sin que vea lo que cobran los demás) o solo la de uno. El `.zip` lo arma el mismo ZIP que envuelve al `.xlsx`, reusado: el navegador bloquea las descargas múltiples disparadas de a una. El rango usa el huso de Argentina, no UTC: un paquete entregado 21:30 del último día del período es 00:30 del día siguiente en UTC y se caía al período que viene.
+El flujo es idéntico: se eligen una o varias contrapartes y un rango de fechas, y se emiten los paquetes **entregados** en ese período. El importe de cada uno sale de la lista de esa contraparte cruzada con la zona del paquete —y la zona se resuelve *contra esa lista*, porque el mismo barrio puede caer en zonas distintas según con qué acuerdo se lo mire—. Una contraparte sin lista asignada no se puede emitir, porque no habría con qué calcular.
 
-Antes de usar la pantalla hay que correr `backend/scripts/migration-liquidaciones.sql` en Supabase.
+Todo el motor vive en `api/_lib/emision.js`; `api/liquidaciones/index.js` y `api/facturas/index.js` son dos líneas cada uno que le pasan su configuración (`TIPOS.liquidacion` / `TIPOS.factura`). En el cliente pasa lo mismo: `components/PanelEmision.jsx` es la pantalla, y `pages/Liquidaciones.jsx` y `pages/Facturas.jsx` solo aportan el vocabulario. Un cambio de comportamiento se hace una vez y vale para los dos.
+
+El detalle se guarda congelado (dirección, la otra punta, zona e importe) en vez de recalcularse al descargar: las tarifas y las zonas cambian con el tiempo, y un documento viejo tiene que poder reimprimirse igual que el día que se emitió.
+
+El historial es **los últimos 5 de cada contraparte**, no los últimos 5 de la empresa: con varias, los cinco últimos de toda la empresa podían ser todos de la misma. Por eso hay que elegir primero de quién se quiere ver (`?contraparteIds=`) y el panel arranca sin historial. Un documento cuya contraparte se dio de baja (el id quedó NULL) no aparece en ningún historial: sigue en la base, pero ya no hay a quién elegir para llegar a él.
+
+El `.xlsx` lo arma `api/_lib/xlsx.js`, un generador mínimo de OOXML sin dependencias. Con varias contrapartes se puede bajar todo en un libro (una hoja por cada una), un archivo por contraparte dentro de un `.zip` (`&modo=separado`, para mandarle a cada uno el suyo sin que vea lo de los demás) o solo el de una. El `.zip` lo arma el mismo ZIP que envuelve al `.xlsx`, reusado: el navegador bloquea las descargas múltiples disparadas de a una. El rango usa el huso de Argentina, no UTC: un paquete entregado 21:30 del último día del período es 00:30 del día siguiente en UTC y se caía al período que viene.
+
+Antes de usar las pantallas hay que correr `backend/scripts/migration-liquidaciones.sql` y `backend/scripts/migration-facturas.sql` en Supabase.
 
 ## Despliegue
 
@@ -96,6 +110,8 @@ Todo el ecosistema (tanto el cliente como la API) funciona mediante los desplieg
 Cada vez que se realiza un push al repositorio, Vercel empaqueta el cliente con Vite y publica cada archivo de `frontend/api` como Serverless Function.
 
 > El plan Hobby de Vercel permite 12 Serverless Functions. Por eso varias rutas se agrupan en dispatchers (`/api/auth/[action]`, `/api/paquetes/[action]`, `/api/ml/[action]`) en vez de tener un archivo por endpoint.
+>
+> **Con `/api/facturas` el proyecto quedó en 12 de 12.** No hay lugar para una ruta más: la próxima que haga falta tiene que entrar en un dispatcher existente o agrupar dos de las que ya están. Lo que vive en `api/_lib/` no cuenta — son módulos que las funciones importan, no endpoints.
 
 `backend/` ya no contiene un servidor: solo quedan las migraciones SQL y scripts de línea de comandos que se corren a mano.
 

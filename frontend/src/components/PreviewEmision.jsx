@@ -1,39 +1,40 @@
 import { formatearFecha, formatearMonto } from '../utils/formato';
 
-// Vista previa de las liquidaciones recién creadas, con el mismo detalle que
-// sale en el Excel. Una sección por transportista.
+// Vista previa de los documentos recién emitidos (liquidaciones o facturas),
+// con el mismo detalle que sale en el Excel. Una sección por contraparte.
 //
-// Con más de un transportista la descarga se ofrece de tres formas, porque las
-// tres se usan: el Excel único sirve para mirar el total del período de una
-// sola vez, y los archivos sueltos para mandarle a cada uno el suyo sin que vea
-// lo que cobran los demás.
-const PreviewLiquidacion = ({
-  liquidaciones,
+// Con más de una, la descarga se ofrece de tres formas, porque las tres se
+// usan: el Excel único sirve para mirar el total del período de una sola vez, y
+// los archivos sueltos para mandarle a cada uno el suyo sin que vea lo de los
+// demás.
+const PreviewEmision = ({
+  config,
+  documentos,
   sinPaquetes = [],
   recienCreada = false,
-  // Clave de lo que se está bajando: 'unico', 'separado' o el id de una
-  // liquidación. null cuando no hay ninguna descarga en curso.
+  // Clave de lo que se está bajando: 'unico', 'separado' o el id de un
+  // documento. null cuando no hay ninguna descarga en curso.
   descargando = null,
   onDescargar,
   onVolver,
 }) => {
-  const totalGeneral = liquidaciones.reduce((suma, l) => suma + l.total, 0);
-  const varias = liquidaciones.length > 1;
+  const totalGeneral = documentos.reduce((suma, d) => suma + d.total, 0);
+  const varios = documentos.length > 1;
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Liquidaciones</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-800">{config.titulo}</h2>
           <p className="text-sm text-gray-500 mt-1">
-            {liquidaciones.length === 1
-              ? `${liquidaciones[0].transportista} · ${formatearFecha(liquidaciones[0].desde)} al ${formatearFecha(liquidaciones[0].hasta)}`
-              : `${liquidaciones.length} transportistas · ${formatearFecha(liquidaciones[0].desde)} al ${formatearFecha(liquidaciones[0].hasta)}`}
+            {documentos.length === 1
+              ? `${documentos[0].contraparte} · ${formatearFecha(documentos[0].desde)} al ${formatearFecha(documentos[0].hasta)}`
+              : `${documentos.length} ${config.contrapartes} · ${formatearFecha(documentos[0].desde)} al ${formatearFecha(documentos[0].hasta)}`}
           </p>
           {recienCreada && (
             <p className="text-xs text-gray-400 mt-0.5">
-              Ya quedó guardada: podés descargar el Excel ahora o más tarde, eligiendo al transportista y
-              entrando en "Ver últimas liquidaciones".
+              Ya quedó guardada: podés descargar el Excel ahora o más tarde, eligiendo al{' '}
+              {config.contraparte} y entrando en "Ver últimas {config.documentos}".
             </p>
           )}
         </div>
@@ -48,22 +49,23 @@ const PreviewLiquidacion = ({
 
       {sinPaquetes.length > 0 && (
         <p className="mb-4 text-amber-800 text-sm bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
-          Sin paquetes entregados en el período (no se les generó liquidación): {sinPaquetes.join(', ')}.
+          Sin paquetes entregados en el período (no se les generó {config.documento}):{' '}
+          {sinPaquetes.join(', ')}.
         </p>
       )}
 
-      {liquidaciones.map((liquidacion) => (
-        <section key={liquidacion.id} className="mb-6 last:mb-0">
-          {varias && (
+      {documentos.map((documento) => (
+        <section key={documento.id} className="mb-6 last:mb-0">
+          {varios && (
             <div className="flex items-center justify-between gap-3 mb-2">
-              <h3 className="text-sm font-bold text-gray-700 truncate">{liquidacion.transportista}</h3>
+              <h3 className="text-sm font-bold text-gray-700 truncate">{documento.contraparte}</h3>
               <button
                 type="button"
-                onClick={() => onDescargar(liquidacion.id)}
-                disabled={descargando === liquidacion.id}
+                onClick={() => onDescargar(documento.id)}
+                disabled={descargando === documento.id}
                 className="shrink-0 text-xs px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 font-medium"
               >
-                {descargando === liquidacion.id ? 'Descargando...' : 'Descargar solo esta'}
+                {descargando === documento.id ? 'Descargando...' : 'Descargar solo esta'}
               </button>
             </div>
           )}
@@ -74,19 +76,22 @@ const PreviewLiquidacion = ({
                 <tr>
                   <th className="py-2 px-3">Dirección</th>
                   <th className="py-2 px-3">Fecha</th>
-                  <th className="py-2 px-3">Seller</th>
+                  {/* La otra punta del paquete: en una liquidación es el seller
+                      que lo despachó, en una factura el transportista que lo
+                      entregó. */}
+                  <th className="py-2 px-3">{config.columnaSecundaria}</th>
                   <th className="py-2 px-3">Zona</th>
                   <th className="py-2 px-3 text-right">Precio</th>
                 </tr>
               </thead>
               <tbody>
-                {liquidacion.lineas.map((linea, i) => (
-                  <tr key={`${liquidacion.id}-${i}`} className="border-b border-gray-100 last:border-0">
+                {documento.lineas.map((linea, i) => (
+                  <tr key={`${documento.id}-${i}`} className="border-b border-gray-100 last:border-0">
                     <td className="py-2 px-3 text-gray-800">{linea.direccion || '—'}</td>
                     <td className="py-2 px-3 text-gray-600 whitespace-nowrap">
                       {formatearFecha(linea.fechaentrega)}
                     </td>
-                    <td className="py-2 px-3 text-gray-600">{linea.seller || '—'}</td>
+                    <td className="py-2 px-3 text-gray-600">{linea.secundario || '—'}</td>
                     <td className="py-2 px-3 text-gray-600">{linea.zona || '—'}</td>
                     <td className="py-2 px-3 text-gray-800 text-right whitespace-nowrap">
                       {formatearMonto(linea.importe)}
@@ -99,14 +104,14 @@ const PreviewLiquidacion = ({
 
           <div className="flex items-center justify-between mt-2 px-4 py-2 bg-marca-amarillo rounded-xl">
             <span className="text-sm font-bold text-gray-800">
-              Total ({liquidacion.cantidad} paquete{liquidacion.cantidad === 1 ? '' : 's'})
+              Total ({documento.cantidad} paquete{documento.cantidad === 1 ? '' : 's'})
             </span>
-            <span className="text-sm font-bold text-gray-800">{formatearMonto(liquidacion.total)}</span>
+            <span className="text-sm font-bold text-gray-800">{formatearMonto(documento.total)}</span>
           </div>
         </section>
       ))}
 
-      {varias && (
+      {varios && (
         <div className="flex items-center justify-between px-4 py-2 border-t border-gray-200 mt-4 pt-4">
           <span className="text-sm font-bold text-gray-800">Total general</span>
           <span className="text-sm font-bold text-gray-800">{formatearMonto(totalGeneral)}</span>
@@ -122,11 +127,11 @@ const PreviewLiquidacion = ({
         >
           {descargando === 'unico'
             ? 'Descargando...'
-            : varias
+            : varios
               ? 'Descargar todo en un Excel'
               : 'Descargar'}
         </button>
-        {varias && (
+        {varios && (
           <button
             type="button"
             onClick={() => onDescargar('separado')}
@@ -138,14 +143,14 @@ const PreviewLiquidacion = ({
         )}
       </div>
 
-      {varias && (
+      {varios && (
         <p className="mt-3 text-center text-xs text-gray-500">
-          En un Excel va una hoja por transportista; por separado, un archivo para cada uno dentro de
-          un .zip.
+          En un Excel va una hoja por {config.contraparte}; por separado, un archivo para cada uno
+          dentro de un .zip.
         </p>
       )}
     </div>
   );
 };
 
-export default PreviewLiquidacion;
+export default PreviewEmision;
