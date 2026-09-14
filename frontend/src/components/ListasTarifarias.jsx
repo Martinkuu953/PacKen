@@ -48,10 +48,13 @@ const ListasTarifarias = () => {
 
   // Borradores locales de tarifas por `${listaId}-${zonaId}` mientras se editan.
   const [tarifaDraft, setTarifaDraft] = useState({});
-  // Panel "editar todas las zonas" abierto para una lista + sus valores.
+  // Panel de ajuste masivo abierto para una lista + sus valores.
   const [bulkAbierto, setBulkAbierto] = useState(null);
   const [bulkImporte, setBulkImporte] = useState('');
   const [bulkPct, setBulkPct] = useState('');
+  // Qué zonas recibe el ajuste. Arranca con todas: el caso habitual es el
+  // aumento parejo, y así abrir el panel y aplicar sigue siendo dos clics.
+  const [bulkZonas, setBulkZonas] = useState(() => new Set());
   // Renombrado inline.
   const [renombrando, setRenombrando] = useState(null);
   const [nombreEdit, setNombreEdit] = useState('');
@@ -98,6 +101,7 @@ const ListasTarifarias = () => {
     setExpandida(null);
     setTarifaDraft({});
     setBulkAbierto(null);
+    setBulkZonas(new Set());
     setRenombrando(null);
     setBusqueda('');
     setTipo(nuevo);
@@ -160,8 +164,36 @@ const ListasTarifarias = () => {
     }
   };
 
+  // Abrir el panel preselecciona todas las zonas; cerrarlo limpia todo, para
+  // que la próxima lista no herede una selección de la anterior.
+  const alternarBulk = (listaId) => {
+    if (bulkAbierto === listaId) {
+      setBulkAbierto(null);
+      return;
+    }
+    setBulkAbierto(listaId);
+    setBulkZonas(new Set(zonas.map((z) => z.id)));
+    setBulkImporte('');
+    setBulkPct('');
+  };
+
+  const alternarZonaBulk = (zonaId) =>
+    setBulkZonas((prev) => {
+      const copia = new Set(prev);
+      if (copia.has(zonaId)) copia.delete(zonaId);
+      else copia.add(zonaId);
+      return copia;
+    });
+
+  const todasElegidas = zonas.length > 0 && bulkZonas.size === zonas.length;
+
   const aplicarBulk = async (listaId, modo) => {
+    if (bulkZonas.size === 0) return;
     const body = { op: 'setTarifasBulk', listaId };
+    // Con todas elegidas no se manda zonaIds: es el caso de siempre y el
+    // servidor ya lo entiende como "todas".
+    if (!todasElegidas) body.zonaIds = [...bulkZonas];
+
     if (modo === 'importe') {
       if (bulkImporte === '') return;
       body.importe = bulkImporte;
@@ -339,49 +371,91 @@ const ListasTarifarias = () => {
                           <h4 className="text-xs font-semibold text-gray-500 uppercase">Precio por zona</h4>
                           <button
                             type="button"
-                            onClick={() => setBulkAbierto(bulkAbierto === lista.id ? null : lista.id)}
-                            className="text-xs px-2.5 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium"
+                            onClick={() => alternarBulk(lista.id)}
+                            disabled={zonas.length === 0}
+                            className="text-xs px-2.5 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 font-medium"
                           >
-                            Editar todas las zonas
+                            {bulkAbierto === lista.id ? 'Cancelar ajuste' : 'Ajustar varias zonas'}
                           </button>
                         </div>
 
                         {bulkAbierto === lista.id && (
-                          <div className="mb-3 p-3 bg-gray-50 rounded-lg flex flex-wrap items-center gap-2">
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={bulkImporte}
-                              onChange={(e) => setBulkImporte(e.target.value)}
-                              placeholder="Poner todas en $"
-                              className={`${inputClass} w-40`}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => aplicarBulk(lista.id, 'importe')}
-                              disabled={busy || bulkImporte === ''}
-                              className="text-xs px-3 py-2 bg-marca-oro text-marca-grafito rounded-lg font-medium disabled:opacity-50"
-                            >
-                              Aplicar
-                            </button>
-                            <span className="text-gray-300">|</span>
-                            <input
-                              type="number"
-                              step="1"
-                              value={bulkPct}
-                              onChange={(e) => setBulkPct(e.target.value)}
-                              placeholder="Ajustar %"
-                              className={`${inputClass} w-32`}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => aplicarBulk(lista.id, 'porcentaje')}
-                              disabled={busy || bulkPct === ''}
-                              className="text-xs px-3 py-2 bg-marca-oro text-marca-grafito rounded-lg font-medium disabled:opacity-50"
-                            >
-                              Aplicar %
-                            </button>
+                          <div className="mb-3 p-3 bg-gray-50 rounded-lg space-y-3">
+                            {/* Cuántas zonas se van a tocar, siempre a la vista:
+                                el aumento se aplica sobre lo que está tildado
+                                abajo, y aplicarlo a la zona equivocada se paga
+                                en la próxima liquidación. */}
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                              <span className="font-semibold text-gray-700">
+                                Se aplica a {bulkZonas.size} de {zonas.length} zona
+                                {zonas.length === 1 ? '' : 's'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setBulkZonas(new Set(zonas.map((z) => z.id)))}
+                                disabled={todasElegidas}
+                                className="px-2 py-1 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 disabled:opacity-40 font-medium"
+                              >
+                                Todas
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setBulkZonas(new Set())}
+                                disabled={bulkZonas.size === 0}
+                                className="px-2 py-1 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 disabled:opacity-40 font-medium"
+                              >
+                                Ninguna
+                              </button>
+                              <span className="text-gray-500">
+                                Tildá abajo las que quieras cambiar.
+                              </span>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                              <input
+                                type="number"
+                                step="1"
+                                value={bulkPct}
+                                onChange={(e) => setBulkPct(e.target.value)}
+                                placeholder="Aumentar %"
+                                aria-label="Porcentaje de ajuste"
+                                className={`${inputClass} w-32`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => aplicarBulk(lista.id, 'porcentaje')}
+                                disabled={busy || bulkPct === '' || bulkZonas.size === 0}
+                                className="text-xs px-3 py-2 bg-marca-oro text-marca-grafito rounded-lg font-medium disabled:opacity-50"
+                              >
+                                Aplicar %
+                              </button>
+                              <span className="text-gray-300">|</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={bulkImporte}
+                                onChange={(e) => setBulkImporte(e.target.value)}
+                                placeholder="Poner en $"
+                                aria-label="Importe fijo"
+                                className={`${inputClass} w-36`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => aplicarBulk(lista.id, 'importe')}
+                                disabled={busy || bulkImporte === '' || bulkZonas.size === 0}
+                                className="text-xs px-3 py-2 bg-marca-oro text-marca-grafito rounded-lg font-medium disabled:opacity-50"
+                              >
+                                Aplicar
+                              </button>
+                            </div>
+
+                            {/* Un % negativo es una baja: no hace falta otro
+                                control, pero conviene decirlo. */}
+                            <p className="text-xs text-gray-500">
+                              Un porcentaje negativo (–10) baja los precios. Se redondea a dos
+                              decimales y nunca queda por debajo de $0.
+                            </p>
                           </div>
                         )}
 
@@ -395,8 +469,28 @@ const ListasTarifarias = () => {
                                 tarifaDraft[key] !== undefined
                                   ? tarifaDraft[key]
                                   : String(importeDe(lista, z.id));
+                              const ajustando = bulkAbierto === lista.id;
+                              const elegida = bulkZonas.has(z.id);
                               return (
-                                <div key={z.id} className="flex items-center gap-3">
+                                <div
+                                  key={z.id}
+                                  className={`flex items-center gap-3 rounded-lg transition-colors ${
+                                    ajustando && elegida ? 'bg-marca-amarillo/40 -mx-2 px-2 py-1' : ''
+                                  }`}
+                                >
+                                  {/* El tilde se monta sobre la misma fila que ya
+                                      lista las zonas: duplicar la lista adentro
+                                      del panel era pedirle al ojo que las
+                                      cruzara. */}
+                                  {ajustando && (
+                                    <input
+                                      type="checkbox"
+                                      checked={elegida}
+                                      onChange={() => alternarZonaBulk(z.id)}
+                                      aria-label={`Incluir ${z.nombre} en el ajuste`}
+                                      className="w-4 h-4 accent-marca-oro cursor-pointer"
+                                    />
+                                  )}
                                   <span className="flex-1 text-sm text-gray-700">{z.nombre}</span>
                                   <span className="text-gray-400 text-sm">$</span>
                                   <input

@@ -277,12 +277,32 @@ async function setTarifa(supabase, idempresa, tipo, body, res) {
   return res.json({ ok: true });
 }
 
+// Aplica un mismo cambio a varias zonas de una lista: las pone todas en un
+// importe fijo, o las ajusta por un porcentaje (un aumento general, o una
+// corrección puntual sobre las zonas que se elijan).
+//
+// `zonaIds` es opcional y son public_id: sin él se tocan TODAS las zonas de la
+// empresa, que es como venía funcionando. Con él, solo esas — porque un aumento
+// no siempre es parejo: se encarece la zona lejana y las demás quedan igual.
 async function setTarifasBulk(supabase, idempresa, tipo, body, res) {
   const idlista = await resolverLista(supabase, idempresa, tipo, body.listaId);
   if (!idlista) return res.status(404).json({ error: 'Lista no encontrada' });
 
-  const zonas = await listarZonas(supabase, idempresa);
-  if (!zonas.length) return res.json({ ok: true });
+  const todas = await listarZonas(supabase, idempresa);
+  if (!todas.length) return res.json({ ok: true });
+
+  let zonas = todas;
+  if (Array.isArray(body.zonaIds)) {
+    const pedidas = new Set(body.zonaIds.map(String));
+    if (pedidas.size === 0) throw new ErrorPublico('Elegí al menos una zona');
+
+    zonas = todas.filter((z) => pedidas.has(z.public_id));
+    // Si alguna no resolvió, cortamos en vez de aplicar el cambio a medias:
+    // un aumento que toca 2 de 3 zonas y no avisa es peor que uno que falla.
+    if (zonas.length !== pedidas.size) {
+      return res.status(404).json({ error: 'Alguna de las zonas elegidas no existe' });
+    }
+  }
 
   const tieneImporte = body.importe !== undefined && body.importe !== null && body.importe !== '';
   const tienePorcentaje = body.porcentaje !== undefined && body.porcentaje !== null && body.porcentaje !== '';
