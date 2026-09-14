@@ -9,7 +9,10 @@ function mapPaquete(row) {
     direccion: row.direccion ?? '',
     estado: row.estado ?? '',
     codigopostal: row.codigopostal ?? '',
+    // zona y partido son dos cosas distintas y las dos viajan: el partido es lo
+    // que lista la pantalla de Paquetes, y la zona la que agrupa Estadísticas.
     zona: row.zona ?? null,
+    partido: row.partido ?? null,
     seller: row.seller ?? null,
     sellerId: row.sellerId ?? null,
     transportista: row.transportista ?? null,

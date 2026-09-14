@@ -21,22 +21,45 @@ import { responderError } from '../errores.js';
 // (id=1), que es el fallback histórico.
 export async function resolverZonaYRegistrarArea(supabase, idEmpresa, envio) {
   const ref = envio.barrioRef;
-  if (idEmpresa == null || !ref) return { idarea: null, idzona: 1 };
+  if (idEmpresa == null || !ref) {
+    console.warn(
+      `[PacKen] Sin barrio para el envío ${envio.idEnvioMl}: el paquete queda sin partido ` +
+        `(empresa=${idEmpresa}, barrio="${envio.barrio ?? ''}")`,
+    );
+    return { idarea: null, idzona: 1 };
+  }
 
+  // Los errores de acá NO cortan el escaneo (registrar el barrio es
+  // best-effort), pero se loguean: hasta que se los empezó a mirar, un upsert
+  // que fallaba dejaba el paquete sin idarea en silencio, sin partido en la
+  // lista y liquidando contra la zona General, que no tiene tarifa.
+  //
   // ignoreDuplicates: si el barrio ya existe no lo pisamos (preserva su zona).
-  await supabase
+  const { error: errUpsert } = await supabase
     .from('area_flex')
     .upsert(
       { idempresa: idEmpresa, nombre: envio.barrio || ref, ml_ref: ref },
       { onConflict: 'idempresa,ml_ref', ignoreDuplicates: true },
     );
+  if (errUpsert) {
+    console.error(`[PacKen] No se pudo registrar el barrio "${ref}" en area_flex:`, errUpsert.message);
+  }
 
-  const { data } = await supabase
+  const { data, error: errSelect } = await supabase
     .from('area_flex')
     .select('id, idzona')
     .eq('idempresa', idEmpresa)
     .eq('ml_ref', ref)
     .maybeSingle();
+  if (errSelect) {
+    console.error(`[PacKen] No se pudo leer el barrio "${ref}" de area_flex:`, errSelect.message);
+  }
+  if (!data) {
+    console.warn(
+      `[PacKen] El barrio "${ref}" (empresa ${idEmpresa}) no quedó en area_flex: ` +
+        'el paquete se guarda sin partido y con la zona General.',
+    );
+  }
 
   return { idarea: data?.id ?? null, idzona: data?.idzona ?? 1 };
 }
