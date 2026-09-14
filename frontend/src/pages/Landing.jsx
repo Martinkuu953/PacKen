@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import './Landing.css';
+import Logo from '../components/Logo';
 
 const FONT_DISPLAY = "'Space Grotesk', sans-serif";
 const FONT_SERIF = "'Instrument Serif', serif";
@@ -248,14 +249,7 @@ const Landing = () => {
 
       {/* NAV */}
       <nav className="sticky top-0 z-50 flex items-center justify-between gap-4 border-b border-[#EDEBE2] bg-[#FBFBF8]/82 px-5 py-4 backdrop-blur-md sm:px-10">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px] bg-[#16150F]">
-            <div className="h-[14px] w-[14px] rounded-[3px] bg-[#FFDE00]" />
-          </div>
-          <span className="text-[21px] font-bold tracking-[-0.02em]" style={{ fontFamily: FONT_DISPLAY }}>
-            Packen
-          </span>
-        </div>
+        <Logo className="h-[30px]" />
         <div className="hidden items-center gap-8 md:flex">
           <a href="#funciones" className="text-[15px] font-medium text-[#4A4838]">Funciones</a>
           <a href="#como" className="text-[15px] font-medium text-[#4A4838]">Cómo funciona</a>
@@ -737,12 +731,7 @@ const Landing = () => {
       <footer className="mx-auto mt-[100px] max-w-[1180px] border-t border-[#EDEBE2] px-5 pb-14 pt-12 sm:px-10">
         <div className="flex flex-wrap justify-between gap-10">
           <div className="max-w-[260px]">
-            <div className="mb-3.5 flex items-center gap-2.5">
-              <div className="flex h-7 w-7 items-center justify-center rounded-[7px] bg-[#16150F]">
-                <div className="h-[13px] w-[13px] rounded-[3px] bg-[#FFDE00]" />
-              </div>
-              <span className="text-[19px] font-bold tracking-[-0.02em]" style={{ fontFamily: FONT_DISPLAY }}>Packen</span>
-            </div>
+            <Logo className="mb-3.5 block h-7" />
             <p className="text-[14px] leading-[1.55] text-[#8A8770]">
               El gestor logístico para empresas que reparten envíos de Mercado Libre.
             </p>

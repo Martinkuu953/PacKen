@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Sidebar from './Sidebar';
+import Logo from './Logo';
 
 const Layout = ({ children }) => {
   const [sidebarAbierto, setSidebarAbierto] = useState(false);
@@ -23,8 +24,8 @@ const Layout = ({ children }) => {
             </svg>
           </button>
 
-          <span className="text-lg font-bold text-gray-800 flex items-center justify-center gap-2 justify-self-center">
-            📦 PacKen
+          <span className="flex items-center justify-center justify-self-center">
+            <Logo className="h-7" />
           </span>
 
           {/* Columna vacía para balancear el grid y mantener el logo realmente centrado */}

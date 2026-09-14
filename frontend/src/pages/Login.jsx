@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import Logo from '../components/Logo';
 
 const Login = () => {
   const { login } = useAuth();
@@ -26,8 +27,8 @@ const Login = () => {
     <div className="min-h-screen bg-[#F3F4F6] flex items-center justify-center px-4">
       <div className="bg-white rounded-2xl shadow-lg border border-gray-200 w-full max-w-md p-6 sm:p-8">
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-800 flex items-center justify-center gap-2">
-            📦 PacKen
+          <h1 className="flex items-center justify-center">
+            <Logo className="h-9" />
           </h1>
           <p className="text-gray-500 text-sm mt-2">Iniciá sesión para continuar</p>
         </div>
