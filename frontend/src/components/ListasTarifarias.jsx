@@ -52,8 +52,12 @@ const ListasTarifarias = () => {
   const [bulkAbierto, setBulkAbierto] = useState(null);
   const [bulkImporte, setBulkImporte] = useState('');
   const [bulkPct, setBulkPct] = useState('');
-  // Qué zonas recibe el ajuste. Arranca con todas: el caso habitual es el
-  // aumento parejo, y así abrir el panel y aplicar sigue siendo dos clics.
+  // 'aumentar' | 'disminuir': el signo del ajuste es un botón y no un menos
+  // tipeado a mano. Bajar precios es tan normal como subirlos.
+  const [bulkSigno, setBulkSigno] = useState('aumentar');
+  // Qué zonas recibe el ajuste. Arranca VACÍO a propósito: con todas tildadas
+  // de entrada, abrir y aplicar subía la lista entera sin que se notara que
+  // había algo para elegir.
   const [bulkZonas, setBulkZonas] = useState(() => new Set());
   // Renombrado inline.
   const [renombrando, setRenombrando] = useState(null);
@@ -164,17 +168,19 @@ const ListasTarifarias = () => {
     }
   };
 
-  // Abrir el panel preselecciona todas las zonas; cerrarlo limpia todo, para
-  // que la próxima lista no herede una selección de la anterior.
+  // Abrir el panel no preselecciona nada: el primer paso es elegir sobre qué
+  // zonas se trabaja. Cerrarlo limpia todo, para que la próxima lista no
+  // herede la selección de la anterior.
   const alternarBulk = (listaId) => {
     if (bulkAbierto === listaId) {
       setBulkAbierto(null);
       return;
     }
     setBulkAbierto(listaId);
-    setBulkZonas(new Set(zonas.map((z) => z.id)));
+    setBulkZonas(new Set());
     setBulkImporte('');
     setBulkPct('');
+    setBulkSigno('aumentar');
   };
 
   const alternarZonaBulk = (zonaId) =>
@@ -187,6 +193,31 @@ const ListasTarifarias = () => {
 
   const todasElegidas = zonas.length > 0 && bulkZonas.size === zonas.length;
 
+  // El porcentaje con signo: el input siempre lleva un número positivo y el
+  // botón decide si suma o resta.
+  const pctConSigno = () => {
+    const n = Math.abs(Number(bulkPct));
+    if (!Number.isFinite(n)) return null;
+    return bulkSigno === 'disminuir' ? -n : n;
+  };
+
+  // Cuánto quedaría una zona si se aplicara lo que hay cargado ahora. Es la
+  // misma cuenta que hace el servidor, repetida acá solo para mostrarla: ver
+  // "$1000 → $1150" antes de apretar es lo que evita el aumento equivocado.
+  const previsualizar = (lista, zonaId) => {
+    const base = Number(importeDe(lista, zonaId));
+    if (bulkPct !== '') {
+      const pct = pctConSigno();
+      if (pct === null) return null;
+      return Math.max(0, Math.round(base * (1 + pct / 100) * 100) / 100);
+    }
+    if (bulkImporte !== '') {
+      const fijo = Number(bulkImporte);
+      return Number.isFinite(fijo) ? fijo : null;
+    }
+    return null;
+  };
+
   const aplicarBulk = async (listaId, modo) => {
     if (bulkZonas.size === 0) return;
     const body = { op: 'setTarifasBulk', listaId };
@@ -198,8 +229,9 @@ const ListasTarifarias = () => {
       if (bulkImporte === '') return;
       body.importe = bulkImporte;
     } else {
-      if (bulkPct === '') return;
-      body.porcentaje = bulkPct;
+      const pct = pctConSigno();
+      if (bulkPct === '' || pct === null) return;
+      body.porcentaje = String(pct);
     }
     if (await ejecutar(body)) {
       setBulkAbierto(null);
@@ -381,14 +413,19 @@ const ListasTarifarias = () => {
 
                         {bulkAbierto === lista.id && (
                           <div className="mb-3 p-3 bg-gray-50 rounded-lg space-y-3">
-                            {/* Cuántas zonas se van a tocar, siempre a la vista:
-                                el aumento se aplica sobre lo que está tildado
-                                abajo, y aplicarlo a la zona equivocada se paga
-                                en la próxima liquidación. */}
+                            {/* Paso 1: sobre qué zonas. Arranca en cero y el
+                                botón de aplicar queda bloqueado hasta que se
+                                tilde alguna: aplicar el aumento a la zona
+                                equivocada se paga en la próxima liquidación. */}
                             <div className="flex flex-wrap items-center gap-2 text-xs">
-                              <span className="font-semibold text-gray-700">
-                                Se aplica a {bulkZonas.size} de {zonas.length} zona
-                                {zonas.length === 1 ? '' : 's'}
+                              <span
+                                className={`font-semibold ${
+                                  bulkZonas.size === 0 ? 'text-amber-700' : 'text-gray-700'
+                                }`}
+                              >
+                                {bulkZonas.size === 0
+                                  ? '1. Tildá abajo las zonas a cambiar'
+                                  : `Se aplica a ${bulkZonas.size} de ${zonas.length} zona${zonas.length === 1 ? '' : 's'}`}
                               </span>
                               <button
                                 type="button"
@@ -406,56 +443,78 @@ const ListasTarifarias = () => {
                               >
                                 Ninguna
                               </button>
-                              <span className="text-gray-500">
-                                Tildá abajo las que quieras cambiar.
-                              </span>
                             </div>
 
+                            {/* Paso 2: subir o bajar. El signo es un botón, no
+                                un menos tipeado. */}
                             <div className="flex flex-wrap items-center gap-2">
+                              <div className="flex gap-1 bg-gray-200 rounded-lg p-0.5">
+                                {[
+                                  ['aumentar', 'Aumentar'],
+                                  ['disminuir', 'Disminuir'],
+                                ].map(([valor, texto]) => (
+                                  <button
+                                    key={valor}
+                                    type="button"
+                                    onClick={() => setBulkSigno(valor)}
+                                    aria-pressed={bulkSigno === valor}
+                                    className={`text-xs px-3 py-1.5 rounded-md font-semibold transition-colors ${
+                                      bulkSigno === valor
+                                        ? 'bg-white shadow-sm text-gray-800'
+                                        : 'text-gray-600 hover:text-gray-800'
+                                    }`}
+                                  >
+                                    {texto}
+                                  </button>
+                                ))}
+                              </div>
                               <input
                                 type="number"
+                                min="0"
                                 step="1"
                                 value={bulkPct}
                                 onChange={(e) => setBulkPct(e.target.value)}
-                                placeholder="Aumentar %"
-                                aria-label="Porcentaje de ajuste"
-                                className={`${inputClass} w-32`}
+                                placeholder="%"
+                                aria-label={`Porcentaje a ${bulkSigno}`}
+                                className={`${inputClass} w-24`}
                               />
+                              <span className="text-sm text-gray-500">%</span>
                               <button
                                 type="button"
                                 onClick={() => aplicarBulk(lista.id, 'porcentaje')}
                                 disabled={busy || bulkPct === '' || bulkZonas.size === 0}
                                 className="text-xs px-3 py-2 bg-marca-oro text-marca-grafito rounded-lg font-medium disabled:opacity-50"
                               >
-                                Aplicar %
+                                {bulkSigno === 'disminuir' ? 'Bajar' : 'Subir'}
+                                {bulkZonas.size > 0
+                                  ? ` ${bulkZonas.size} zona${bulkZonas.size === 1 ? '' : 's'}`
+                                  : ''}
                               </button>
-                              <span className="text-gray-300">|</span>
+                            </div>
+
+                            {/* Alternativa: pisar el valor en vez de ajustarlo. */}
+                            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-gray-200">
+                              <span className="text-xs text-gray-500">o poner en</span>
+                              <span className="text-gray-400 text-sm">$</span>
                               <input
                                 type="number"
                                 min="0"
                                 step="0.01"
                                 value={bulkImporte}
                                 onChange={(e) => setBulkImporte(e.target.value)}
-                                placeholder="Poner en $"
+                                placeholder="0.00"
                                 aria-label="Importe fijo"
-                                className={`${inputClass} w-36`}
+                                className={`${inputClass} w-28`}
                               />
                               <button
                                 type="button"
                                 onClick={() => aplicarBulk(lista.id, 'importe')}
                                 disabled={busy || bulkImporte === '' || bulkZonas.size === 0}
-                                className="text-xs px-3 py-2 bg-marca-oro text-marca-grafito rounded-lg font-medium disabled:opacity-50"
+                                className="text-xs px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium disabled:opacity-50"
                               >
                                 Aplicar
                               </button>
                             </div>
-
-                            {/* Un % negativo es una baja: no hace falta otro
-                                control, pero conviene decirlo. */}
-                            <p className="text-xs text-gray-500">
-                              Un porcentaje negativo (–10) baja los precios. Se redondea a dos
-                              decimales y nunca queda por debajo de $0.
-                            </p>
                           </div>
                         )}
 
@@ -471,27 +530,48 @@ const ListasTarifarias = () => {
                                   : String(importeDe(lista, z.id));
                               const ajustando = bulkAbierto === lista.id;
                               const elegida = bulkZonas.has(z.id);
+                              const nuevo = ajustando && elegida ? previsualizar(lista, z.id) : null;
                               return (
                                 <div
                                   key={z.id}
                                   className={`flex items-center gap-3 rounded-lg transition-colors ${
-                                    ajustando && elegida ? 'bg-marca-amarillo/40 -mx-2 px-2 py-1' : ''
+                                    ajustando
+                                      ? `-mx-2 px-2 py-1 ${elegida ? 'bg-marca-amarillo/40' : ''}`
+                                      : ''
                                   }`}
                                 >
                                   {/* El tilde se monta sobre la misma fila que ya
                                       lista las zonas: duplicar la lista adentro
                                       del panel era pedirle al ojo que las
-                                      cruzara. */}
-                                  {ajustando && (
-                                    <input
-                                      type="checkbox"
-                                      checked={elegida}
-                                      onChange={() => alternarZonaBulk(z.id)}
-                                      aria-label={`Incluir ${z.nombre} en el ajuste`}
-                                      className="w-4 h-4 accent-marca-oro cursor-pointer"
-                                    />
+                                      cruzara. El label envuelve solo el tilde y
+                                      el nombre —no el input de precio, que se
+                                      sigue pudiendo editar con el panel
+                                      abierto—. */}
+                                  {ajustando ? (
+                                    <label className="flex-1 flex items-center gap-3 cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={elegida}
+                                        onChange={() => alternarZonaBulk(z.id)}
+                                        className="w-4 h-4 accent-marca-oro cursor-pointer"
+                                      />
+                                      <span className="flex-1 text-sm text-gray-700">{z.nombre}</span>
+                                    </label>
+                                  ) : (
+                                    <span className="flex-1 text-sm text-gray-700">{z.nombre}</span>
                                   )}
-                                  <span className="flex-1 text-sm text-gray-700">{z.nombre}</span>
+                                  {/* Cuánto va a quedar, antes de apretar nada. */}
+                                  {nuevo !== null && (
+                                    <span
+                                      className={`text-xs font-semibold whitespace-nowrap ${
+                                        nuevo >= Number(importeDe(lista, z.id))
+                                          ? 'text-green-700'
+                                          : 'text-red-700'
+                                      }`}
+                                    >
+                                      → ${nuevo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                                    </span>
+                                  )}
                                   <span className="text-gray-400 text-sm">$</span>
                                   <input
                                     type="number"
