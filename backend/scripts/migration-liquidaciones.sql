@@ -17,7 +17,37 @@
 
 BEGIN;
 
-CREATE TABLE IF NOT EXISTS liquidacion (
+-- La base traía del modelo original una tabla `liquidacion` con otras columnas.
+-- Con CREATE TABLE IF NOT EXISTS quedaba la vieja y el índice sobre public_id
+-- fallaba ("column public_id does not exist"), así que se reemplaza.
+--
+-- Dos resguardos, porque esto borra tablas:
+--   - Si alguna tiene filas, aborta en vez de borrar datos de alguien.
+--   - El DROP va SIN CASCADE a propósito: si otro objeto depende de la tabla,
+--     preferimos que Postgres corte con un error a que se lo lleve puesto.
+-- Los IF van anidados y no con un AND: plpgsql prepara cada sentencia recién
+-- cuando la ejecuta, así que la referencia a la tabla tiene que quedar adentro
+-- del IF que comprueba que existe. Con un AND se parsea igual y falla en una
+-- base donde la tabla no esté.
+DO $$
+BEGIN
+  IF to_regclass('public.liquidacion') IS NOT NULL THEN
+    IF EXISTS (SELECT 1 FROM liquidacion) THEN
+      RAISE EXCEPTION 'liquidacion ya tiene datos: revisala a mano antes de reemplazarla';
+    END IF;
+  END IF;
+
+  IF to_regclass('public.liquidacion_detalle') IS NOT NULL THEN
+    IF EXISTS (SELECT 1 FROM liquidacion_detalle) THEN
+      RAISE EXCEPTION 'liquidacion_detalle ya tiene datos: revisala a mano antes de reemplazarla';
+    END IF;
+  END IF;
+END $$;
+
+DROP TABLE IF EXISTS liquidacion_detalle;
+DROP TABLE IF EXISTS liquidacion;
+
+CREATE TABLE liquidacion (
   id              SERIAL PRIMARY KEY,
   public_id       UUID NOT NULL DEFAULT gen_random_uuid(),
   idempresa       INTEGER NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
@@ -38,7 +68,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_liquidacion_public_id ON liquidacion(publi
 -- El historial siempre pide "las últimas N de esta empresa".
 CREATE INDEX IF NOT EXISTS idx_liquidacion_empresa_fecha ON liquidacion(idempresa, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS liquidacion_detalle (
+CREATE TABLE liquidacion_detalle (
   id            SERIAL PRIMARY KEY,
   idliquidacion INTEGER NOT NULL REFERENCES liquidacion(id) ON DELETE CASCADE,
   idpaquete     INTEGER REFERENCES paquete(id) ON DELETE SET NULL,
