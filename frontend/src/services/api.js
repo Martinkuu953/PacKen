@@ -48,7 +48,7 @@ function esRutaAuthPublica(path) {
   );
 }
 
-async function ejecutarFetch(path, options, token) {
+function ejecutarFetch(path, options, token) {
   const headers = {
     'Content-Type': 'application/json',
     ...options.headers,
@@ -56,35 +56,59 @@ async function ejecutarFetch(path, options, token) {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  const res = await fetch(apiUrl(path), { ...options, headers, credentials: 'include' });
-  const body = await res.json().catch(() => ({}));
-  return { res, body };
+  return fetch(apiUrl(path), { ...options, headers, credentials: 'include' });
+}
+
+// Hace la request y, si el access token venció, la reintenta una sola vez con
+// el token rotado. Devuelve la Response cruda: quien llama decide si el cuerpo
+// es JSON o un archivo.
+async function fetchConSesion(path, options) {
+  const res = await ejecutarFetch(path, options, getStoredToken());
+  if (res.status !== 401 || esRutaAuthPublica(path)) return res;
+
+  let refreshed;
+  try {
+    refreshed = await intentarRefresh();
+  } catch {
+    syncHandlers.onSessionExpired?.();
+    localStorage.removeItem('packen_token');
+    localStorage.removeItem('packen_usuario');
+    window.location.href = '/login';
+    throw new Error('Sesión expirada');
+  }
+
+  syncHandlers.onTokenRefreshed?.(refreshed.token, refreshed.usuario);
+  return ejecutarFetch(path, options, refreshed.token);
 }
 
 export async function apiFetch(path, options = {}) {
-  const { res, body } = await ejecutarFetch(path, options, getStoredToken());
-
-  if (res.status === 401 && !esRutaAuthPublica(path)) {
-    try {
-      const refreshed = await intentarRefresh();
-      syncHandlers.onTokenRefreshed?.(refreshed.token, refreshed.usuario);
-      const reintento = await ejecutarFetch(path, options, refreshed.token);
-      if (!reintento.res.ok) {
-        throw new Error(reintento.body.error || reintento.body.message || `Error ${reintento.res.status}`);
-      }
-      return reintento.body;
-    } catch {
-      syncHandlers.onSessionExpired?.();
-      localStorage.removeItem('packen_token');
-      localStorage.removeItem('packen_usuario');
-      window.location.href = '/login';
-      throw new Error('Sesión expirada');
-    }
-  }
+  const res = await fetchConSesion(path, options);
+  const body = await res.json().catch(() => ({}));
 
   if (!res.ok) {
     throw new Error(body.error || body.message || `Error ${res.status}`);
   }
 
   return body;
+}
+
+// Descarga un archivo de la API y dispara el "guardar como" del navegador.
+// No alcanza con un <a href>: el middleware exige el header Authorization en
+// toda ruta de /api, y un link no lo manda.
+export async function apiDescargar(path, nombreArchivo) {
+  const res = await fetchConSesion(path, { method: 'GET' });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || body.message || `Error ${res.status}`);
+  }
+
+  const url = URL.createObjectURL(await res.blob());
+  const enlace = document.createElement('a');
+  enlace.href = url;
+  enlace.download = nombreArchivo;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  URL.revokeObjectURL(url);
 }

@@ -12,6 +12,7 @@ import ListasPrecios from './pages/ListasPrecios';
 import EstablecerZonas from './pages/EstablecerZonas';
 import Transportistas from './pages/Transportistas';
 import Estadisticas from './pages/Estadisticas';
+import Liquidaciones from './pages/Liquidaciones';
 
 function RutaProtegida({ children, rolesPermitidos }) {
   const { autenticado, usuario, aprobado } = useAuth();
@@ -107,7 +108,7 @@ function AppRoutes() {
       } />
       <Route path="/liquidaciones" element={
         <RutaProtegida rolesPermitidos={['empresa']}>
-          <h2>Pantalla de Liquidaciones en construcción...</h2>
+          <Liquidaciones />
         </RutaProtegida>
       } />
       <Route path="/perfil" element={
