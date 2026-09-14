@@ -1,21 +1,23 @@
 @import "tailwindcss";
 
-/* Paleta de marca, sacada del logo y no inventada aparte: el gris frío y el
-   amarillo limón que había antes no estaban en él y peleaban con la marca.
-   El limón #FDE047 en particular quedaba tan cerca del oro de la caja del logo
-   que la figura se lavaba cuando se apoyaba encima.
+/* Paleta de marca. Grafito, oro y crema salen del logo; el amarillo de las
+   superficies es el de la app desde siempre y se mantiene por decisión de
+   marca.
 
    Los dos amarillos tienen trabajos distintos y no son intercambiables:
-   - `amarillo` es para SUPERFICIES grandes (sidebar, chips, fila elegida).
-     Pálido a propósito, para que el logo y el texto recorten encima.
+   - `amarillo` es para SUPERFICIES grandes (sidebar, header de mobile, chips,
+     fila elegida).
    - `oro` es para ACCIONES (botones, foco). Es el oro exacto del logo: en una
-     superficie grande encandila, pero en un botón es lo que le da peso. */
+     superficie grande encandila, pero en un botón es lo que le da peso.
+
+   Al cambiar `amarillo` acá cambian todas las superficies a la vez, que es el
+   punto de tenerlo en un token y no repartido en hexadecimales sueltos. */
 @theme {
   --color-marca-grafito: #2E3136;
   --color-marca-oro: #F2B400;
   --color-marca-oro-oscuro: #D9A200;
-  --color-marca-amarillo: #F7E7A8;
-  --color-marca-amarillo-fuerte: #F0DB8E;
+  --color-marca-amarillo: #FDE047;
+  --color-marca-amarillo-fuerte: #FACC15;
   --color-marca-crema: #FCFBF8;
 }
 
