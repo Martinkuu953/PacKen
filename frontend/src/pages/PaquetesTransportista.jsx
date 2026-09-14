@@ -112,7 +112,7 @@ const Listado = ({ vista, paquetes, loading, error, onVolver, onEscanear, onReca
 
       {/* Pegado al borde inferior: es la acción principal de la pantalla y
           tiene que quedar al alcance del pulgar por más larga que sea la lista. */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#F3F4F6] via-[#F3F4F6] to-transparent">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-marca-crema via-marca-crema to-transparent">
         <div className="max-w-xl mx-auto">
           <button
             onClick={onEscanear}

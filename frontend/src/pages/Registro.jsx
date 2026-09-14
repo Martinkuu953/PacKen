@@ -6,7 +6,7 @@ import Logo from '../components/Logo';
 // Solo se registran empresas. Las cuentas de transportista las crea la empresa
 // desde su panel: un transportista no puede darse de alta solo.
 const INPUT =
-  'w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent transition-all';
+  'w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-marca-oro focus:border-transparent transition-all';
 
 const Registro = () => {
   const { registrar } = useAuth();
@@ -46,7 +46,7 @@ const Registro = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-marca-crema flex items-center justify-center px-4">
       <div className="bg-white rounded-2xl shadow-lg border border-gray-200 w-full max-w-md p-6 sm:p-8">
         <div className="text-center mb-6">
           <h1 className="flex items-center justify-center">
@@ -131,7 +131,7 @@ const Registro = () => {
           <button
             type="submit"
             disabled={cargando}
-            className="w-full py-2.5 bg-[#FDE047] text-gray-800 font-semibold rounded-xl hover:bg-yellow-300 disabled:opacity-50 transition-colors duration-150"
+            className="w-full py-2.5 bg-marca-oro text-marca-grafito font-semibold rounded-xl hover:bg-marca-oro-oscuro disabled:opacity-50 transition-colors duration-150"
           >
             {cargando ? 'Registrando...' : 'Crear cuenta'}
           </button>

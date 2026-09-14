@@ -16,7 +16,7 @@ const Buscador = ({ valor, onChange, placeholder = 'Buscar...', resultados, tota
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           aria-label={placeholder}
-          className="w-full pl-9 pr-9 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent transition-all"
+          className="w-full pl-9 pr-9 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-marca-oro focus:border-transparent transition-all"
         />
         {filtrando && (
           <button

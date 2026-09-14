@@ -11,7 +11,7 @@ import { filtrarPorTexto } from '../utils/busqueda';
 const ENDPOINT = '/api/precios';
 
 const inputClass =
-  'px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent transition-all bg-white';
+  'px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-marca-oro focus:border-transparent transition-all bg-white';
 
 const EstablecerZonas = () => {
   const [zonas, setZonas] = useState([]);
@@ -150,7 +150,7 @@ const EstablecerZonas = () => {
               type="button"
               onClick={sincronizar}
               disabled={busy}
-              className="text-xs px-3 py-1.5 bg-[#FDE047] text-gray-800 rounded-lg hover:bg-yellow-300 disabled:opacity-50 font-medium"
+              className="text-xs px-3 py-1.5 bg-marca-oro text-marca-grafito rounded-lg hover:bg-marca-oro-oscuro disabled:opacity-50 font-medium"
             >
               {busy ? '...' : 'Sincronizar barrios de Flex'}
             </button>
@@ -170,7 +170,7 @@ const EstablecerZonas = () => {
                   <button
                     type="button"
                     onClick={() => guardarNombreZona(z.id)}
-                    className="text-xs px-2 py-1 bg-[#FDE047] rounded-lg font-medium"
+                    className="text-xs px-2 py-1 bg-marca-oro text-marca-grafito rounded-lg font-medium"
                   >
                     OK
                   </button>
@@ -263,7 +263,7 @@ const EstablecerZonas = () => {
                         onClick={() => asignarArea(area.id, activa ? null : z.id)}
                         className={`w-8 h-8 rounded-full text-sm font-semibold transition-colors ${
                           activa
-                            ? 'bg-[#FDE047] text-gray-900 shadow-sm'
+                            ? 'bg-marca-amarillo text-marca-grafito shadow-sm'
                             : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
                         }`}
                       >

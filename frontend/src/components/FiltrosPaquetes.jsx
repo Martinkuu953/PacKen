@@ -1,6 +1,6 @@
 import { ESTADOS_VALIDOS } from '../utils/estados';
 
-const SELECT = 'w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-yellow-300';
+const SELECT = 'w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-marca-oro';
 const LABEL = 'block text-[11px] font-semibold text-gray-500 uppercase mb-1';
 
 const FiltrosPaquetes = ({ valores, onChange, sellers = [], transportistas = [] }) => {

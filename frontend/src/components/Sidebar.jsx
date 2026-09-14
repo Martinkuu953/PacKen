@@ -39,7 +39,7 @@ const Sidebar = ({ abierto, onCerrar }) => {
 
       <aside
         className={`
-          bg-[#FDE047] h-screen fixed left-0 top-0 overflow-y-auto shadow-lg z-40
+          bg-marca-amarillo h-screen fixed left-0 top-0 overflow-y-auto shadow-lg z-40
           w-64 transition-transform duration-200 flex flex-col
           ${abierto ? 'translate-x-0' : '-translate-x-full'}
           lg:translate-x-0
@@ -52,23 +52,23 @@ const Sidebar = ({ abierto, onCerrar }) => {
             </h1>
             <button
               onClick={onCerrar}
-              className="text-gray-700 hover:text-gray-900 text-2xl font-bold lg:hidden"
+              className="text-marca-grafito/70 hover:text-marca-grafito text-2xl font-bold lg:hidden"
               aria-label="Cerrar menú"
             >
               ×
             </button>
           </div>
           <nav>
-            <ul className="space-y-4 text-gray-800 font-medium">
+            <ul className="space-y-1.5 text-marca-grafito font-medium">
               {menuItems.map((item) => (
                 <li key={item.name}>
                   <Link
                     to={item.path}
                     onClick={onCerrar}
-                    className={`block px-4 py-2 rounded-md transition-colors ${
+                    className={`block px-4 py-2 rounded-lg transition-colors ${
                       location.pathname === item.path
-                        ? 'bg-white shadow-sm font-bold'
-                        : 'hover:bg-yellow-300'
+                        ? 'bg-marca-crema shadow-sm font-bold'
+                        : 'hover:bg-marca-amarillo-fuerte'
                     }`}
                   >
                     {item.name}
@@ -79,17 +79,17 @@ const Sidebar = ({ abierto, onCerrar }) => {
           </nav>
         </div>
 
-        <div className="p-6 border-t border-yellow-400/50">
+        <div className="p-6 border-t border-marca-oro/25">
           {usuario && (
-            <p className="text-xs text-gray-700 mb-3 truncate">
+            <p className="text-xs text-marca-grafito/80 mb-3 truncate">
               <span className="font-semibold">{usuario.nombre}</span>
               <br />
-              <span className="capitalize text-gray-600">{usuario.rol}</span>
+              <span className="capitalize text-marca-grafito/60">{usuario.rol}</span>
             </p>
           )}
           <button
             onClick={handleLogout}
-            className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white/60 rounded-md hover:bg-white transition-colors"
+            className="w-full px-4 py-2 text-sm font-medium text-marca-grafito bg-marca-crema/70 rounded-lg hover:bg-marca-crema transition-colors"
           >
             Cerrar sesión
           </button>

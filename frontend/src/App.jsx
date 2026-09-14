@@ -53,7 +53,7 @@ function RutaSinAcceso() {
 // alguien que sí tiene sesión válida.
 function PantallaCargando() {
   return (
-    <div className="min-h-screen bg-[#F3F4F6] flex items-center justify-center">
+    <div className="min-h-screen bg-marca-crema flex items-center justify-center">
       <p className="text-gray-500 text-sm">Cargando...</p>
     </div>
   );

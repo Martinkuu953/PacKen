@@ -6,7 +6,7 @@ const Layout = ({ children }) => {
   const [sidebarAbierto, setSidebarAbierto] = useState(false);
 
   return (
-    <div className="flex bg-[#F3F4F6] min-h-screen">
+    <div className="flex bg-marca-crema min-h-screen">
       <Sidebar abierto={sidebarAbierto} onCerrar={() => setSidebarAbierto(false)} />
 
       <div className="flex-1 lg:ml-64 flex flex-col">

@@ -9,7 +9,7 @@ const SinAcceso = () => {
   const { cerrarSesion } = useAuth();
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-marca-crema flex items-center justify-center px-4">
       <div className="bg-white rounded-2xl shadow-lg border border-gray-200 w-full max-w-md p-6 sm:p-8 text-center">
         <h1 className="mb-2 flex items-center justify-center">
           <Logo className="h-9" />

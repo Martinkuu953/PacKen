@@ -53,7 +53,7 @@ const HistorialLiquidaciones = ({ historial, descargandoId, abriendoId, onVer, o
             onClick={() => onDescargar(liquidacion)}
             disabled={descargandoId === liquidacion.id}
             aria-label={`Descargar liquidación de ${liquidacion.transportista}`}
-            className="shrink-0 w-9 h-9 mr-1 flex items-center justify-center bg-[#FDE047] rounded-full hover:bg-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150"
+            className="shrink-0 w-9 h-9 mr-1 flex items-center justify-center bg-marca-oro text-marca-grafito rounded-full hover:bg-marca-oro-oscuro disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150"
           >
             {descargandoId === liquidacion.id ? '…' : '↓'}
           </button>

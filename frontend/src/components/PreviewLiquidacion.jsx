@@ -78,7 +78,7 @@ const PreviewLiquidacion = ({
             </table>
           </div>
 
-          <div className="flex items-center justify-between mt-2 px-4 py-2 bg-[#FDE047] rounded-xl">
+          <div className="flex items-center justify-between mt-2 px-4 py-2 bg-marca-amarillo rounded-xl">
             <span className="text-sm font-bold text-gray-800">
               Total ({liquidacion.cantidad} paquete{liquidacion.cantidad === 1 ? '' : 's'})
             </span>

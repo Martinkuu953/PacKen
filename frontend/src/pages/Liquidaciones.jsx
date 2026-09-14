@@ -9,7 +9,7 @@ const ENDPOINT = '/api/liquidaciones';
 const CAMPOS_BUSQUEDA = ['nombre'];
 
 const INPUT_FECHA =
-  'text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-yellow-300';
+  'text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-marca-oro';
 
 // El nombre del transportista puede traer espacios o acentos: los navegadores
 // los aceptan, pero conviene un nombre de archivo parejo y sin barras.
@@ -269,7 +269,7 @@ const Liquidaciones = () => {
                   aria-pressed={activo}
                   className={`w-full flex items-center gap-3 px-4 py-3 border rounded-xl text-left transition-colors duration-150 ${
                     activo
-                      ? 'bg-[#FDE047] border-yellow-400 shadow-sm'
+                      ? 'bg-marca-amarillo border-marca-oro shadow-sm'
                       : liquidable
                         ? 'bg-white border-gray-200 shadow-sm hover:bg-gray-50'
                         : 'bg-gray-50 border-gray-200 cursor-not-allowed'
@@ -309,7 +309,7 @@ const Liquidaciones = () => {
           <button
             type="button"
             onClick={() => setVista('historial')}
-            className="px-6 py-2.5 bg-[#FDE047] text-gray-800 rounded-xl font-semibold hover:bg-yellow-300 transition-colors duration-150"
+            className="px-6 py-2.5 bg-marca-oro text-marca-grafito rounded-xl font-semibold hover:bg-marca-oro-oscuro transition-colors duration-150"
           >
             Ver últimas liquidaciones
           </button>

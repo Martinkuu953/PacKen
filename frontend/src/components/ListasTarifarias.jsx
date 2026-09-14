@@ -25,7 +25,7 @@ const CONFIG = {
 };
 
 const inputClass =
-  'px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent transition-all bg-white';
+  'px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-marca-oro focus:border-transparent transition-all bg-white';
 
 const ListasTarifarias = () => {
   const [tipo, setTipo] = useState('precio');
@@ -224,7 +224,7 @@ const ListasTarifarias = () => {
             type="button"
             onClick={crearLista}
             disabled={busy || !nuevaLista.trim()}
-            className="px-4 py-2 bg-[#FDE047] text-gray-800 font-semibold rounded-xl hover:bg-yellow-300 disabled:opacity-50 transition-colors text-sm whitespace-nowrap"
+            className="px-4 py-2 bg-marca-oro text-marca-grafito font-semibold rounded-xl hover:bg-marca-oro-oscuro disabled:opacity-50 transition-colors text-sm whitespace-nowrap"
           >
             + Crear lista
           </button>
@@ -275,7 +275,7 @@ const ListasTarifarias = () => {
                           type="button"
                           onClick={() => guardarNombre(lista.id)}
                           disabled={busy}
-                          className="text-xs px-2.5 py-1 bg-[#FDE047] text-gray-800 rounded-lg font-medium disabled:opacity-50"
+                          className="text-xs px-2.5 py-1 bg-marca-oro text-marca-grafito rounded-lg font-medium disabled:opacity-50"
                         >
                           Guardar
                         </button>
@@ -355,7 +355,7 @@ const ListasTarifarias = () => {
                               type="button"
                               onClick={() => aplicarBulk(lista.id, 'importe')}
                               disabled={busy || bulkImporte === ''}
-                              className="text-xs px-3 py-2 bg-[#FDE047] text-gray-800 rounded-lg font-medium disabled:opacity-50"
+                              className="text-xs px-3 py-2 bg-marca-oro text-marca-grafito rounded-lg font-medium disabled:opacity-50"
                             >
                               Aplicar
                             </button>
@@ -372,7 +372,7 @@ const ListasTarifarias = () => {
                               type="button"
                               onClick={() => aplicarBulk(lista.id, 'porcentaje')}
                               disabled={busy || bulkPct === ''}
-                              className="text-xs px-3 py-2 bg-[#FDE047] text-gray-800 rounded-lg font-medium disabled:opacity-50"
+                              className="text-xs px-3 py-2 bg-marca-oro text-marca-grafito rounded-lg font-medium disabled:opacity-50"
                             >
                               Aplicar %
                             </button>
