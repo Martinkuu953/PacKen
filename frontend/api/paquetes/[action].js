@@ -1,6 +1,7 @@
 import cambiarEstado from '../_lib/paquetes/cambiar-estado.js';
 import escanear from '../_lib/paquetes/escanear.js';
 import reasignar from '../_lib/paquetes/reasignar.js';
+import rezonificar from '../_lib/paquetes/rezonificar.js';
 import simularEntregas from '../_lib/paquetes/simular-entregas.js';
 import sincronizar from '../_lib/paquetes/sincronizar-ml.js';
 
@@ -12,6 +13,7 @@ const rutas = {
   'cambiar-estado': cambiarEstado,
   escanear,
   reasignar,
+  rezonificar,
   'simular-entregas': simularEntregas,
   sincronizar,
 };

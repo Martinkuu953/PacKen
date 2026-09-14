@@ -10,7 +10,7 @@ import { responderError } from '../errores.js';
 // Registra el barrio del envío en area_flex (si es nuevo, sin zona) y devuelve
 // la zona que la empresa le mapeó. Si no hay empresa, ni barrio, ni asignación,
 // cae en la zona General (id=1), que es el fallback histórico.
-async function resolverZonaYRegistrarArea(supabase, idEmpresa, envio) {
+export async function resolverZonaYRegistrarArea(supabase, idEmpresa, envio) {
   const ref = envio.barrioRef;
   if (idEmpresa == null || !ref) return 1;
 

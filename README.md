@@ -41,6 +41,7 @@ No hay `/health`: era del Express viejo, que ya no existe. El diagnóstico de la
 
 * **Login / registro / refresh / logout:** `POST /api/auth/login`, `/registro`, `/refresh`, `/logout`
 * **Listar / escanear / cambiar estado / reasignar / simular entregas paquetes:** `GET /api/paquetes`, `POST /api/paquetes/escanear`, `.../cambiar-estado`, `.../reasignar`, `.../simular-entregas`
+* **Recalcular la zona de paquetes ya cargados:** `POST /api/paquetes/rezonificar` (simula; `{"aplicar":true}` escribe)
 * **Sellers / Transportistas:** `GET|POST|DELETE /api/sellers`, `/api/transportistas`
 * **Listas de precios / costos:** `GET|POST|DELETE /api/precios`, `/api/costos`
 * **Liquidaciones:** `GET /api/liquidaciones` (transportistas + últimas 5), `POST /api/liquidaciones` (crear), `GET /api/liquidaciones?ids=...` (descargar el .xlsx), `GET /api/liquidaciones?ids=...&formato=json` (detalle para la vista previa)
@@ -65,6 +66,14 @@ Puesta en marcha, **en este orden**:
 3. Correr `backend/scripts/cron-sincronizar-ml.sql` en Supabase, con el mismo secreto.
 
 > El cron vive en Supabase (`pg_cron` + `pg_net`) y no en `vercel.json` porque el plan Hobby de Vercel solo permite una ejecución diaria de un cron job.
+
+## Rezonificar paquetes
+
+La zona de un paquete se resuelve una sola vez, al escanearlo, con el mapeo barrio→zona vigente en ese momento. Si después se crean zonas o se reasignan barrios, los paquetes viejos siguen apuntando a la zona vieja. `POST /api/paquetes/rezonificar` los vuelve a resolver contra el mapeo actual: le pregunta el barrio a ML por cada `idenvioml` (hay que volver a preguntarlo porque el barrio no se guarda en `paquete`, solo queda el `idzona`).
+
+Simula por defecto y devuelve qué cambiaría; recién con `{"aplicar": true}` escribe. Un barrio que no esté mapeado a ninguna zona **no** mueve el paquete: se reporta en `sinMapear` y el paquete queda como está. Mandarlo a `General` sería peor que no hacer nada, porque esa zona no puede tener tarifa —es la zona global, con `idempresa` NULL, y las listas solo siembran tarifas para las zonas de la empresa—, así que el paquete pasaría a liquidar en $0 sin avisar.
+
+El orden correcto es: mapear los barrios en "Establecer zonas", después rezonificar, y por último cargar la tarifa de esas zonas en la lista de costos de cada transportista.
 
 ## Liquidaciones
 
