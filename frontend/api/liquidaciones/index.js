@@ -7,8 +7,9 @@ import { generarXlsx, ESTILOS_XLSX } from '../_lib/xlsx.js';
 // /api/liquidaciones — lo que la empresa le paga a cada transportista por los
 // paquetes que entregó en un período.
 //
-//   GET                      → { transportistas, historial }  (panel)
-//   GET  ?ids=<uuid,uuid>    → el .xlsx de esas liquidaciones
+//   GET                             → { transportistas, historial }  (panel)
+//   GET  ?ids=<uuid,uuid>           → el .xlsx de esas liquidaciones
+//   GET  ?ids=<uuid>&formato=json   → su detalle, para la vista previa
 //   POST { transportistaIds, desde, hasta } → las crea y devuelve la vista previa
 //
 // El importe de cada paquete sale de la lista de COSTOS del transportista
@@ -239,7 +240,7 @@ async function crear(supabase, idempresa, req, res) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// GET ?ids= — descarga del .xlsx
+// GET ?ids= — una liquidación ya emitida, en JSON (vista previa) o .xlsx
 // ──────────────────────────────────────────────────────────────────────────
 const ENCABEZADOS = ['Dirección', 'Fecha de entrega', 'Seller', 'Zona', 'Envío ML', 'Precio'];
 const ANCHOS = [38, 16, 24, 14, 18, 14];
@@ -257,8 +258,10 @@ const formatearFecha = (valor) => {
     : fecha.toLocaleDateString('es-AR', { timeZone: ZONA_AR });
 };
 
-async function descargar(supabase, idempresa, req, res) {
-  const ids = String(req.query.ids ?? '')
+// Relee liquidaciones ya emitidas con su detalle. Lo comparten la vista previa
+// (JSON) y la descarga (.xlsx), para que las dos muestren exactamente lo mismo.
+async function traerLiquidaciones(supabase, idempresa, idsCrudos) {
+  const ids = String(idsCrudos ?? '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
@@ -285,20 +288,48 @@ async function descargar(supabase, idempresa, req, res) {
   const porLiquidacion = new Map(cabeceras.map((c) => [c.id, []]));
   for (const d of detalles) porLiquidacion.get(d.idliquidacion)?.push(d);
 
-  const hojas = cabeceras.map((c) => {
-    const lineas = porLiquidacion.get(c.id) ?? [];
+  return cabeceras.map((c) => ({
+    id: c.public_id,
+    transportista: c.transportista,
+    desde: c.desde,
+    hasta: c.hasta,
+    cantidad: c.cantidad,
+    total: Number(c.total),
+    creadaEn: c.created_at,
+    // numeric de Postgres llega como string: sin el Number() la vista previa
+    // sumaría concatenando.
+    lineas: (porLiquidacion.get(c.id) ?? []).map((l) => ({
+      idenvioml: l.idenvioml,
+      direccion: l.direccion,
+      fechaentrega: l.fechaentrega,
+      seller: l.seller,
+      zona: l.zona,
+      importe: Number(l.importe),
+    })),
+  }));
+}
+
+async function detallar(supabase, idempresa, req, res) {
+  const liquidaciones = await traerLiquidaciones(supabase, idempresa, req.query.ids);
+  return res.json({ liquidaciones });
+}
+
+async function descargar(supabase, idempresa, req, res) {
+  const liquidaciones = await traerLiquidaciones(supabase, idempresa, req.query.ids);
+
+  const hojas = liquidaciones.map((c) => {
     const filas = [
       [{ v: c.transportista, s: ESTILOS_XLSX.negrita }],
       [`Período: ${formatearFecha(c.desde)} al ${formatearFecha(c.hasta)}`],
       [],
       ENCABEZADOS.map((titulo) => ({ v: titulo, s: ESTILOS_XLSX.encabezado })),
-      ...lineas.map((l) => [
+      ...c.lineas.map((l) => [
         l.direccion ?? '—',
         formatearFecha(l.fechaentrega),
         l.seller ?? '—',
         l.zona ?? '—',
         l.idenvioml ?? '—',
-        { v: Number(l.importe), s: ESTILOS_XLSX.moneda },
+        { v: l.importe, s: ESTILOS_XLSX.moneda },
       ]),
       [],
       [
@@ -307,7 +338,7 @@ async function descargar(supabase, idempresa, req, res) {
         '',
         '',
         '',
-        { v: Number(c.total), s: ESTILOS_XLSX.monedaNegrita },
+        { v: c.total, s: ESTILOS_XLSX.monedaNegrita },
       ],
     ];
     return { nombre: c.transportista, columnas: ANCHOS, filas };
@@ -315,9 +346,9 @@ async function descargar(supabase, idempresa, req, res) {
 
   const archivo = generarXlsx(hojas);
   const nombre =
-    cabeceras.length === 1
-      ? `liquidacion-${cabeceras[0].transportista}-${cabeceras[0].desde}_${cabeceras[0].hasta}.xlsx`
-      : `liquidaciones-${cabeceras[0].desde}_${cabeceras[0].hasta}.xlsx`;
+    liquidaciones.length === 1
+      ? `liquidacion-${liquidaciones[0].transportista}-${liquidaciones[0].desde}_${liquidaciones[0].hasta}.xlsx`
+      : `liquidaciones-${liquidaciones[0].desde}_${liquidaciones[0].hasta}.xlsx`;
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   // El nombre del transportista puede traer acentos: filename* (RFC 5987) es
@@ -342,7 +373,11 @@ export default async function handler(req, res) {
   try {
     const supabase = getSupabase();
     if (req.method === 'POST') return await crear(supabase, usuario.id, req, res);
-    if (req.query?.ids) return await descargar(supabase, usuario.id, req, res);
+    if (req.query?.ids) {
+      return req.query.formato === 'json'
+        ? await detallar(supabase, usuario.id, req, res)
+        : await descargar(supabase, usuario.id, req, res);
+    }
     return await panel(supabase, usuario.id, res);
   } catch (err) {
     return responderError(res, err, 500, '/api/liquidaciones');

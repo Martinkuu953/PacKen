@@ -43,7 +43,7 @@ No hay `/health`: era del Express viejo, que ya no existe. El diagnóstico de la
 * **Listar / escanear / cambiar estado / reasignar / simular entregas paquetes:** `GET /api/paquetes`, `POST /api/paquetes/escanear`, `.../cambiar-estado`, `.../reasignar`, `.../simular-entregas`
 * **Sellers / Transportistas:** `GET|POST|DELETE /api/sellers`, `/api/transportistas`
 * **Listas de precios / costos:** `GET|POST|DELETE /api/precios`, `/api/costos`
-* **Liquidaciones:** `GET /api/liquidaciones` (transportistas + últimas 5), `POST /api/liquidaciones` (crear), `GET /api/liquidaciones?ids=...` (descargar el .xlsx)
+* **Liquidaciones:** `GET /api/liquidaciones` (transportistas + últimas 5), `POST /api/liquidaciones` (crear), `GET /api/liquidaciones?ids=...` (descargar el .xlsx), `GET /api/liquidaciones?ids=...&formato=json` (detalle para la vista previa)
 * **Conectar seller con Mercado Libre:** `GET /api/ml/conectar` (arranca el OAuth; el callback es `/api/ml/callback`)
 * **Consultar envío ML:** `GET /api/envios/:shipmentId?sellerId=...`
 * **Webhook de Mercado Libre (público):** `POST /api/webhooks/mercadolibre`

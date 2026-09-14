@@ -2,7 +2,14 @@ import { formatearFecha, formatearMonto } from '../utils/formato';
 
 // Vista previa de las liquidaciones recién creadas, con el mismo detalle que
 // sale en el Excel. Una sección por transportista.
-const PreviewLiquidacion = ({ liquidaciones, sinPaquetes = [], descargando, onDescargar, onVolver }) => {
+const PreviewLiquidacion = ({
+  liquidaciones,
+  sinPaquetes = [],
+  recienCreada = false,
+  descargando,
+  onDescargar,
+  onVolver,
+}) => {
   const totalGeneral = liquidaciones.reduce((suma, l) => suma + l.total, 0);
 
   return (
@@ -15,6 +22,11 @@ const PreviewLiquidacion = ({ liquidaciones, sinPaquetes = [], descargando, onDe
               ? `${liquidaciones[0].transportista} · ${formatearFecha(liquidaciones[0].desde)} al ${formatearFecha(liquidaciones[0].hasta)}`
               : `${liquidaciones.length} transportistas · ${formatearFecha(liquidaciones[0].desde)} al ${formatearFecha(liquidaciones[0].hasta)}`}
           </p>
+          {recienCreada && (
+            <p className="text-xs text-gray-400 mt-0.5">
+              Ya quedó guardada: podés descargar el Excel ahora o más tarde, desde "Ver últimas liquidaciones".
+            </p>
+          )}
         </div>
         <button
           type="button"

@@ -31,9 +31,14 @@ const Liquidaciones = () => {
 
   const [vista, setVista] = useState('seleccion');
   const [preview, setPreview] = useState(null);
+  // A dónde vuelve la vista previa: se llega a ella tanto al crear como al
+  // abrir una del historial, y el botón "Volver" tiene que deshacer el camino
+  // que se hizo.
+  const [volverA, setVolverA] = useState('seleccion');
   const [loading, setLoading] = useState(true);
   const [creando, setCreando] = useState(false);
   const [descargandoId, setDescargandoId] = useState(null);
+  const [abriendoId, setAbriendoId] = useState(null);
   const [error, setError] = useState('');
 
   const aplicar = useCallback((res) => {
@@ -89,6 +94,23 @@ const Liquidaciones = () => {
     }
   }, []);
 
+  // Abre una liquidación ya emitida con el mismo detalle que sale en el Excel,
+  // para poder mirarla sin bajar el archivo.
+  const verDetalle = async (liquidacion) => {
+    setAbriendoId(liquidacion.id);
+    setError('');
+    try {
+      const res = await apiFetch(`${ENDPOINT}?ids=${encodeURIComponent(liquidacion.id)}&formato=json`);
+      setPreview({ liquidaciones: res.liquidaciones, sinPaquetes: [] });
+      setVolverA('historial');
+      setVista('preview');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAbriendoId(null);
+    }
+  };
+
   const crear = async () => {
     setCreando(true);
     setError('');
@@ -98,11 +120,12 @@ const Liquidaciones = () => {
         body: JSON.stringify({ transportistaIds: [...seleccionados], desde, hasta }),
       });
       setPreview(res);
+      setVolverA('seleccion');
       setVista('preview');
       setSeleccionados(new Set());
-      // El Excel se baja solo al crear; el botón "Descargar" de la vista previa
-      // sirve para repetirlo si el navegador lo bloqueó o se cerró la pestaña.
-      await descargar(res.liquidaciones, 'preview');
+      // Sin descarga automática: primero se revisa la vista previa y el Excel
+      // sale solo si se aprieta "Descargar". Si no, quedan archivos tirados por
+      // cada liquidación que uno mira de paso.
       apiFetch(ENDPOINT).then(aplicar).catch(() => {});
     } catch (err) {
       setError(err.message);
@@ -122,9 +145,10 @@ const Liquidaciones = () => {
         <PreviewLiquidacion
           liquidaciones={preview.liquidaciones}
           sinPaquetes={preview.sinPaquetes}
+          recienCreada={volverA === 'seleccion'}
           descargando={descargandoId === 'preview'}
           onDescargar={() => descargar(preview.liquidaciones, 'preview')}
-          onVolver={() => setVista('seleccion')}
+          onVolver={() => setVista(volverA)}
         />
       </div>
     );
@@ -141,6 +165,8 @@ const Liquidaciones = () => {
         <HistorialLiquidaciones
           historial={historial}
           descargandoId={descargandoId}
+          abriendoId={abriendoId}
+          onVer={verDetalle}
           onDescargar={(liquidacion) => descargar([liquidacion], liquidacion.id)}
           onVolver={() => setVista('seleccion')}
         />
