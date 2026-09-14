@@ -11,10 +11,14 @@ import { ErrorPublico, responderError } from './errores.js';
 //   lista_zona_tarifa   → importe por (lista, zona)
 //   zona                → zonas de la empresa (Zona 1/2/3)
 //   area_flex           → barrios/municipios de Flex mapeados a una zona
+//   lista_area_zona     → mapeo barrio→zona propio de una lista
 //   seller.idlista / usuario.idlista_costo → lista de cada entidad
 //
-// Las zonas y las áreas son compartidas por precios y costos, así que solo el
-// endpoint de precios (manejaZonas = true) las administra; costos las lee.
+// Las zonas y el catálogo de barrios son de la empresa, así que solo el
+// endpoint de precios (manejaZonas = true) los administra; costos los lee. El
+// mapeo barrio→zona, en cambio, es de cada lista y lo edita cualquiera de los
+// dos (op asignarAreaLista): lo que una lista no defina cae en el default de
+// la empresa, que es area_flex.idzona.
 
 function parsearImporte(valor, campo, { permitirNegativo = false } = {}) {
   const numero = Number(valor);
@@ -130,9 +134,20 @@ async function listarZonas(supabase, idempresa) {
 // ──────────────────────────────────────────────────────────────────────────
 // GET
 // ──────────────────────────────────────────────────────────────────────────
-async function listar(supabase, idempresa, tipo, res, { incluirAreas }) {
+async function listar(supabase, idempresa, tipo, res) {
   const zonasRows = await listarZonas(supabase, idempresa);
   const zonaPublicById = new Map(zonasRows.map((z) => [z.id, z.public_id]));
+
+  // Los barrios los necesitan los dos tipos de lista: cada una agrupa los
+  // barrios en zonas a su manera. Antes solo los traía /api/precios, cuando el
+  // mapeo era uno solo para toda la empresa.
+  const { data: areasRows, error: eAreas } = await supabase
+    .from('area_flex')
+    .select('id, public_id, nombre, idzona')
+    .eq('idempresa', idempresa)
+    .order('nombre');
+  if (eAreas) throw new Error(eAreas.message);
+  const areaPublicById = new Map((areasRows ?? []).map((a) => [a.id, a.public_id]));
 
   const { data: listasRows, error: e1 } = await supabase
     .from('lista')
@@ -162,11 +177,33 @@ async function listar(supabase, idempresa, tipo, res, { incluirAreas }) {
     });
   }
 
+  // Mapeo barrio→zona propio de cada lista. Lo que no esté acá cae en el
+  // default de la empresa (area_flex.idzona), que administra /api/precios.
+  let areasRowsPorLista = [];
+  if (listaIds.length) {
+    const { data, error } = await supabase
+      .from('lista_area_zona')
+      .select('idlista, idarea, idzona')
+      .in('idlista', listaIds);
+    if (error) throw new Error(error.message);
+    areasRowsPorLista = data ?? [];
+  }
+
+  const areasPorLista = new Map();
+  for (const a of areasRowsPorLista) {
+    if (!areasPorLista.has(a.idlista)) areasPorLista.set(a.idlista, []);
+    areasPorLista.get(a.idlista).push({
+      areaId: areaPublicById.get(a.idarea) ?? null,
+      zonaId: zonaPublicById.get(a.idzona) ?? null,
+    });
+  }
+
   const listaPublicById = new Map((listasRows ?? []).map((l) => [l.id, l.public_id]));
   const listas = (listasRows ?? []).map((l) => ({
     id: l.public_id,
     nombre: l.nombre,
     tarifas: tarifasPorLista.get(l.id) ?? [],
+    areas: areasPorLista.get(l.id) ?? [],
   }));
 
   const entidadesRows = await ENTIDADES[tipo].listar(supabase, idempresa);
@@ -178,23 +215,15 @@ async function listar(supabase, idempresa, tipo, res, { incluirAreas }) {
 
   const zonas = zonasRows.map((z) => ({ id: z.public_id, nombre: z.nombre, orden: z.orden }));
 
-  const payload = { listas, zonas, entidades };
+  // `areas[].zonaId` es el default de la empresa; el override de cada lista va
+  // en `listas[].areas`.
+  const areas = (areasRows ?? []).map((a) => ({
+    id: a.public_id,
+    nombre: a.nombre,
+    zonaId: a.idzona ? zonaPublicById.get(a.idzona) ?? null : null,
+  }));
 
-  if (incluirAreas) {
-    const { data: areasRows, error } = await supabase
-      .from('area_flex')
-      .select('public_id, nombre, idzona')
-      .eq('idempresa', idempresa)
-      .order('nombre');
-    if (error) throw new Error(error.message);
-    payload.areas = (areasRows ?? []).map((a) => ({
-      id: a.public_id,
-      nombre: a.nombre,
-      zonaId: a.idzona ? zonaPublicById.get(a.idzona) ?? null : null,
-    }));
-  }
-
-  return res.json(payload);
+  return res.json({ listas, zonas, entidades, areas });
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -297,6 +326,40 @@ async function asignarEntidad(supabase, idempresa, tipo, body, res) {
   }
 
   await ENTIDADES[tipo].asignar(supabase, entidadInternalId, listaInternalId);
+  return res.json({ ok: true });
+}
+
+// Asigna un barrio a una zona DENTRO de una lista. zonaId null borra el
+// override y el barrio vuelve a seguir el default de la empresa.
+async function asignarAreaLista(supabase, idempresa, tipo, body, res) {
+  const idlista = await resolverLista(supabase, idempresa, tipo, body.listaId);
+  if (!idlista) return res.status(404).json({ error: 'Lista no encontrada' });
+
+  const { data: area } = await supabase
+    .from('area_flex')
+    .select('id')
+    .eq('public_id', body.areaId)
+    .eq('idempresa', idempresa)
+    .maybeSingle();
+  if (!area) return res.status(404).json({ error: 'Área no encontrada' });
+
+  if (!body.zonaId) {
+    const { error } = await supabase
+      .from('lista_area_zona')
+      .delete()
+      .eq('idlista', idlista)
+      .eq('idarea', area.id);
+    if (error) throw new Error(error.message);
+    return res.json({ ok: true });
+  }
+
+  const idzona = await resolverZona(supabase, idempresa, body.zonaId);
+  if (!idzona) return res.status(404).json({ error: 'Zona no encontrada' });
+
+  const { error } = await supabase
+    .from('lista_area_zona')
+    .upsert({ idlista, idarea: area.id, idzona, updated_at: ahora() }, { onConflict: 'idlista,idarea' });
+  if (error) throw new Error(error.message);
   return res.json({ ok: true });
 }
 
@@ -417,6 +480,8 @@ async function guardar(supabase, idempresa, tipo, req, res, { manejaZonas }) {
       return setTarifasBulk(supabase, idempresa, tipo, body, res);
     case 'asignarEntidad':
       return asignarEntidad(supabase, idempresa, tipo, body, res);
+    case 'asignarAreaLista':
+      return asignarAreaLista(supabase, idempresa, tipo, body, res);
     default:
       break;
   }
@@ -474,7 +539,7 @@ export async function manejarListas(req, res, tipo) {
     const supabase = getSupabase();
     const idempresa = usuario.id;
 
-    if (req.method === 'GET') return await listar(supabase, idempresa, tipo, res, { incluirAreas: manejaZonas });
+    if (req.method === 'GET') return await listar(supabase, idempresa, tipo, res);
     if (req.method === 'POST') return await guardar(supabase, idempresa, tipo, req, res, { manejaZonas });
     if (req.method === 'DELETE') return await borrar(supabase, idempresa, tipo, req, res);
 

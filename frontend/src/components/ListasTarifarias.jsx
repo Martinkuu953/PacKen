@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../services/api';
 import Buscador from './Buscador';
+import MapeoBarriosLista from './MapeoBarriosLista';
 import { filtrarPorTexto } from '../utils/busqueda';
 
 // Pantalla única de tarifas con toggle Sellers / Transportistas.
 //   - Sellers        → /api/precios (lo que se le cobra a cada seller)
 //   - Transportistas → /api/costos  (lo que se le paga a cada transportista)
-// Las listas tienen un importe por zona y se les asignan sellers/transportistas.
-// El mapeo barrio→zona se hace en la pantalla "Establecer Zonas".
+//
+// Cada lista define dos cosas: cuánto vale cada zona, y qué barrios caen en
+// cada zona. Lo segundo es por lista porque el mismo barrio puede ser Zona 1
+// para un seller y Zona 2 para otro; lo que una lista no defina cae en el
+// default de la empresa, que se administra en "Establecer Zonas".
 
 const CONFIG = {
   precio: {
@@ -33,6 +37,7 @@ const ListasTarifarias = () => {
 
   const [listas, setListas] = useState([]);
   const [zonas, setZonas] = useState([]);
+  const [areas, setAreas] = useState([]);
   const [entidades, setEntidades] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -57,6 +62,7 @@ const ListasTarifarias = () => {
       const res = await apiFetch(CONFIG[t].endpoint);
       setListas(res.listas ?? []);
       setZonas(res.zonas ?? []);
+      setAreas(res.areas ?? []);
       setEntidades(res.entidades ?? []);
       setError('');
     } catch (err) {
@@ -410,6 +416,22 @@ const ListasTarifarias = () => {
                             })}
                           </div>
                         )}
+                      </div>
+
+                      {/* Barrios de esta lista */}
+                      <div>
+                        <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">
+                          Barrios y municipios en esta lista
+                        </h4>
+                        <MapeoBarriosLista
+                          lista={lista}
+                          areas={areas}
+                          zonas={zonas}
+                          busy={busy}
+                          onAsignar={(areaId, zonaId) =>
+                            ejecutar({ op: 'asignarAreaLista', listaId: lista.id, areaId, zonaId })
+                          }
+                        />
                       </div>
 
                       {/* Entidades asignadas */}

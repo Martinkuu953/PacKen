@@ -44,7 +44,7 @@ async function enPool(items, limite, tarea) {
 export async function rezonificarPaquetes(supabase, idEmpresa, { aplicar = false } = {}) {
   const { data: paquetes, error } = await supabase
     .from('paquete')
-    .select('id, idenvioml, idseller, idzona')
+    .select('id, idenvioml, idseller, idarea, idzona')
     .eq('idempresa', idEmpresa)
     .not('idenvioml', 'is', null)
     .not('idseller', 'is', null)
@@ -55,6 +55,7 @@ export async function rezonificarPaquetes(supabase, idEmpresa, { aplicar = false
   const stats = {
     revisados: paquetes?.length ?? 0,
     cambiados: 0,
+    barriosCompletados: 0,
     sinCambio: 0,
     errores: 0,
     cambios: [],
@@ -109,10 +110,24 @@ export async function rezonificarPaquetes(supabase, idEmpresa, { aplicar = false
 
         const { data: area } = await supabase
           .from('area_flex')
-          .select('idzona')
+          .select('id, idzona')
           .eq('idempresa', idEmpresa)
           .eq('ml_ref', envio.barrioRef)
           .maybeSingle();
+
+        // El barrio se guarda aunque todavía no tenga zona: es lo que permite
+        // recalcular después sin volver a llamar a ML, y lo que necesita el
+        // mapeo por lista para resolver la zona de cada lado.
+        if (area?.id && area.id !== paquete.idarea) {
+          if (aplicar) {
+            const { error: errArea } = await supabase
+              .from('paquete')
+              .update({ idarea: area.id })
+              .eq('id', paquete.id);
+            if (errArea) throw new Error(errArea.message);
+          }
+          stats.barriosCompletados += 1;
+        }
 
         if (!area?.idzona) {
           // Barrio sin mapear: no se toca el paquete, solo se reporta.

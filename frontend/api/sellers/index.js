@@ -1,6 +1,7 @@
 import { getSupabase } from '../_lib/ml.js';
 import { autenticar, requiereRol } from '../_lib/auth.js';
 import { responderError } from '../_lib/errores.js';
+import { cargarResolutorZonas } from '../_lib/zonas.js';
 
 // GET /api/sellers — un seller por fila con sus paquetes agrupados por
 // estado y el monto facturado (entregados), todo calculado en el momento a
@@ -123,7 +124,7 @@ export default async function handler(req, res) {
 
     const [sellers, paquetes, listas] = await Promise.all([
       supabase.from('seller').select('id, public_id, nombre, idlista').eq('idempresa', idempresa).order('nombre'),
-      supabase.from('paquete').select('idseller, idzona, estado').eq('idempresa', idempresa),
+      supabase.from('paquete').select('idseller, idarea, idzona, estado').eq('idempresa', idempresa),
       supabase.from('lista').select('id').eq('idempresa', idempresa).eq('tipo', 'precio'),
     ]);
 
@@ -149,6 +150,10 @@ export default async function handler(req, res) {
     );
     const listaPorSeller = new Map((sellers.data ?? []).map((s) => [s.id, s.idlista]));
 
+    // La zona sale del barrio del paquete leído con la lista de ESE seller: el
+    // mismo barrio puede caer en zonas distintas según la lista.
+    const zonaDe = await cargarResolutorZonas(supabase, idempresa, listaIds);
+
     const resumenPorSeller = new Map();
     for (const p of paquetes.data ?? []) {
       if (!resumenPorSeller.has(p.idseller)) resumenPorSeller.set(p.idseller, resumenVacio());
@@ -157,7 +162,10 @@ export default async function handler(req, res) {
 
       if (normalizarEstado(p.estado).includes('entregad')) {
         const idlista = listaPorSeller.get(p.idseller);
-        if (idlista) resumen.monto += tarifaPorListaZona.get(`${idlista}-${p.idzona}`) ?? 0;
+        if (idlista) {
+          const idzona = zonaDe(idlista, p.idarea, p.idzona);
+          resumen.monto += tarifaPorListaZona.get(`${idlista}-${idzona}`) ?? 0;
+        }
       }
     }
 

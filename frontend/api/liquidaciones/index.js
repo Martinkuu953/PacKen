@@ -3,6 +3,7 @@ import { autenticar, requiereRol } from '../_lib/auth.js';
 import { ErrorPublico, responderError } from '../_lib/errores.js';
 import { canonizarEstado, ESTADOS } from '../../shared/estados.js';
 import { generarXlsx, ESTILOS_XLSX } from '../_lib/xlsx.js';
+import { cargarResolutorZonas } from '../_lib/zonas.js';
 
 // /api/liquidaciones — lo que la empresa le paga a cada transportista por los
 // paquetes que entregó en un período.
@@ -154,7 +155,7 @@ async function crear(supabase, idempresa, req, res) {
   const paquetes = await traerTodo(() =>
     supabase
       .from('paquete')
-      .select('id, idenvioml, direccion, fechaentrega, estado, idzona, idseller, idtransportista')
+      .select('id, idenvioml, direccion, fechaentrega, estado, idarea, idzona, idseller, idtransportista')
       .eq('idempresa', idempresa)
       .in('idtransportista', filas.map((t) => t.id))
       .gte('fechaentrega', `${desde}T00:00:00.000${OFFSET_AR}`)
@@ -168,9 +169,19 @@ async function crear(supabase, idempresa, req, res) {
   // en /api/paquetes.
   const entregados = paquetes.filter((p) => canonizarEstado(p.estado) === ESTADOS.ENTREGADO);
 
+  // La zona del paquete se resuelve contra la lista de costos del transportista:
+  // el mismo barrio puede caer en zonas distintas según la lista.
+  const zonaDe = await cargarResolutorZonas(supabase, idempresa, idsListas);
+  const zonaPorPaquete = new Map(
+    entregados.map((p) => {
+      const t = filas.find((f) => f.id === p.idtransportista);
+      return [p.id, zonaDe(t?.idlista_costo, p.idarea, p.idzona)];
+    }),
+  );
+
   const unicos = (campo) => [...new Set(entregados.map((p) => p[campo]).filter(Boolean))];
   const [zonas, sellers] = await Promise.all([
-    buscarPor(supabase, 'zona', 'id, nombre', unicos('idzona')),
+    buscarPor(supabase, 'zona', 'id, nombre', [...new Set([...zonaPorPaquete.values()].filter(Boolean))]),
     buscarPor(supabase, 'seller', 'id, nombre', unicos('idseller')),
   ]);
 
@@ -184,16 +195,19 @@ async function crear(supabase, idempresa, req, res) {
       continue;
     }
 
-    const lineas = propios.map((p) => ({
-      idenvioml: p.idenvioml ?? null,
-      direccion: p.direccion ?? null,
-      fechaentrega: p.fechaentrega,
-      seller: sellers.get(p.idseller)?.nombre ?? null,
-      zona: zonas.get(p.idzona)?.nombre ?? null,
-      // Sin tarifa cargada para esa zona el paquete vale 0 y queda visible en
-      // la planilla, que es más útil que abortar toda la liquidación.
-      importe: tarifas.get(`${transportista.idlista_costo}:${p.idzona}`) ?? 0,
-    }));
+    const lineas = propios.map((p) => {
+      const idzona = zonaPorPaquete.get(p.id);
+      return {
+        idenvioml: p.idenvioml ?? null,
+        direccion: p.direccion ?? null,
+        fechaentrega: p.fechaentrega,
+        seller: sellers.get(p.idseller)?.nombre ?? null,
+        zona: zonas.get(idzona)?.nombre ?? null,
+        // Sin tarifa cargada para esa zona el paquete vale 0 y queda visible en
+        // la planilla, que es más útil que abortar toda la liquidación.
+        importe: tarifas.get(`${transportista.idlista_costo}:${idzona}`) ?? 0,
+      };
+    });
 
     const total = redondear(lineas.reduce((suma, l) => suma + l.importe, 0));
 

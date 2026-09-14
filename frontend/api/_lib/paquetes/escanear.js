@@ -8,11 +8,20 @@ import { autenticar } from '../auth.js';
 import { responderError } from '../errores.js';
 
 // Registra el barrio del envío en area_flex (si es nuevo, sin zona) y devuelve
-// la zona que la empresa le mapeó. Si no hay empresa, ni barrio, ni asignación,
-// cae en la zona General (id=1), que es el fallback histórico.
+// { idarea, idzona }.
+//
+// idarea es lo que importa de acá en adelante: con el mapeo barrio→zona por
+// lista, un paquete tiene una zona distinta según se lo mire desde la lista del
+// seller o la del transportista, así que la zona no se puede congelar. El
+// barrio sí, y de él se derivan las dos.
+//
+// idzona se sigue guardando como el default de la empresa al momento del
+// escaneo: es lo que se muestra en los listados y la red para los paquetes
+// viejos. Si no hay empresa, ni barrio, ni asignación, cae en la zona General
+// (id=1), que es el fallback histórico.
 export async function resolverZonaYRegistrarArea(supabase, idEmpresa, envio) {
   const ref = envio.barrioRef;
-  if (idEmpresa == null || !ref) return 1;
+  if (idEmpresa == null || !ref) return { idarea: null, idzona: 1 };
 
   // ignoreDuplicates: si el barrio ya existe no lo pisamos (preserva su zona).
   await supabase
@@ -24,12 +33,12 @@ export async function resolverZonaYRegistrarArea(supabase, idEmpresa, envio) {
 
   const { data } = await supabase
     .from('area_flex')
-    .select('idzona')
+    .select('id, idzona')
     .eq('idempresa', idEmpresa)
     .eq('ml_ref', ref)
     .maybeSingle();
 
-  return data?.idzona ?? 1;
+  return { idarea: data?.id ?? null, idzona: data?.idzona ?? 1 };
 }
 
 // POST /api/paquetes/escanear  { shipmentId, sellerId, tipo }
@@ -107,14 +116,15 @@ export default async function handler(req, res) {
     // Zona por el barrio/municipio del envío (mapeo barrio→zona de la empresa).
     // Para un paquete ya existente usamos su empresa; si no, la del escaneo.
     const idEmpresaPaquete = existente?.idempresa ?? idEmpresa;
-    const idzonaResuelta = await resolverZonaYRegistrarArea(supabase, idEmpresaPaquete, envio);
+    const { idarea, idzona } = await resolverZonaYRegistrarArea(supabase, idEmpresaPaquete, envio);
 
     const paqueteData = {
       comprador: envio.comprador,
       direccion: envio.direccion,
       estado,
       codigopostal: envio.codigoPostal,
-      idzona: idzonaResuelta,
+      idarea,
+      idzona,
       fechaentrega: estado === 'Entregado' ? envio.fechaEntrega : null,
     };
 

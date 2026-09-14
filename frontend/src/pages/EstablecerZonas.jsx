@@ -3,10 +3,14 @@ import { apiFetch } from '../services/api';
 import Buscador from '../components/Buscador';
 import { filtrarPorTexto } from '../utils/busqueda';
 
-// "Establecer Zonas": la empresa decide a qué zona (1/2/3...) pertenece cada
-// barrio/municipio que trae Mercado Flex. Se guarda al instante. Los barrios se
-// pueblan al escanear paquetes y/o con "Sincronizar barrios de Flex".
-// Usa /api/precios porque zonas y áreas son compartidas por precios y costos.
+// "Establecer Zonas": la zona POR DEFECTO de cada barrio/municipio que trae
+// Mercado Flex, para toda la empresa. Cada lista de precios/costos puede
+// definir la suya para los barrios que haya negociado distinto (ver
+// MapeoBarriosLista); lo que no defina, cae acá.
+//
+// Se guarda al instante. Los barrios se pueblan al escanear paquetes y/o con
+// "Sincronizar barrios de Flex".
+// Usa /api/precios porque zonas y áreas son de la empresa, no de una lista.
 
 const ENDPOINT = '/api/precios';
 
@@ -127,9 +131,12 @@ const EstablecerZonas = () => {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-800 text-center">Establecer Zonas</h2>
         <p className="text-xs text-gray-500 text-center mt-1">
-          Seleccioná la zona correspondiente a cada barrio/municipio.
+          Zona por defecto de cada barrio/municipio para toda la empresa.
         </p>
-        <p className="text-xs text-gray-400 text-center mb-4">(Se guarda automáticamente)</p>
+        <p className="text-xs text-gray-400 text-center mb-4">
+          Cada lista de precios/costos puede pisar esto para los barrios que haya negociado
+          distinto. (Se guarda automáticamente)
+        </p>
 
         {error && (
           <p className="mb-4 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-2">
