@@ -10,11 +10,16 @@ const Layout = ({ children }) => {
       <Sidebar abierto={sidebarAbierto} onCerrar={() => setSidebarAbierto(false)} />
 
       <div className="flex-1 lg:ml-64 flex flex-col">
-        {/* Header solo visible en mobile/tablet: botón a la izquierda, logo centrado */}
-        <header className="lg:hidden grid grid-cols-3 items-center bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-20">
+        {/* Header solo visible en mobile/tablet: botón a la izquierda, logo centrado.
+            Va en el mismo amarillo que el sidebar: con el header blanco, la app
+            se veía de un color en el celular y de otro en la compu.
+            Las columnas de los costados son 1fr y la del medio auto, para que
+            el logo ocupe su ancho natural en vez de que lo apriete un tercio
+            fijo de pantalla y se achate. */}
+        <header className="lg:hidden grid grid-cols-[1fr_auto_1fr] items-center bg-marca-amarillo border-b border-marca-oro/25 px-4 py-3 sticky top-0 z-20">
           <button
             onClick={() => setSidebarAbierto(true)}
-            className="text-gray-700 hover:text-gray-900 p-2 justify-self-start"
+            className="text-marca-grafito/70 hover:text-marca-grafito p-2 justify-self-start"
             aria-label="Abrir menú"
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

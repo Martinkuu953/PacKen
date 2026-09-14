@@ -177,24 +177,31 @@ const Liquidaciones = () => {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-          <div>
+        {/* Nada de montar y desmontar segun la seleccion: en el celular cada
+            aparicion empujaba la lista y el dedo terminaba tocando otra fila.
+            "Deseleccionar" siempre esta, deshabilitado cuando no hay nada. */}
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="min-w-0">
             <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Liquidaciones</h2>
             <p className="text-sm text-gray-500 mt-1">
-              {loading
-                ? 'Cargando...'
-                : `${seleccionados.size} de ${transportistas.length} transportista${transportistas.length === 1 ? '' : 's'} seleccionado${seleccionados.size === 1 ? '' : 's'}`}
+              {/* Texto corto y de largo parejo: el anterior cambiaba de
+                  singular a plural y en el celular pasaba de una linea a dos,
+                  corriendo toda la lista de abajo. */}
+              {loading ? 'Cargando...' : `${seleccionados.size} de ${transportistas.length} seleccionados`}
             </p>
           </div>
-          {seleccionados.size > 0 && (
-            <button
-              type="button"
-              onClick={() => setSeleccionados(new Set())}
-              className="text-xs sm:text-sm px-3 py-1.5 bg-red-100 text-red-700 border border-red-200 rounded-lg hover:bg-red-200 transition-colors duration-150 font-medium"
-            >
-              Deseleccionar
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setSeleccionados(new Set())}
+            disabled={seleccionados.size === 0}
+            className={`shrink-0 text-xs sm:text-sm px-3 py-1.5 rounded-lg border transition-colors duration-150 font-medium ${
+              seleccionados.size === 0
+                ? 'bg-gray-50 text-gray-300 border-gray-200 cursor-not-allowed'
+                : 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200'
+            }`}
+          >
+            Deseleccionar
+          </button>
         </div>
 
         {error && (
@@ -315,11 +322,13 @@ const Liquidaciones = () => {
           </button>
         </div>
 
-        {seleccionados.size > 0 && (!desde || !hasta) && (
-          <p className="mt-3 text-center text-xs text-gray-500">
-            Elegí un rango de fechas para poder crear la liquidación.
-          </p>
-        )}
+        {/* La ayuda siempre ocupa su lugar aunque este vacia, para que aparecer
+            y desaparecer no mueva los botones de arriba. */}
+        <p className="mt-3 min-h-4 text-center text-xs text-gray-500">
+          {seleccionados.size > 0 && (!desde || !hasta)
+            ? 'Elegí un rango de fechas para poder crear la liquidación.'
+            : ''}
+        </p>
       </div>
     </div>
   );
