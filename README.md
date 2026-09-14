@@ -44,7 +44,7 @@ No hay `/health`: era del Express viejo, que ya no existe. El diagnóstico de la
 * **Recalcular la zona de paquetes ya cargados:** `POST /api/paquetes/rezonificar` (simula; `{"aplicar":true}` escribe)
 * **Sellers / Transportistas:** `GET|POST|DELETE /api/sellers`, `/api/transportistas`
 * **Listas de precios / costos:** `GET|POST|DELETE /api/precios`, `/api/costos`
-* **Liquidaciones:** `GET /api/liquidaciones` (transportistas + últimas 5), `POST /api/liquidaciones` (crear), `GET /api/liquidaciones?ids=...` (descargar el .xlsx), `GET /api/liquidaciones?ids=...&formato=json` (detalle para la vista previa)
+* **Liquidaciones:** `GET /api/liquidaciones` (transportistas liquidables), `GET /api/liquidaciones?transportistaIds=...` (+ las últimas 5 de cada uno), `POST /api/liquidaciones` (crear), `GET /api/liquidaciones?ids=...` (descargar el .xlsx), `GET /api/liquidaciones?ids=...&modo=separado` (un .zip con un .xlsx por liquidación), `GET /api/liquidaciones?ids=...&formato=json` (detalle para la vista previa)
 * **Conectar seller con Mercado Libre:** `GET /api/ml/conectar` (arranca el OAuth; el callback es `/api/ml/callback`)
 * **Consultar envío ML:** `GET /api/envios/:shipmentId?sellerId=...`
 * **Webhook de Mercado Libre (público):** `POST /api/webhooks/mercadolibre`
@@ -75,13 +75,17 @@ Simula por defecto y devuelve qué cambiaría; recién con `{"aplicar": true}` e
 
 El orden correcto es: mapear los barrios en "Establecer zonas", después rezonificar, y por último cargar la tarifa de esas zonas en la lista de costos de cada transportista.
 
+Rezonificar también completa `paquete.idarea` cuando falta, y de ahí sale el **partido** que lista la pantalla de Paquetes (`area_flex.nombre`: "Belgrano", "Villa Soldati"). Un paquete escaneado antes de que existiera esa columna no tiene barrio guardado y aparece con "—" hasta que se lo rezonifique.
+
 ## Liquidaciones
 
 Lo que la empresa le paga a cada transportista. Se elige uno o varios transportistas y un rango de fechas, y se liquidan los paquetes **entregados** en ese período: el importe de cada uno sale de la lista de costos del transportista (`usuario.idlista_costo`) cruzada con la zona del paquete. Un transportista sin lista asignada no se puede liquidar, porque no habría con qué calcular.
 
 El detalle se guarda congelado en `liquidacion_detalle` (dirección, seller, zona e importe) en vez de recalcularse al descargar: las tarifas y las zonas cambian con el tiempo, y una liquidación vieja tiene que poder reimprimirse igual que el día que se emitió.
 
-El `.xlsx` lo arma `api/_lib/xlsx.js`, un generador mínimo de OOXML sin dependencias (una hoja por transportista). El rango usa el huso de Argentina, no UTC: un paquete entregado 21:30 del último día del período es 00:30 del día siguiente en UTC y se caía al período que viene.
+El historial es **las últimas 5 de cada transportista**, no las últimas 5 de la empresa: con una flota de varios, las cinco últimas de toda la empresa podían ser todas del mismo. Por eso hay que elegir primero de quién se quiere ver (`?transportistaIds=`) y el panel arranca sin historial. Una liquidación cuyo transportista se dio de baja (`idtransportista` quedó NULL) no aparece en ningún historial: sigue en la base, pero ya no hay a quién elegir para llegar a ella.
+
+El `.xlsx` lo arma `api/_lib/xlsx.js`, un generador mínimo de OOXML sin dependencias. Con varios transportistas se puede bajar todo en un libro (una hoja por transportista), un archivo por transportista dentro de un `.zip` (`&modo=separado`, para mandarle a cada uno el suyo sin que vea lo que cobran los demás) o solo la de uno. El `.zip` lo arma el mismo ZIP que envuelve al `.xlsx`, reusado: el navegador bloquea las descargas múltiples disparadas de a una. El rango usa el huso de Argentina, no UTC: un paquete entregado 21:30 del último día del período es 00:30 del día siguiente en UTC y se caía al período que viene.
 
 Antes de usar la pantalla hay que correr `backend/scripts/migration-liquidaciones.sql` en Supabase.
 

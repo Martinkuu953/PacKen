@@ -36,7 +36,10 @@ function armarZip(archivos) {
   let offset = 0;
 
   for (const { nombre, contenido } of archivos) {
-    const crudo = Buffer.from(contenido, 'utf8');
+    // El contenido puede ser XML (las partes del .xlsx) o un archivo ya armado
+    // (un .xlsx entero, cuando lo que se empaqueta es el .zip de varias
+    // liquidaciones sueltas).
+    const crudo = Buffer.isBuffer(contenido) ? contenido : Buffer.from(contenido, 'utf8');
     const comprimido = deflateRawSync(crudo);
     const nombreBuf = Buffer.from(nombre, 'utf8');
     const crc = crc32(crudo);
@@ -280,6 +283,19 @@ export function generarXlsx(hojas) {
     })),
   ];
 
+  return armarZip(archivos);
+}
+
+/**
+ * Empaqueta varios archivos ya armados en un .zip y lo devuelve como Buffer.
+ *
+ * Cada archivo es `{ nombre, contenido }`, con el contenido como Buffer o texto.
+ * Es el mismo ZIP que envuelve a un .xlsx, reusado para bajar una liquidación
+ * por transportista en una sola descarga: el navegador bloquea las descargas
+ * múltiples disparadas de a una.
+ */
+export function generarZip(archivos) {
+  if (!archivos?.length) throw new Error('generarZip: se necesita al menos un archivo');
   return armarZip(archivos);
 }
 

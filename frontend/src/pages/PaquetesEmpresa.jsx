@@ -14,7 +14,9 @@ const COLUMNAS = [
   { campo: 'comprador', label: 'Comprador' },
   { campo: 'direccion', label: 'Dirección' },
   { campo: 'codigopostal', label: 'CP' },
-  { campo: 'zona', label: 'Zona' },
+  // El partido y no la zona: el partido es lo que se reconoce de una dirección,
+  // y la zona es una agrupación tarifaria que además cambia según la lista.
+  { campo: 'partido', label: 'Partido' },
   { campo: 'seller', label: 'Seller' },
   { campo: 'fechaingreso', label: 'Ingreso' },
   { campo: 'estado', label: 'Estado' },
@@ -22,7 +24,7 @@ const COLUMNAS = [
   { campo: 'acciones', label: '' },
 ];
 
-const CAMPOS_BUSQUEDA = ['idenvioml', 'comprador', 'direccion', 'codigopostal', 'zona', 'seller'];
+const CAMPOS_BUSQUEDA = ['idenvioml', 'comprador', 'direccion', 'codigopostal', 'partido', 'seller'];
 
 const ORDENABLES = COLUMNAS.filter((c) => c.campo !== 'acciones');
 
@@ -80,7 +82,7 @@ const TarjetaPaquete = ({ paquete, transportistas, ocupado, onReasignar, onEntre
 
     <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
       <span className="font-mono">{paquete.idenvioml}</span>
-      <span>Zona: <span className="text-gray-700">{paquete.zona || '—'}</span></span>
+      <span>Partido: <span className="text-gray-700">{paquete.partido || '—'}</span></span>
       <span>Seller: <span className="text-gray-700">{paquete.seller || '—'}</span></span>
       <span>Ingreso: <span className="text-gray-700">{formatearFecha(paquete.fechaingreso)}</span></span>
     </div>
@@ -210,7 +212,7 @@ const PaquetesEmpresa = () => {
         <Buscador
           valor={busqueda}
           onChange={setBusqueda}
-          placeholder="Buscar por ID, comprador, dirección, CP, zona o seller..."
+          placeholder="Buscar por ID, comprador, dirección, CP, partido o seller..."
           resultados={paquetesBuscados.length}
           total={paquetes.length}
         />
@@ -306,7 +308,7 @@ const PaquetesEmpresa = () => {
                     <td className="py-2 px-2 text-gray-700">{paquete.comprador || '—'}</td>
                     <td className="py-2 px-2 text-gray-600 truncate max-w-[14rem]">{paquete.direccion}</td>
                     <td className="py-2 px-2 text-gray-600">{paquete.codigopostal || '—'}</td>
-                    <td className="py-2 px-2 text-gray-600">{paquete.zona || '—'}</td>
+                    <td className="py-2 px-2 text-gray-600">{paquete.partido || '—'}</td>
                     <td className="py-2 px-2 text-gray-600">{paquete.seller || '—'}</td>
                     <td className="py-2 px-2 text-gray-600 whitespace-nowrap">
                       {formatearFecha(paquete.fechaingreso)}

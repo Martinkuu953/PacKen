@@ -13,12 +13,15 @@ const INPUT_FECHA =
 
 // El nombre del transportista puede traer espacios o acentos: los navegadores
 // los aceptan, pero conviene un nombre de archivo parejo y sin barras.
-const nombreArchivo = (liquidaciones) => {
+const nombreArchivo = (liquidaciones, separado) => {
   const base =
     liquidaciones.length === 1
       ? `liquidacion-${liquidaciones[0].transportista}-${liquidaciones[0].desde}_${liquidaciones[0].hasta}`
       : `liquidaciones-${liquidaciones[0].desde}_${liquidaciones[0].hasta}`;
-  return `${base.replace(/[^\w\-.]+/g, '-')}.xlsx`;
+  // El .zip solo tiene sentido con más de una: una sola siempre baja como .xlsx,
+  // igual que decide el servidor.
+  const extension = separado && liquidaciones.length > 1 ? 'zip' : 'xlsx';
+  return `${base.replace(/[^\w\-.]+/g, '-')}.${extension}`;
 };
 
 const Liquidaciones = () => {
@@ -31,26 +34,25 @@ const Liquidaciones = () => {
 
   const [vista, setVista] = useState('seleccion');
   const [preview, setPreview] = useState(null);
+  // De quiénes es el historial que se está mirando: se congela al entrar, para
+  // que el encabezado no cambie si después se toca la selección.
+  const [historialDe, setHistorialDe] = useState([]);
   // A dónde vuelve la vista previa: se llega a ella tanto al crear como al
   // abrir una del historial, y el botón "Volver" tiene que deshacer el camino
   // que se hizo.
   const [volverA, setVolverA] = useState('seleccion');
   const [loading, setLoading] = useState(true);
   const [creando, setCreando] = useState(false);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
   const [descargandoId, setDescargandoId] = useState(null);
   const [abriendoId, setAbriendoId] = useState(null);
   const [error, setError] = useState('');
-
-  const aplicar = useCallback((res) => {
-    setTransportistas(res.transportistas ?? []);
-    setHistorial(res.historial ?? []);
-  }, []);
 
   useEffect(() => {
     let cancelado = false;
     apiFetch(ENDPOINT)
       .then((res) => {
-        if (!cancelado) aplicar(res);
+        if (!cancelado) setTransportistas(res.transportistas ?? []);
       })
       .catch((err) => {
         if (!cancelado) setError(err.message);
@@ -62,7 +64,7 @@ const Liquidaciones = () => {
     return () => {
       cancelado = true;
     };
-  }, [aplicar]);
+  }, []);
 
   const encontrados = useMemo(
     () => filtrarPorTexto(transportistas, busqueda, CAMPOS_BUSQUEDA),
@@ -81,18 +83,56 @@ const Liquidaciones = () => {
 
   const puedeCrear = seleccionados.size > 0 && desde !== '' && hasta !== '' && !creando;
 
-  const descargar = useCallback(async (liquidaciones, id) => {
-    setDescargandoId(id);
+  // `clave` es lo que se marca como "descargando" en la UI ('unico',
+  // 'separado' o el id de una liquidación), y `separado` decide si el servidor
+  // manda un Excel con todas o un .zip con una por transportista.
+  const descargar = useCallback(async (liquidaciones, clave, separado = false) => {
+    setDescargandoId(clave);
     setError('');
     try {
       const ids = liquidaciones.map((l) => l.id).join(',');
-      await apiDescargar(`${ENDPOINT}?ids=${encodeURIComponent(ids)}`, nombreArchivo(liquidaciones));
+      const modo = separado && liquidaciones.length > 1 ? '&modo=separado' : '';
+      await apiDescargar(
+        `${ENDPOINT}?ids=${encodeURIComponent(ids)}${modo}`,
+        nombreArchivo(liquidaciones, separado),
+      );
     } catch (err) {
       setError(err.message);
     } finally {
       setDescargandoId(null);
     }
   }, []);
+
+  // Las tres opciones de la vista previa: todo junto, una por archivo, o solo
+  // la de un transportista (la clave es su id de liquidación).
+  const descargarPreview = (clave) => {
+    const todas = preview?.liquidaciones ?? [];
+    if (clave === 'unico') return descargar(todas, 'unico');
+    if (clave === 'separado') return descargar(todas, 'separado', true);
+
+    const una = todas.find((l) => l.id === clave);
+    return una ? descargar([una], clave) : undefined;
+  };
+
+  // El historial se pide recién acá, y solo de los transportistas elegidos: son
+  // las últimas 5 de CADA uno, así que sin elegir no hay nada que traer.
+  const verHistorial = async () => {
+    const elegidos = [...seleccionados];
+    setCargandoHistorial(true);
+    setError('');
+    try {
+      const res = await apiFetch(`${ENDPOINT}?transportistaIds=${encodeURIComponent(elegidos.join(','))}`);
+      setHistorial(res.historial ?? []);
+      setHistorialDe(
+        transportistas.filter((t) => elegidos.includes(t.id)).map((t) => t.nombre),
+      );
+      setVista('historial');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCargandoHistorial(false);
+    }
+  };
 
   // Abre una liquidación ya emitida con el mismo detalle que sale en el Excel,
   // para poder mirarla sin bajar el archivo.
@@ -119,14 +159,14 @@ const Liquidaciones = () => {
         method: 'POST',
         body: JSON.stringify({ transportistaIds: [...seleccionados], desde, hasta }),
       });
-      setPreview(res);
-      setVolverA('seleccion');
-      setVista('preview');
-      setSeleccionados(new Set());
       // Sin descarga automática: primero se revisa la vista previa y el Excel
       // sale solo si se aprieta "Descargar". Si no, quedan archivos tirados por
       // cada liquidación que uno mira de paso.
-      apiFetch(ENDPOINT).then(aplicar).catch(() => {});
+      setPreview(res);
+      setVolverA('seleccion');
+      setVista('preview');
+      // La selección se conserva: recién liquidado es cuando más sirve poder
+      // entrar al historial de esos mismos transportistas.
     } catch (err) {
       setError(err.message);
     } finally {
@@ -146,8 +186,8 @@ const Liquidaciones = () => {
           liquidaciones={preview.liquidaciones}
           sinPaquetes={preview.sinPaquetes}
           recienCreada={volverA === 'seleccion'}
-          descargando={descargandoId === 'preview'}
-          onDescargar={() => descargar(preview.liquidaciones, 'preview')}
+          descargando={descargandoId}
+          onDescargar={descargarPreview}
           onVolver={() => setVista(volverA)}
         />
       </div>
@@ -164,6 +204,7 @@ const Liquidaciones = () => {
         )}
         <HistorialLiquidaciones
           historial={historial}
+          transportistas={historialDe}
           descargandoId={descargandoId}
           abriendoId={abriendoId}
           onVer={verDetalle}
@@ -315,19 +356,22 @@ const Liquidaciones = () => {
           </button>
           <button
             type="button"
-            onClick={() => setVista('historial')}
-            className="px-6 py-2.5 bg-marca-oro text-marca-grafito rounded-xl font-semibold hover:bg-marca-oro-oscuro transition-colors duration-150"
+            onClick={verHistorial}
+            disabled={seleccionados.size === 0 || cargandoHistorial}
+            className="px-6 py-2.5 bg-marca-oro text-marca-grafito rounded-xl font-semibold hover:bg-marca-oro-oscuro disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors duration-150"
           >
-            Ver últimas liquidaciones
+            {cargandoHistorial ? 'Buscando...' : 'Ver últimas liquidaciones'}
           </button>
         </div>
 
         {/* La ayuda siempre ocupa su lugar aunque este vacia, para que aparecer
             y desaparecer no mueva los botones de arriba. */}
         <p className="mt-3 min-h-4 text-center text-xs text-gray-500">
-          {seleccionados.size > 0 && (!desde || !hasta)
-            ? 'Elegí un rango de fechas para poder crear la liquidación.'
-            : ''}
+          {seleccionados.size === 0
+            ? 'Elegí uno o más transportistas para crear una liquidación o ver las anteriores.'
+            : !desde || !hasta
+              ? 'Elegí un rango de fechas para poder crear la liquidación.'
+              : ''}
         </p>
       </div>
     </div>

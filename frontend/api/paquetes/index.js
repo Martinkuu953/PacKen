@@ -73,10 +73,11 @@ export default async function handler(req, res) {
       : (data ?? []);
     const unicos = (campo) => [...new Set(paquetes.map((p) => p[campo]).filter(Boolean))];
 
-    // zona/seller/transportista se resuelven aparte: esas columnas no tienen FK
-    // declarada en Supabase, así que un select embebido fallaría.
-    const [zonas, sellers, transportistas] = await Promise.all([
+    // zona/área/seller/transportista se resuelven aparte: esas columnas no
+    // tienen FK declarada en Supabase, así que un select embebido fallaría.
+    const [zonas, areas, sellers, transportistas] = await Promise.all([
       buscarPor(supabase, 'zona', 'id, nombre', unicos('idzona')),
+      buscarPor(supabase, 'area_flex', 'id, nombre', unicos('idarea')),
       buscarPor(supabase, 'seller', 'id, public_id, nombre', unicos('idseller')),
       buscarPor(supabase, 'usuario', 'id, public_id, nombre', unicos('idtransportista')),
     ]);
@@ -98,6 +99,10 @@ export default async function handler(req, res) {
         // clasificaba como desconocidas y dejaba fuera de los listados.
         estado: canonizarEstado(p.estado) ?? p.estado,
         zona: zonas.get(p.idzona)?.nombre ?? null,
+        // El partido/barrio que trajo Flex ("Belgrano", "Villa Soldati"). Es lo
+        // que se lista: la zona es una agrupación interna que además cambia
+        // según la lista con la que se mire el paquete.
+        partido: areas.get(p.idarea)?.nombre ?? null,
         seller: sellers.get(p.idseller)?.nombre ?? null,
         sellerId: sellers.get(p.idseller)?.public_id ?? null,
         transportista: transportistas.get(p.idtransportista)?.nombre ?? null,

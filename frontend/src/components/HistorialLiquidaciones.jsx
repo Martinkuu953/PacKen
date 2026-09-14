@@ -1,15 +1,31 @@
 import { formatearFecha, formatearMonto } from '../utils/formato';
 
-// Las últimas liquidaciones emitidas, cada una con su descarga. El Excel se
-// rearma desde el detalle guardado, así que una liquidación vieja sale igual
-// que el día que se creó aunque después hayan cambiado las tarifas.
-const HistorialLiquidaciones = ({ historial, descargandoId, abriendoId, onVer, onDescargar, onVolver }) => (
+// Las últimas liquidaciones de los transportistas elegidos (hasta 5 de cada
+// uno), cada una con su descarga. El Excel se rearma desde el detalle guardado,
+// así que una liquidación vieja sale igual que el día que se creó aunque
+// después hayan cambiado las tarifas.
+const HistorialLiquidaciones = ({
+  historial,
+  transportistas = [],
+  descargandoId,
+  abriendoId,
+  onVer,
+  onDescargar,
+  onVolver,
+}) => (
   <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
     <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-      <div>
+      <div className="min-w-0">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Últimas liquidaciones</h2>
         <p className="text-sm text-gray-500 mt-1">
-          {historial.length === 0 ? 'Todavía no generaste ninguna.' : `Las últimas ${historial.length}`}
+          {/* De quién es lo que se está mirando: con varios elegidos, la lista
+              mezcla transportistas y sin esto no se sabe cuál falta. */}
+          {transportistas.length ? transportistas.join(', ') : 'Sin transportistas elegidos'}
+        </p>
+        <p className="text-xs text-gray-400 mt-0.5">
+          {historial.length === 0
+            ? 'Todavía no tienen ninguna liquidación.'
+            : `${historial.length} en total · hasta las últimas 5 de cada uno`}
         </p>
       </div>
       <button

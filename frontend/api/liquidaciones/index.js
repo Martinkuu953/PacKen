@@ -2,15 +2,17 @@ import { getSupabase } from '../_lib/ml.js';
 import { autenticar, requiereRol } from '../_lib/auth.js';
 import { ErrorPublico, responderError } from '../_lib/errores.js';
 import { canonizarEstado, ESTADOS } from '../../shared/estados.js';
-import { generarXlsx, ESTILOS_XLSX } from '../_lib/xlsx.js';
+import { generarXlsx, generarZip, ESTILOS_XLSX } from '../_lib/xlsx.js';
 import { cargarResolutorZonas } from '../_lib/zonas.js';
 
 // /api/liquidaciones — lo que la empresa le paga a cada transportista por los
 // paquetes que entregó en un período.
 //
-//   GET                             → { transportistas, historial }  (panel)
-//   GET  ?ids=<uuid,uuid>           → el .xlsx de esas liquidaciones
-//   GET  ?ids=<uuid>&formato=json   → su detalle, para la vista previa
+//   GET                                  → { transportistas }  (panel)
+//   GET  ?transportistaIds=<uuid,uuid>   → + las últimas 5 de CADA uno
+//   GET  ?ids=<uuid,uuid>                → el .xlsx de esas liquidaciones
+//   GET  ?ids=<uuid,uuid>&modo=separado  → un .zip con un .xlsx por liquidación
+//   GET  ?ids=<uuid>&formato=json        → su detalle, para la vista previa
 //   POST { transportistaIds, desde, hasta } → las crea y devuelve la vista previa
 //
 // El importe de cada paquete sale de la lista de COSTOS del transportista
@@ -19,6 +21,9 @@ import { cargarResolutorZonas } from '../_lib/zonas.js';
 //
 // Requiere migration-liquidaciones.sql.
 
+// Últimas N por transportista, no N sobre el total de la empresa: con una flota
+// de varios, las cinco últimas de toda la empresa podían ser todas del mismo y
+// dejar al resto sin historial visible.
 const HISTORIAL_MAX = 5;
 
 // Una liquidación es plata: el día de entrega tiene que ser el que vio el
@@ -62,12 +67,55 @@ async function traerTodo(construir) {
 const redondear = (n) => Math.round(n * 100) / 100;
 
 // ──────────────────────────────────────────────────────────────────────────
-// GET — panel (transportistas liquidables + historial)
+// GET — panel (transportistas liquidables + historial de los elegidos)
 // ──────────────────────────────────────────────────────────────────────────
-async function panel(supabase, idempresa, res) {
+const listaDeIds = (crudos) =>
+  String(crudos ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+// Las últimas HISTORIAL_MAX de cada transportista. Va una consulta por
+// transportista y no una sola con .in(): un único .limit() sobre el conjunto
+// se lo llevaría el que liquidó más seguido, dejando a los demás en cero.
+async function historialDe(supabase, idempresa, transportistas) {
+  const consultas = transportistas.map((t) =>
+    supabase
+      .from('liquidacion')
+      .select('public_id, transportista, desde, hasta, cantidad, total, created_at')
+      .eq('idempresa', idempresa)
+      .eq('idtransportista', t.id)
+      .order('created_at', { ascending: false })
+      .limit(HISTORIAL_MAX),
+  );
+
+  const resultados = await Promise.all(consultas);
+
+  const filas = [];
+  for (const { data, error } of resultados) {
+    if (error) throw new Error(error.message);
+    filas.push(...(data ?? []));
+  }
+
+  // Ya mezcladas, se ordenan de nuevo: cada consulta vino ordenada por su
+  // cuenta, y la lista se lee como una sola línea de tiempo.
+  return filas
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+    .map((l) => ({
+      id: l.public_id,
+      transportista: l.transportista,
+      desde: l.desde,
+      hasta: l.hasta,
+      cantidad: l.cantidad,
+      total: Number(l.total),
+      creadaEn: l.created_at,
+    }));
+}
+
+async function panel(supabase, idempresa, req, res) {
   const { data: filas, error } = await supabase
     .from('usuario')
-    .select('public_id, nombre, idlista_costo')
+    .select('id, public_id, nombre, idlista_costo')
     .eq('idempresa', idempresa)
     .eq('rol', 'transportista')
     .eq('estado_solicitud', 'aceptado')
@@ -84,23 +132,12 @@ async function panel(supabase, idempresa, res) {
     lista: t.idlista_costo ? listas.get(t.idlista_costo)?.nombre ?? null : null,
   }));
 
-  const { data: hist, error: errHist } = await supabase
-    .from('liquidacion')
-    .select('public_id, transportista, desde, hasta, cantidad, total, created_at')
-    .eq('idempresa', idempresa)
-    .order('created_at', { ascending: false })
-    .limit(HISTORIAL_MAX);
-  if (errHist) throw new Error(errHist.message);
-
-  const historial = (hist ?? []).map((l) => ({
-    id: l.public_id,
-    transportista: l.transportista,
-    desde: l.desde,
-    hasta: l.hasta,
-    cantidad: l.cantidad,
-    total: Number(l.total),
-    creadaEn: l.created_at,
-  }));
+  // Sin transportistas elegidos no hay historial que mostrar: primero se
+  // elige de quién se quiere ver, y recién ahí se traen sus liquidaciones.
+  const elegidos = new Set(listaDeIds(req.query?.transportistaIds));
+  const historial = elegidos.size
+    ? await historialDe(supabase, idempresa, (filas ?? []).filter((t) => elegidos.has(t.public_id)))
+    : [];
 
   return res.json({ transportistas, historial });
 }
@@ -275,10 +312,7 @@ const formatearFecha = (valor) => {
 // Relee liquidaciones ya emitidas con su detalle. Lo comparten la vista previa
 // (JSON) y la descarga (.xlsx), para que las dos muestren exactamente lo mismo.
 async function traerLiquidaciones(supabase, idempresa, idsCrudos) {
-  const ids = String(idsCrudos ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const ids = listaDeIds(idsCrudos);
   if (ids.length === 0) throw new ErrorPublico('ids es requerido');
 
   const { data: cabeceras, error } = await supabase
@@ -328,51 +362,104 @@ async function detallar(supabase, idempresa, req, res) {
   return res.json({ liquidaciones });
 }
 
-async function descargar(supabase, idempresa, req, res) {
-  const liquidaciones = await traerLiquidaciones(supabase, idempresa, req.query.ids);
+// Una hoja por liquidación: el mismo contenido tanto si van todas juntas en un
+// libro como si cada una sale en su propio archivo.
+function hojaDe(c) {
+  const filas = [
+    [{ v: c.transportista, s: ESTILOS_XLSX.negrita }],
+    [`Período: ${formatearFecha(c.desde)} al ${formatearFecha(c.hasta)}`],
+    [],
+    ENCABEZADOS.map((titulo) => ({ v: titulo, s: ESTILOS_XLSX.encabezado })),
+    ...c.lineas.map((l) => [
+      l.direccion ?? '—',
+      formatearFecha(l.fechaentrega),
+      l.seller ?? '—',
+      l.zona ?? '—',
+      l.idenvioml ?? '—',
+      { v: l.importe, s: ESTILOS_XLSX.moneda },
+    ]),
+    [],
+    [
+      { v: `Total (${c.cantidad} paquete${c.cantidad === 1 ? '' : 's'})`, s: ESTILOS_XLSX.negrita },
+      '',
+      '',
+      '',
+      '',
+      { v: c.total, s: ESTILOS_XLSX.monedaNegrita },
+    ],
+  ];
+  return { nombre: c.transportista, columnas: ANCHOS, filas };
+}
 
-  const hojas = liquidaciones.map((c) => {
-    const filas = [
-      [{ v: c.transportista, s: ESTILOS_XLSX.negrita }],
-      [`Período: ${formatearFecha(c.desde)} al ${formatearFecha(c.hasta)}`],
-      [],
-      ENCABEZADOS.map((titulo) => ({ v: titulo, s: ESTILOS_XLSX.encabezado })),
-      ...c.lineas.map((l) => [
-        l.direccion ?? '—',
-        formatearFecha(l.fechaentrega),
-        l.seller ?? '—',
-        l.zona ?? '—',
-        l.idenvioml ?? '—',
-        { v: l.importe, s: ESTILOS_XLSX.moneda },
-      ]),
-      [],
-      [
-        { v: `Total (${c.cantidad} paquete${c.cantidad === 1 ? '' : 's'})`, s: ESTILOS_XLSX.negrita },
-        '',
-        '',
-        '',
-        '',
-        { v: c.total, s: ESTILOS_XLSX.monedaNegrita },
-      ],
-    ];
-    return { nombre: c.transportista, columnas: ANCHOS, filas };
+const nombreLiquidacion = (c) => `liquidacion-${c.transportista}-${c.desde}_${c.hasta}`;
+
+// Los nombres van sin acentos ni espacios porque viajan dentro de un .zip, que
+// no define codificación: un nombre "raro" lo descomprime mal más de un
+// programa de Windows.
+const limpiarNombre = (texto) =>
+  String(texto)
+    // NFD separa la tilde de la letra, y el rango de diacríticos la borra: sin
+    // esto "Martín" terminaría como "Mart-n", porque la tilde suelta tampoco
+    // pasa el filtro de abajo.
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\-.]+/g, '-');
+
+function nombresUnicos(liquidaciones) {
+  const usados = new Set();
+  return liquidaciones.map((c) => {
+    const base = limpiarNombre(nombreLiquidacion(c));
+    // Dos liquidaciones del mismo transportista por el mismo período son
+    // legítimas (se rehízo una): sin desambiguar, la segunda pisaba a la
+    // primera adentro del .zip.
+    let nombre = `${base}.xlsx`;
+    let n = 2;
+    while (usados.has(nombre)) nombre = `${base}-${n++}.xlsx`;
+    usados.add(nombre);
+    return nombre;
   });
+}
 
-  const archivo = generarXlsx(hojas);
-  const nombre =
-    liquidaciones.length === 1
-      ? `liquidacion-${liquidaciones[0].transportista}-${liquidaciones[0].desde}_${liquidaciones[0].hasta}.xlsx`
-      : `liquidaciones-${liquidaciones[0].desde}_${liquidaciones[0].hasta}.xlsx`;
-
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+function responderArchivo(res, archivo, nombre, tipo, respaldo) {
+  res.setHeader('Content-Type', tipo);
   // El nombre del transportista puede traer acentos: filename* (RFC 5987) es
   // el que los soporta; filename queda como respaldo en ASCII.
   res.setHeader(
     'Content-Disposition',
-    `attachment; filename="liquidacion.xlsx"; filename*=UTF-8''${encodeURIComponent(nombre)}`,
+    `attachment; filename="${respaldo}"; filename*=UTF-8''${encodeURIComponent(nombre)}`,
   );
   res.setHeader('Content-Length', archivo.length);
   return res.status(200).end(archivo);
+}
+
+async function descargar(supabase, idempresa, req, res) {
+  const liquidaciones = await traerLiquidaciones(supabase, idempresa, req.query.ids);
+
+  // Separado: un .xlsx por liquidación, todos dentro de un .zip. Con una sola
+  // liquidación el .zip sería una carpeta con un archivo adentro, así que da
+  // igual el modo y sale el .xlsx suelto.
+  if (req.query.modo === 'separado' && liquidaciones.length > 1) {
+    const nombres = nombresUnicos(liquidaciones);
+    const zip = generarZip(
+      liquidaciones.map((c, i) => ({ nombre: nombres[i], contenido: generarXlsx([hojaDe(c)]) })),
+    );
+    const nombre = `liquidaciones-${liquidaciones[0].desde}_${liquidaciones[0].hasta}.zip`;
+    return responderArchivo(res, zip, nombre, 'application/zip', 'liquidaciones.zip');
+  }
+
+  const archivo = generarXlsx(liquidaciones.map(hojaDe));
+  const nombre =
+    liquidaciones.length === 1
+      ? `${nombreLiquidacion(liquidaciones[0])}.xlsx`
+      : `liquidaciones-${liquidaciones[0].desde}_${liquidaciones[0].hasta}.xlsx`;
+
+  return responderArchivo(
+    res,
+    archivo,
+    nombre,
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'liquidacion.xlsx',
+  );
 }
 
 export default async function handler(req, res) {
@@ -392,7 +479,7 @@ export default async function handler(req, res) {
         ? await detallar(supabase, usuario.id, req, res)
         : await descargar(supabase, usuario.id, req, res);
     }
-    return await panel(supabase, usuario.id, res);
+    return await panel(supabase, usuario.id, req, res);
   } catch (err) {
     return responderError(res, err, 500, '/api/liquidaciones');
   }
