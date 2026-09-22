@@ -12,11 +12,10 @@ import { ErrorPublico } from './errores.js';
 
 const ML_API = 'https://api.mercadolibre.com';
 
-// Estado operativo del courier según la acción de escaneo.
-export const ESTADO_POR_TIPO = {
-  colecta: ESTADOS.INGRESADO,
-  reparto: ESTADOS.EN_CAMINO,
-};
+// Acciones de escaneo válidas. El estado que deja cada una no es fijo: lo
+// decide decidirEstadoDeEscaneo, más abajo, porque en reparto depende de lo que
+// diga ML.
+export const TIPOS_ESCANEO = ['colecta', 'reparto'];
 
 // ──────────────────────────────────────────────────────────────────────────
 // Supabase (service role → bypasea RLS, necesario para leer/escribir meli_token)
@@ -61,9 +60,9 @@ export function traducirEstadoML(status) {
 // ──────────────────────────────────────────────────────────────────────────
 // Política de sincronización: cuándo el estado de ML pisa al nuestro
 // ──────────────────────────────────────────────────────────────────────────
-// Única fuente de verdad para el webhook y para el sync periódico: si cada uno
-// decidiera por su cuenta, terminarían dejando el mismo paquete en estados
-// distintos según por dónde llegó la novedad.
+// Única fuente de verdad para el webhook, el sync periódico y el escaneo: si
+// cada uno decidiera por su cuenta, terminarían dejando el mismo paquete en
+// estados distintos según por dónde llegó la novedad.
 //
 // Solo tres status de ML pisan nuestro estado. Son *hechos del envío*, cosas
 // que pasaron afuera y que nosotros no podemos saber de otra forma:
@@ -96,6 +95,35 @@ export function decidirEstadoDesdeML(estadoActual, statusMl) {
   if (!destino || destino === actual) return null;
 
   return destino;
+}
+
+// Estado con el que queda un paquete al escanearlo. Comparte IMPUESTOS_POR_ML y
+// TERMINALES con la política de arriba para que el escaneo no pueda contradecir
+// al webhook ni al sync.
+//
+// `estadoActual` es el estado del paquete si ya estaba en la base (null si es la
+// primera vez que se escanea), y `statusMl` el status crudo del shipment.
+//
+// Las tres reglas, en orden:
+//
+//  1. Un paquete terminal (Entregado, Cancelado) no se reabre: se devuelve tal
+//     como está. Antes un re-escaneo en colecta lo volvía a "Ingresado" y uno en
+//     reparto pisaba un "Cancelado" con "En camino", que además descuadraba la
+//     facturación (el importe se calcula sobre los entregados).
+//  2. Colecta deja "Ingresado": el paquete entra al depósito, y de eso ML no
+//     tiene nada que decir.
+//  3. Reparto toma el estado de ML cuando ML informa un hecho del envío
+//     (delivered / cancelled / not_delivered): ese hecho ya pasó, y marcar el
+//     paquete "En camino" sería inventar un viaje que no va a ocurrir. Si ML
+//     todavía no sabe nada (pending, handling, ready_to_ship: el seller imprimió
+//     la etiqueta y nada más) o ya dice shipped, queda "En camino", porque el
+//     paquete está físicamente en la camioneta. En Flex el escaneo va adelante
+//     de ML, y el webhook y el sync lo mueven después, cuando ML se entera.
+export function decidirEstadoDeEscaneo(tipo, estadoActual, statusMl) {
+  const actual = canonizarEstado(estadoActual);
+  if (TERMINALES.includes(actual)) return actual;
+  if (tipo === 'colecta') return ESTADOS.INGRESADO;
+  return IMPUESTOS_POR_ML[statusMl] ?? ESTADOS.EN_CAMINO;
 }
 
 // ──────────────────────────────────────────────────────────────────────────

@@ -52,12 +52,27 @@ No hay `/health`: era del Express viejo, que ya no existe. El diagnóstico de la
 
 ## Sincronización de estados con Mercado Libre
 
-El estado de un paquete se actualiza solo cuando cambia en ML, por dos caminos que comparten la misma política (`decidirEstadoDesdeML` en `api/_lib/ml.js`):
+El estado de un paquete se actualiza cuando cambia en ML, por dos caminos que comparten la misma política (`decidirEstadoDesdeML` en `api/_lib/ml.js`):
 
 1. **Webhook** (`/api/webhooks/mercadolibre`) — ML notifica y el paquete se actualiza en segundos. Requiere tener la app de ML suscrita al topic `shipments` con esa URL de callback, en el DevCenter de Mercado Libre.
 2. **Sync periódico** (`/api/paquetes/sincronizar`) — cada 15 minutos recorre los paquetes abiertos y le pregunta a ML el estado real. Es la red de contención: recupera toda notificación que se haya perdido.
 
 Solo tres estados de ML pisan el nuestro, porque son hechos del envío: `delivered` → **Entregado**, `cancelled` → **Cancelado**, `not_delivered` → **Reprogramado**. Los demás (`pending`, `handling`, `ready_to_ship`, `shipped`) se ignoran a propósito: *Ingresado* y *En camino* los define el escaneo del transportista, que en Flex va adelante de lo que ML sabe. *Entregado* y *Cancelado* son terminales y no se reescriben.
+
+El **escaneo** es el tercer camino y usa la misma tabla de hechos, con `decidirEstadoDeEscaneo`:
+
+| Al escanear en… | ML dice | Queda |
+| --- | --- | --- |
+| Colecta | cualquier cosa | Ingresado |
+| Reparto | `delivered` | Entregado (con `fechaentrega`) |
+| Reparto | `cancelled` | Cancelado |
+| Reparto | `not_delivered` | Reprogramado |
+| Reparto | `shipped`, `ready_to_ship`, `handling`, `pending` | En camino |
+| Cualquiera | cualquier cosa, si el paquete ya está Entregado o Cancelado | como estaba |
+
+La diferencia con el sync es el último caso de reparto: ahí el escaneo sí decide, porque ML todavía no sabe nada (el seller imprimió la etiqueta y nada más) y el paquete ya está físicamente en la camioneta. Cuando ML informa un hecho, ese hecho gana: marcar "En camino" un envío que ML ya dio por entregado o cancelado es inventar un viaje que no va a pasar. El escaneo también guarda `estadoml` / `subestadoml` / `ml_sincronizado_en`, igual que los otros dos caminos.
+
+Un paquete terminal no se reabre por un re-escaneo, en ninguno de los dos tipos: es la misma regla `TERMINALES` del sync, y evita que un entregado vuelva a *Ingresado* (lo que además descuadraría la facturación, que se calcula sobre los entregados).
 
 Puesta en marcha, **en este orden**:
 

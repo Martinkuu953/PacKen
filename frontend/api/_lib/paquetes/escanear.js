@@ -2,9 +2,11 @@ import {
   getSupabase,
   resolverSellerInterno,
   obtenerShipment,
-  ESTADO_POR_TIPO,
+  decidirEstadoDeEscaneo,
+  TIPOS_ESCANEO,
 } from '../ml.js';
 import { autenticar } from '../auth.js';
+import { ESTADOS } from '../../../shared/estados.js';
 import { responderError } from '../errores.js';
 
 // Registra el barrio del envío en area_flex (si es nuevo, sin zona) y devuelve
@@ -79,7 +81,7 @@ export default async function handler(req, res) {
     if (!shipmentId || !sellerId || !tipo) {
       return res.status(400).json({ error: 'shipmentId, sellerId y tipo son requeridos' });
     }
-    if (!ESTADO_POR_TIPO[tipo]) {
+    if (!TIPOS_ESCANEO.includes(tipo)) {
       return res.status(400).json({ error: 'Tipo inválido: debe ser "colecta" o "reparto"' });
     }
 
@@ -109,26 +111,17 @@ export default async function handler(req, res) {
     // hay que evitar es adoptar un paquete que ya es de OTRA empresa.
     const { data: existente } = await supabase
       .from('paquete')
-      .select('id, estado, idempresa')
+      .select('id, estado, idempresa, fechaentrega')
       .eq('idenvioml', envio.idEnvioMl)
       .or(`idempresa.eq.${idEmpresa},idempresa.is.null`)
       .limit(1)
       .maybeSingle();
 
-    // Colecta: siempre "Ingresado". Si ya existe y se re-escanea en colecta, no cambia.
-    // Reparto: pasa a "En camino" solo si el paquete ya fue ingresado.
-    // El escaneo nunca cierra un paquete: "Entregado", "Cancelado" y
-    // "Reprogramado" los pone ML, por el webhook o por el sync periódico.
-    let estado;
-    if (tipo === 'colecta') {
-      estado = 'Ingresado';
-    } else {
-      if (existente && existente.estado === 'Entregado') {
-        estado = 'Entregado';
-      } else {
-        estado = 'En camino';
-      }
-    }
+    // Colecta deja "Ingresado"; reparto toma el estado real de ML si ML ya sabe
+    // algo del envío, y "En camino" si todavía no. La regla completa, con el por
+    // qué de cada caso, está en decidirEstadoDeEscaneo (_lib/ml.js), compartida
+    // con el webhook y el sync.
+    const estado = decidirEstadoDeEscaneo(tipo, existente?.estado, envio.estadoMl);
 
     console.log(
       `[PacKen] Estado ML="${envio.estadoMl}" (sub="${envio.subestadoMl}") → estado interno="${estado}"`
@@ -148,7 +141,21 @@ export default async function handler(req, res) {
       codigopostal: envio.codigoPostal,
       idarea,
       idzona,
-      fechaentrega: estado === 'Entregado' ? envio.fechaEntrega : null,
+      // El status crudo de ML se guarda igual que en el webhook y en el sync: es
+      // lo único que después explica por qué el paquete quedó donde quedó. Y el
+      // escaneo cuenta como una consulta a ML, así que también mueve la cola del
+      // sync (ml_sincronizado_en): el paquete recién escaneado es el que menos
+      // falta hace volver a consultar.
+      estadoml: envio.estadoMl,
+      subestadoml: envio.subestadoMl,
+      ml_sincronizado_en: new Date().toISOString(),
+      // ML no siempre manda date_delivered; antes que dejar un entregado sin
+      // fecha (no se puede liquidar: el período se filtra por fechaentrega) se
+      // conserva la que ya tenía, y si tampoco hay, el momento del escaneo.
+      fechaentrega:
+        estado === ESTADOS.ENTREGADO
+          ? envio.fechaEntrega || existente?.fechaentrega || new Date().toISOString()
+          : null,
     };
 
     let paquete;

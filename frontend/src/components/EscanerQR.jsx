@@ -110,7 +110,12 @@ const EscanerQR = ({ tipo, onCerrar, onPaqueteGuardado }) => {
         subestadoMl: envio.subestadoMl,
       });
       setEstado('ok');
-      setMensaje(`Paquete ${shipmentId} guardado correctamente.`);
+      // El estado va en el mensaje, no solo en la ficha de abajo: en reparto lo
+      // decide ML, así que un paquete puede volver "Entregado" o "Cancelado" y
+      // el transportista tiene que verlo sin leer el detalle.
+      setMensaje(
+        `Paquete ${shipmentId} guardado como "${resultado.paquete?.estado ?? 'sin estado'}".`,
+      );
       onPaqueteGuardado?.(resultado.paquete);
     } catch (err) {
       setEstado('error');
