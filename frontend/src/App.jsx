@@ -14,6 +14,7 @@ import Transportistas from './pages/Transportistas';
 import Estadisticas from './pages/Estadisticas';
 import Liquidaciones from './pages/Liquidaciones';
 import Facturas from './pages/Facturas';
+import Perfil from './pages/Perfil';
 
 function RutaProtegida({ children, rolesPermitidos }) {
   const { autenticado, usuario, aprobado } = useAuth();
@@ -114,7 +115,7 @@ function AppRoutes() {
       } />
       <Route path="/perfil" element={
         <RutaProtegida>
-          <h2>Pantalla de Perfil en construcción...</h2>
+          <Perfil />
         </RutaProtegida>
       } />
 

@@ -94,3 +94,19 @@ export async function revocarRefreshToken(supabase, tokenPlano) {
     .eq('token_hash', hash(tokenPlano))
     .is('revoked_at', null);
 }
+
+// Corta todas las sesiones vivas del usuario. Se usa al cambiar la contraseña:
+// si alguien más tenía la cuenta abierta, cambiarla tiene que dejarlo afuera.
+// El que pide el cambio se queda adentro porque el handler le emite un refresh
+// token nuevo inmediatamente después.
+export async function revocarSesionesDeUsuario(supabase, usuarioId) {
+  const { error } = await supabase
+    .from('refresh_tokens')
+    .update({ revoked_at: new Date().toISOString() })
+    .eq('usuario_id', usuarioId)
+    .is('revoked_at', null);
+
+  // A diferencia de limpiarVencidos(), esto no es best-effort: si no pudimos
+  // revocar, la contraseña ya cambió pero las sesiones viejas siguen vivas.
+  if (error) throw new Error(error.message);
+}
