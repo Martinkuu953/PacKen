@@ -1,5 +1,6 @@
 import { getSupabase } from '../_lib/ml.js';
 import { responderError } from '../_lib/errores.js';
+import { revocarSesionesDeUsuario } from '../_lib/refreshTokens.js';
 import {
   autenticar,
   requiereRol,
@@ -74,6 +75,43 @@ async function crear(req, res, supabase, idempresa) {
   return res.status(201).json({ transportista: { id: public_id, ...resto } });
 }
 
+// PATCH /api/transportistas?transportistaId=<public_id> { password }
+// Restablece la contrasena de un transportista de la empresa.
+//
+// No existe "ver la contrasena": lo guardado es un hash de bcrypt, de una sola
+// via. Cuando un transportista se la olvida, lo unico posible es ponerle una
+// nueva y pasarsela, que es lo mismo que ya pasa al crearlo.
+//
+// El filtro por idempresa no es decorativo: sin el, cualquier empresa podria
+// pisarle la contrasena a un transportista de otra mandando su public_id.
+async function restablecerPassword(req, res, supabase, idempresa) {
+  const { transportistaId } = req.query;
+  if (!transportistaId) return res.status(400).json({ error: 'transportistaId es requerido' });
+
+  const { password } = req.body ?? {};
+  const errorPassword = validarPassword(password);
+  if (errorPassword) return res.status(400).json({ error: errorPassword });
+
+  const { data, error } = await supabase
+    .from('usuario')
+    .update({ password: hashPassword(password) })
+    .eq('public_id', transportistaId)
+    .eq('rol', 'transportista')
+    .eq('idempresa', idempresa)
+    .select('id, nombre')
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) return res.status(404).json({ error: 'Transportista no encontrado' });
+
+  // Si el transportista tenia la sesion abierta, la contrasena que conoce ya
+  // no sirve: dejarlo adentro haria que el cambio recien se note dentro de 30
+  // dias, cuando venza el refresh token.
+  await revocarSesionesDeUsuario(supabase, data.id);
+
+  return res.json({ ok: true, nombre: data.nombre });
+}
+
 // DELETE /api/transportistas?transportistaId=<public_id>
 // Solo se puede borrar si no tiene paquetes asignados ni listas de costos con
 // tarifas (FK desde paquete/lista_costos): se lo comunicamos al usuario en
@@ -105,7 +143,7 @@ async function borrar(req, res, supabase, idempresa) {
 }
 
 export default async function handler(req, res) {
-  if (!['GET', 'POST', 'DELETE'].includes(req.method)) {
+  if (!['GET', 'POST', 'PATCH', 'DELETE'].includes(req.method)) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -116,9 +154,10 @@ export default async function handler(req, res) {
   try {
     const supabase = getSupabase();
     if (req.method === 'POST') return await crear(req, res, supabase, usuario.id);
+    if (req.method === 'PATCH') return await restablecerPassword(req, res, supabase, usuario.id);
     if (req.method === 'DELETE') return await borrar(req, res, supabase, usuario.id);
     return await listar(res, supabase, usuario.id);
   } catch (err) {
-    return responderError(res, err, req.method === 'POST' ? 400 : 500, '/api/transportistas');
+    return responderError(res, err, ['POST', 'PATCH'].includes(req.method) ? 400 : 500, '/api/transportistas');
   }
 }
