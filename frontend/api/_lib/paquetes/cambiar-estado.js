@@ -4,6 +4,8 @@ import { ESTADOS, canonizarEstado } from '../../../shared/estados.js';
 import { ErrorPublico, responderError } from '../errores.js';
 import { esUuid, paquetePublico } from './comun.js';
 
+const ESTADOS_TRANSPORTISTA = [ESTADOS.ENTREGADO, ESTADOS.REPROGRAMADO];
+
 // POST /api/paquetes/cambiar-estado  { id, estado }
 // `id` es el public_id (UUID) del paquete.
 export default async function handler(req, res) {
@@ -46,6 +48,13 @@ export default async function handler(req, res) {
     // existencia de paquetes ajenos.
     if (!propio) {
       return res.status(404).json({ error: 'Paquete no encontrado' });
+    }
+
+    // El transportista solo informa lo que pasó en la calle. Cancelar o
+    // devolver un paquete a "Ingresado" mueve facturas y liquidaciones, y eso
+    // lo decide la empresa.
+    if (usuario.rol === 'transportista' && !ESTADOS_TRANSPORTISTA.includes(estadoCanonico)) {
+      return res.status(403).json({ error: 'No tenés permiso para poner ese estado' });
     }
 
     // Un paquete solo se entrega si salió a reparto: marcar como entregado algo

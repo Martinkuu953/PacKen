@@ -1,6 +1,7 @@
+import { timingSafeEqual } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { getSupabase, pedirTokenPorCodigo, obtenerUsuarioML, guardarSellerYToken } from '../ml.js';
-import { PROPOSITO_STATE } from './conectar.js';
+import { AUDIENCE_STATE, COOKIE_NONCE, baseUrl } from './conectar.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -8,12 +9,31 @@ function nombreDesdeUsuarioML(usuarioML) {
   return usuarioML.nickname || [usuarioML.first_name, usuarioML.last_name].filter(Boolean).join(' ') || `Seller ${usuarioML.id}`;
 }
 
+function leerCookie(req, nombre) {
+  if (req.cookies?.[nombre]) return req.cookies[nombre];
+  const par = (req.headers?.cookie ?? '')
+    .split(';')
+    .map((c) => c.trim())
+    .find((c) => c.startsWith(`${nombre}=`));
+  return par ? par.slice(nombre.length + 1) : null;
+}
+
+function mismoNonce(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return ba.length === bb.length && timingSafeEqual(ba, bb);
+}
+
 // GET /api/ml/callback — a esta URL redirige Mercado Libre después de que el
-// vendedor aprueba el acceso. Es pública (no hay sesión de PacKen en este
-// request: el navegador viene de mercadolibre.com); la empresa dueña de la
-// conexión se recupera del "state" firmado que armó /api/ml/conectar.
+// vendedor aprueba el acceso. Es pública (no hay header Authorization en una
+// navegación); la empresa sale del "state" firmado, y la cookie de nonce
+// prueba que quien vuelve es el mismo navegador que pidió la conexión.
 export default async function callback(req, res) {
   const { code, state, error } = req.query;
+
+  // La cookie es de un solo uso: se borra siempre, salga bien o mal.
+  res.setHeader('Set-Cookie', `${COOKIE_NONCE}=; Path=/api/ml; Max-Age=0; HttpOnly; Secure; SameSite=Lax`);
 
   if (error) {
     console.error('[PacKen] ML no autorizó la conexión:', error);
@@ -26,15 +46,20 @@ export default async function callback(req, res) {
 
   let payload;
   try {
-    payload = jwt.verify(state, JWT_SECRET);
-    if (payload.proposito !== PROPOSITO_STATE || !payload.idempresa) throw new Error('state sin propósito');
+    payload = jwt.verify(state, JWT_SECRET, { audience: AUDIENCE_STATE, algorithms: ['HS256'] });
+    if (!payload.idempresa) throw new Error('state sin empresa');
   } catch {
     console.error('[PacKen] state inválido o vencido en /api/ml/callback');
     return res.redirect(302, '/sellers?ml=error');
   }
 
+  if (!mismoNonce(leerCookie(req, COOKIE_NONCE), payload.nonce)) {
+    console.error('[PacKen] /api/ml/callback sin cookie de nonce válida: link de otro navegador, se rechaza');
+    return res.redirect(302, '/sellers?ml=error');
+  }
+
   try {
-    const redirectUri = `https://${req.headers.host}/api/ml/callback`;
+    const redirectUri = `${baseUrl(req)}/api/ml/callback`;
     const tokenData = await pedirTokenPorCodigo(code, redirectUri);
     const usuarioML = await obtenerUsuarioML(tokenData.access_token);
     const nombre = nombreDesdeUsuarioML(usuarioML);
@@ -52,6 +77,10 @@ export default async function callback(req, res) {
     console.log(`[PacKen] Seller conectado vía OAuth: "${nombre}" (idmercadolibre=${usuarioML.id}, idempresa=${payload.idempresa})`);
     return res.redirect(302, '/sellers?ml=ok');
   } catch (err) {
+    if (err.message === 'SELLER_DE_OTRA_EMPRESA') {
+      console.warn(`[PacKen] OAuth rechazado: el seller ya pertenece a otra empresa (idempresa pedida=${payload.idempresa})`);
+      return res.redirect(302, '/sellers?ml=otra-empresa');
+    }
     console.error('[PacKen] Error en callback de ML:', err.message);
     return res.redirect(302, '/sellers?ml=error');
   }

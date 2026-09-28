@@ -3,6 +3,7 @@ import { autenticar, comparePassword, hashPassword, validarPassword } from '../a
 import { crearRefreshToken, revocarSesionesDeUsuario } from '../refreshTokens.js';
 import { setRefreshCookie } from '../cookies.js';
 import { ErrorPublico, responderError } from '../errores.js';
+import { LIMITES, verificarLimites, registrarIntento, limpiarIntentos } from '../rateLimit.js';
 
 // GET|PATCH /api/auth/perfil — los datos del usuario logueado, y la edición de
 // los que puede cambiar solo.
@@ -51,6 +52,11 @@ async function editar(req, res, usuario) {
 
     // Pedir la contraseña actual es lo que evita que un token robado, o una
     // sesión que quedó abierta en una máquina ajena, se quede con la cuenta.
+    // Con límite: si no, una sesión robada puede probar contraseñas actuales
+    // sin freno y, al acertar, echar al dueño de sus otras sesiones.
+    const claveIntentos = `perfil:pwd:${usuario.id}`;
+    await verificarLimites(supabase, [{ clave: claveIntentos, ...LIMITES.cambioPasswordPorUsuario }]);
+
     const { data: fila, error } = await supabase
       .from('usuario')
       .select('password')
@@ -59,8 +65,10 @@ async function editar(req, res, usuario) {
 
     if (error) throw new Error(error.message);
     if (!comparePassword(String(passwordActual ?? ''), fila.password)) {
+      await registrarIntento(supabase, [claveIntentos]);
       throw new ErrorPublico('La contraseña actual no es correcta', 403);
     }
+    await limpiarIntentos(supabase, claveIntentos);
 
     cambios.password = hashPassword(passwordNueva);
   }

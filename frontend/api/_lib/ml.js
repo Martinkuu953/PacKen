@@ -9,6 +9,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { ESTADOS, canonizarEstado } from '../../shared/estados.js';
 import { ErrorPublico } from './errores.js';
+import { cifrarToken, descifrarToken } from './cifrado.js';
 
 const ML_API = 'https://api.mercadolibre.com';
 
@@ -156,8 +157,8 @@ async function guardarTokens(supabase, tokenId, data, refreshTokenPrevio) {
   await supabase
     .from('meli_token')
     .update({
-      access_token: data.access_token,
-      refresh_token: data.refresh_token || refreshTokenPrevio,
+      access_token: cifrarToken(data.access_token),
+      refresh_token: cifrarToken(data.refresh_token || refreshTokenPrevio),
       expires_at: expiresAt,
       fechaactualizacion: new Date().toISOString(),
     })
@@ -180,18 +181,22 @@ export async function getValidToken(supabase, idSellerInterno) {
 
   const vencido = !tokenRow.expires_at || new Date(tokenRow.expires_at).getTime() <= Date.now();
 
+  // En la base van cifrados (ver cifrado.js); acá se trabaja en claro.
+  const accessGuardado = descifrarToken(tokenRow.access_token);
+  const refreshGuardado = descifrarToken(tokenRow.refresh_token);
+
   if (!vencido) {
-    return { accessToken: tokenRow.access_token, tokenId: tokenRow.id, refreshToken: tokenRow.refresh_token };
+    return { accessToken: accessGuardado, tokenId: tokenRow.id, refreshToken: refreshGuardado };
   }
 
   console.log(`[PacKen] Token vencido para seller id=${idSellerInterno}, renovando...`);
-  const data = await refreshMLToken(tokenRow.refresh_token);
-  await guardarTokens(supabase, tokenRow.id, data, tokenRow.refresh_token);
+  const data = await refreshMLToken(refreshGuardado);
+  await guardarTokens(supabase, tokenRow.id, data, refreshGuardado);
 
   return {
     accessToken: data.access_token,
     tokenId: tokenRow.id,
-    refreshToken: data.refresh_token || tokenRow.refresh_token,
+    refreshToken: data.refresh_token || refreshGuardado,
   };
 }
 
@@ -320,10 +325,18 @@ export async function guardarSellerYToken(
 ) {
   const { data: sellerExistente, error: selErr } = await supabase
     .from('seller')
-    .select('id')
+    .select('id, idempresa')
     .eq('idmercadolibre', String(idMercadoLibre))
     .maybeSingle();
   if (selErr) throw new Error(selErr.message);
+
+  // Un seller que ya es de otra empresa no se muda solo porque alguien
+  // completó el OAuth: antes se le cambiaba idempresa y la empresa original lo
+  // perdía (junto con el acceso a sus envíos). Eso lo tiene que resolver un
+  // administrador a mano.
+  if (sellerExistente?.idempresa != null && sellerExistente.idempresa !== idempresa) {
+    throw new ErrorPublico('SELLER_DE_OTRA_EMPRESA', 409);
+  }
 
   let idSellerInterno;
   if (sellerExistente) {
@@ -355,8 +368,8 @@ export async function guardarSellerYToken(
     const { error } = await supabase
       .from('meli_token')
       .update({
-        access_token: accessToken,
-        refresh_token: refreshToken,
+        access_token: cifrarToken(accessToken),
+        refresh_token: cifrarToken(refreshToken),
         expires_at: expiresAt,
         fechaactualizacion: new Date().toISOString(),
       })
@@ -365,7 +378,12 @@ export async function guardarSellerYToken(
   } else {
     const { error } = await supabase
       .from('meli_token')
-      .insert({ access_token: accessToken, refresh_token: refreshToken, expires_at: expiresAt, idseller: idSellerInterno });
+      .insert({
+        access_token: cifrarToken(accessToken),
+        refresh_token: cifrarToken(refreshToken),
+        expires_at: expiresAt,
+        idseller: idSellerInterno,
+      });
     if (error) throw new Error(error.message);
   }
 
@@ -443,7 +461,18 @@ export function mapShipment(shipment) {
 }
 
 // Trae un shipment de ML ya mapeado.
-export async function obtenerShipment(supabase, idSellerInterno, shipmentId) {
+// El shipmentId sale del QR o de la URL, o sea del usuario, y se pega en un
+// path de la API de ML que se llama con el token del seller. Sin esta
+// validación, "../users/me" hacía que el servidor consultara otros recursos
+// de ML en nombre del seller.
+export function validarShipmentId(shipmentId) {
+  const id = String(shipmentId ?? '').trim();
+  if (!/^\d{1,20}$/.test(id)) throw new ErrorPublico('ID de envío inválido', 400);
+  return id;
+}
+
+export async function obtenerShipment(supabase, idSellerInterno, shipmentIdCrudo) {
+  const shipmentId = validarShipmentId(shipmentIdCrudo);
   const shipment = await mlFetchConReintento(supabase, idSellerInterno, `/shipments/${shipmentId}`);
   return mapShipment(shipment);
 }

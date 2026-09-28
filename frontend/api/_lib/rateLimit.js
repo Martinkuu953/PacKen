@@ -8,11 +8,18 @@ import { ErrorPublico } from './errores.js';
 // minutos hay `max` o más intentos con esa clave, se corta con 429.
 
 export const LIMITES = {
-  // Por cuenta: 5 contraseñas mal en 15 minutos bloquean esa cuenta 15 minutos.
-  loginPorCuenta: { max: 5, ventanaMin: 15 },
+  // Por cuenta + IP: 5 contraseñas mal en 15 minutos bloquean esa cuenta desde
+  // esa IP. Contar solo por cuenta dejaba que cualquiera bloqueara a un usuario
+  // ajeno fallando 5 veces a propósito.
+  loginPorCuentaIp: { max: 5, ventanaMin: 15 },
+  // Por cuenta a secas, con un techo alto: frena el ataque repartido entre
+  // muchas IPs sin que un par de errores ajenos alcancen para bloquear a nadie.
+  loginPorCuenta: { max: 30, ventanaMin: 15 },
   // Por IP: más alto, para no bloquear una oficina entera que comparte IP.
   loginPorIp: { max: 20, ventanaMin: 15 },
   registroPorIp: { max: 5, ventanaMin: 60 },
+  // Contraseña actual incorrecta al cambiarla desde Mi Perfil.
+  cambioPasswordPorUsuario: { max: 5, ventanaMin: 15 },
 };
 
 // En Vercel x-forwarded-for lo pisa la plataforma con la IP real del cliente,

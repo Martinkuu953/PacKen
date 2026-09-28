@@ -48,7 +48,7 @@ export default async function middleware(req) {
 
   try {
     const secret = new TextEncoder().encode(process.env.JWT_SECRET);
-    const { payload } = await jwtVerify(header.slice(7), secret);
+    const { payload } = await jwtVerify(header.slice(7), secret, { algorithms: ['HS256'] });
     // Solo un access token trae sub. Otros JWT firmados con el mismo secreto
     // (el state de OAuth de ML) no sirven como sesión.
     if (!payload.sub) throw new Error('sin sub');

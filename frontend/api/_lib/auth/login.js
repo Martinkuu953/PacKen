@@ -1,5 +1,5 @@
 import { getSupabase } from '../ml.js';
-import { comparePassword, generateToken, perfilPublico } from '../auth.js';
+import { comparePassword, compararConHashFalso, generateToken, perfilPublico } from '../auth.js';
 import { crearRefreshToken } from '../refreshTokens.js';
 import { setRefreshCookie } from '../cookies.js';
 import { responderError } from '../errores.js';
@@ -23,9 +23,12 @@ export default async function handler(req, res) {
 
     // C-04: se cuenta por cuenta y por IP. La de cuenta frena el ataque a un
     // usuario puntual; la de IP, el que prueba muchas cuentas desde un lugar.
+    const ip = ipDe(req);
     const claveCuenta = `login:id:${ident}`;
-    const claveIp = `login:ip:${ipDe(req)}`;
+    const claveCuentaIp = `login:idip:${ident}:${ip}`;
+    const claveIp = `login:ip:${ip}`;
     await verificarLimites(supabase, [
+      { clave: claveCuentaIp, ...LIMITES.loginPorCuentaIp },
       { clave: claveCuenta, ...LIMITES.loginPorCuenta },
       { clave: claveIp, ...LIMITES.loginPorIp },
     ]);
@@ -38,12 +41,15 @@ export default async function handler(req, res) {
       .maybeSingle();
 
     if (error) throw new Error(error.message);
-    if (!usuario || !comparePassword(password, usuario.password)) {
-      await registrarIntento(supabase, [claveCuenta, claveIp]);
+    // Sin usuario igual se corre un bcrypt: si no, "no existe" responde más
+    // rápido que "contraseña mal" y el tiempo delata qué cuentas hay.
+    const ok = usuario ? comparePassword(password, usuario.password) : compararConHashFalso(password);
+    if (!ok) {
+      await registrarIntento(supabase, [claveCuentaIp, claveCuenta, claveIp]);
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
-    await limpiarIntentos(supabase, claveCuenta);
+    await limpiarIntentos(supabase, claveCuentaIp);
 
     const token = generateToken(usuario);
     const { token: refreshToken, expiresAt } = await crearRefreshToken(supabase, usuario.id);

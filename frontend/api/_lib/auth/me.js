@@ -7,7 +7,7 @@ export default async function handler(req, res) {
 
   // autenticar() ya trae el perfil fresco de la DB resolviendo el public_id
   // del token, así que no hace falta una segunda consulta.
-  const usuario = await autenticar(req, res);
+  const usuario = await autenticar(req, res, { permitirPendiente: true });
   if (!usuario) return;
 
   return res.json({ usuario: perfilPublico(usuario) });

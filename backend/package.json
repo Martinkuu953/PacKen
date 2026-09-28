@@ -6,7 +6,8 @@
   "scripts": {
     "db:test": "node scripts/test-db.mjs",
     "seller:conectar": "node scripts/conectar-seller.mjs",
-    "seller:registrar": "node scripts/registrar-seller.mjs"
+    "seller:registrar": "node scripts/registrar-seller.mjs",
+    "tokens:cifrar": "node scripts/cifrar-tokens-ml.mjs"
   },
   "dependencies": {
     "dotenv": "^16.4.7",

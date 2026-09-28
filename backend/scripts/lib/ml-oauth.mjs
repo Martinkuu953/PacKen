@@ -1,6 +1,8 @@
 // Helpers de OAuth de Mercado Libre compartidos entre registrar-seller.mjs
 // (ya tenías un refresh_token) y conectar-seller.mjs (lo consigue solo).
 
+import { cifrarToken } from '../../../frontend/api/_lib/cifrado.js';
+
 const ML_API = 'https://api.mercadolibre.com';
 
 async function pedirToken(params) {
@@ -60,9 +62,14 @@ export async function guardarSellerYToken(
   { idEmpresa, idMercadoLibre, nombre, accessToken, refreshToken, expiresIn },
 ) {
   const { rows: sellerRows } = await query(
-    'SELECT id FROM seller WHERE idmercadolibre = $1 LIMIT 1',
+    'SELECT id, idempresa FROM seller WHERE idmercadolibre = $1 LIMIT 1',
     [String(idMercadoLibre)],
   );
+
+  // Mismo criterio que /api/ml/callback: un seller de otra empresa no se toca.
+  if (sellerRows[0]?.idempresa != null && sellerRows[0].idempresa !== idEmpresa) {
+    throw new Error(`El seller ${idMercadoLibre} ya pertenece a otra empresa (idempresa=${sellerRows[0].idempresa})`);
+  }
 
   const yaExistia = sellerRows.length > 0;
   let idSellerInterno;
@@ -90,13 +97,13 @@ export async function guardarSellerYToken(
       `UPDATE meli_token
        SET access_token = $1, refresh_token = $2, expires_at = $3, fechaactualizacion = now()
        WHERE id = $4`,
-      [accessToken, refreshToken, expiresAt, tokenRows[0].id],
+      [cifrarToken(accessToken), cifrarToken(refreshToken), expiresAt, tokenRows[0].id],
     );
   } else {
     await query(
       `INSERT INTO meli_token (access_token, refresh_token, expires_at, idseller)
        VALUES ($1, $2, $3, $4)`,
-      [accessToken, refreshToken, expiresAt, idSellerInterno],
+      [cifrarToken(accessToken), cifrarToken(refreshToken), expiresAt, idSellerInterno],
     );
   }
 

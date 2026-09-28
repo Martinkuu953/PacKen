@@ -141,7 +141,13 @@ const Sellers = () => {
 
         {resultadoConexion === 'error' && (
           <p className="mb-4 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-2">
-            No se pudo conectar el seller con Mercado Libre. Probá de nuevo.
+            No se pudo conectar el seller con Mercado Libre. Probá de nuevo desde este mismo navegador.
+          </p>
+        )}
+        {resultadoConexion === 'otra-empresa' && (
+          <p className="mb-4 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+            Esa cuenta de Mercado Libre ya está conectada a otra empresa en PacKen. Si es un error,
+            contactá a soporte.
           </p>
         )}
 

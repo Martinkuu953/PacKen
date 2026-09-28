@@ -58,7 +58,7 @@ export function generateToken(usuario) {
   if (!usuario.public_id) {
     throw new Error('No se puede firmar el token: falta public_id (¿corriste migration-public-id.sql?)');
   }
-  return jwt.sign({ sub: usuario.public_id }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  return jwt.sign({ sub: usuario.public_id }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN, algorithm: 'HS256' });
 }
 
 // Perfil que viaja en el body de las respuestas: solo lo que la UI renderiza.
@@ -71,14 +71,31 @@ export function perfilPublico(usuario) {
   };
 }
 
+// Algoritmo fijo: no se acepta ningún otro que diga traer el header del token.
 export function verifyToken(token) {
-  return jwt.verify(token, JWT_SECRET);
+  return jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
+}
+
+// Hash de una contraseña que no existe. El login lo compara cuando el usuario
+// no existe, para que "email desconocido" tarde lo mismo que "contraseña
+// incorrecta" y el tiempo de respuesta no revele qué cuentas hay.
+// Precalculado (cost 10, igual que SALT_ROUNDS) para no pagar un hash en cada
+// arranque en frío de la función.
+const HASH_FALSO = '$2b$10$1uJzhUQRKwr/MczjT64TTu9WisqICIANPsvqIwwyzNIkdKGDKSsmi';
+
+export function compararConHashFalso(plain) {
+  bcrypt.compareSync(String(plain ?? ''), HASH_FALSO);
+  return false;
 }
 
 // Resuelve el UUID del token contra la DB y devuelve la sesión con el id
 // interno. Al leer siempre de la DB, rol y estado_solicitud están al día: no
 // quedan congelados hasta que expire el access token.
-export async function autenticar(req, res) {
+//
+// Un transportista no aprobado (solicitud pendiente o rechazada) no pasa: antes
+// solo lo frenaba el frontend. `permitirPendiente` es para /api/auth/me, que
+// la pantalla de "sin acceso" necesita para saber en qué estado está.
+export async function autenticar(req, res, { permitirPendiente = false } = {}) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Token requerido' });
@@ -106,6 +123,11 @@ export async function autenticar(req, res) {
 
   if (error || !data) {
     res.status(401).json({ error: 'Sesión inválida, iniciá sesión nuevamente' });
+    return null;
+  }
+
+  if (!permitirPendiente && data.rol === 'transportista' && data.estado_solicitud !== 'aceptado') {
+    res.status(403).json({ error: 'Tu cuenta todavía no fue aprobada por la empresa' });
     return null;
   }
 

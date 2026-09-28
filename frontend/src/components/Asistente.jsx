@@ -77,7 +77,7 @@ const TEMAS = {
     ruta: '/perfil',
     pasos: [
       'Tu sesión no queda guardada en el navegador: si cerrás la pestaña, al volver se renueva sola de forma segura.',
-      'Después de 5 contraseñas incorrectas seguidas, la cuenta se bloquea 15 minutos para frenar intentos de adivinarla.',
+      'Después de 5 contraseñas incorrectas seguidas desde un mismo lugar, el ingreso se frena 15 minutos para impedir que alguien la adivine.',
       'Desde Mi Perfil podés cambiar tu contraseña. Al hacerlo se cierran las sesiones abiertas en otros dispositivos.',
     ],
   },
