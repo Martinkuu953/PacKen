@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { waitUntil } from '@vercel/functions';
 import { getSupabase, mlFetchConReintento, decidirEstadoDesdeML } from '../_lib/ml.js';
 import { ESTADOS } from '../../shared/estados.js';
@@ -17,11 +18,34 @@ import { ESTADOS } from '../../shared/estados.js';
 // payload y el trabajo real va en waitUntil(), que mantiene viva la función
 // después de cerrada la respuesta (sin esto el runtime la congela y el
 // procesamiento queda a medias).
+//
+// C-02 — Autenticidad. ML no firma las notificaciones de shipments, así que la
+// verificación se arma en tres capas:
+//   1. Secreto compartido: la URL de notificaciones configurada en el DevCenter
+//      de ML lleva ?token=<ML_WEBHOOK_SECRET>. Sin ese token, se rechaza.
+//   2. application_id del body tiene que ser nuestra app (ML_CLIENT_ID).
+//   3. user_id del body tiene que ser el seller dueño del paquete.
+// Y de fondo, el body nunca se usa como dato: el estado se le pregunta a la API
+// de ML con el token del seller. Lo peor que logra una notificación falsa que
+// pase todo esto es adelantar una consulta que el sync iba a hacer igual.
+
+function tokenValido(req) {
+  const esperado = process.env.ML_WEBHOOK_SECRET;
+  if (!esperado) {
+    console.error('[PacKen Webhook] ML_WEBHOOK_SECRET no está configurado: se rechazan todas las notificaciones.');
+    return false;
+  }
+  const recibido = req.query?.token ?? req.headers['x-packen-webhook-token'];
+  if (typeof recibido !== 'string') return false;
+  const a = Buffer.from(esperado);
+  const b = Buffer.from(recibido);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 // Corre DESPUÉS de haber respondido: su único canal de salida es el log, no
 // hay respuesta donde informar nada. Por eso no propaga: si rompe, el sync
 // periódico levanta el cambio en la próxima corrida.
-async function procesar(shipmentId) {
+async function procesar(shipmentId, userIdMl) {
   try {
     const supabase = getSupabase();
 
@@ -34,6 +58,17 @@ async function procesar(shipmentId) {
 
     if (!paquete) {
       console.log(`[PacKen Webhook] Shipment ${shipmentId} no existe en nuestra DB, ignorando.`);
+      return;
+    }
+
+    // La notificación tiene que venir a nombre del seller dueño del paquete.
+    const { data: seller } = await supabase
+      .from('seller')
+      .select('idmercadolibre')
+      .eq('id', paquete.idseller)
+      .maybeSingle();
+    if (!seller || String(seller.idmercadolibre) !== String(userIdMl)) {
+      console.warn(`[PacKen Webhook] user_id=${userIdMl} no es el seller del shipment ${shipmentId}, ignorando.`);
       return;
     }
 
@@ -57,6 +92,9 @@ async function procesar(shipmentId) {
 
     if (nuevoEstado) {
       cambios.estado = nuevoEstado;
+      // Para el historial (trigger de paquete_historial): cambio automático.
+      cambios.ultimo_cambio_por = null;
+      cambios.ultimo_cambio_origen = 'webhook_ml';
       if (nuevoEstado === ESTADOS.ENTREGADO) {
         cambios.fechaentrega = shipment.status_history?.date_delivered || new Date().toISOString();
       }
@@ -84,7 +122,16 @@ export default function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { resource, topic, user_id } = req.body ?? {};
+  if (!tokenValido(req)) {
+    return res.status(401).json({ error: 'No autorizado' });
+  }
+
+  const { resource, topic, user_id, application_id } = req.body ?? {};
+
+  if (process.env.ML_CLIENT_ID && String(application_id) !== String(process.env.ML_CLIENT_ID)) {
+    console.warn(`[PacKen Webhook] application_id=${application_id} no es nuestra app, ignorando.`);
+    return res.status(200).json({ ok: true, ignored: true });
+  }
 
   console.log(`[PacKen Webhook] Notificación recibida: topic="${topic}", resource="${resource}", user_id=${user_id}`);
 
@@ -101,7 +148,7 @@ export default function handler(req, res) {
 
   const shipmentId = shipmentIdMatch[1];
 
-  waitUntil(procesar(shipmentId));
+  waitUntil(procesar(shipmentId, user_id));
 
   // 200 inmediato. No dice si el paquete se actualizó (todavía no se sabe):
   // eso queda en el log. ML solo necesita saber que la recibimos.

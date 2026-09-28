@@ -3,7 +3,8 @@ import { ESTADOS } from '../utils/estados.js';
 
 function mapPaquete(row) {
   return {
-    id: row.id ?? row.idenvioml ?? '',
+    // public_id (UUID) del paquete: es lo que esperan cambiar-estado y reasignar.
+    id: row.id ?? null,
     idenvioml: row.idenvioml ?? row.id ?? '',
     comprador: row.comprador ?? '',
     direccion: row.direccion ?? '',
@@ -54,6 +55,16 @@ export async function reasignarTransportista(id, idtransportista) {
   });
 }
 
-export async function simularEntregas() {
-  return apiFetch('/api/paquetes/simular-entregas', { method: 'POST' });
+// Entrega solo los paquetes elegidos (public_id). El servidor omite los que no
+// estén En camino o no sean de la empresa.
+export async function entregarPaquetes(ids) {
+  return apiFetch('/api/paquetes/entregar', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+}
+
+export async function getHistorialPaquete(id) {
+  const data = await apiFetch(`/api/paquetes?historial=${encodeURIComponent(id)}`);
+  return data.historial ?? [];
 }

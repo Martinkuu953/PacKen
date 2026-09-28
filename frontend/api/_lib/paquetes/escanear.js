@@ -8,6 +8,7 @@ import {
 import { autenticar } from '../auth.js';
 import { ESTADOS } from '../../../shared/estados.js';
 import { responderError } from '../errores.js';
+import { paquetePublico } from './comun.js';
 
 // Registra el barrio del envío en area_flex (si es nuevo, sin zona) y devuelve
 // { idarea, idzona }.
@@ -135,6 +136,9 @@ export default async function handler(req, res) {
     const { idarea, idzona } = await resolverZonaYRegistrarArea(supabase, idEmpresaPaquete, envio);
 
     const paqueteData = {
+      // Quién y por dónde: lo toma el trigger de paquete_historial.
+      ultimo_cambio_por: usuario.id,
+      ultimo_cambio_origen: `escaneo_${tipo}`,
       comprador: envio.comprador,
       direccion: envio.direccion,
       estado,
@@ -191,7 +195,7 @@ export default async function handler(req, res) {
       console.log(`[PacKen] Paquete insertado (id=${paquete.id})`);
     }
 
-    return res.status(200).json({ ok: true, paquete, envio });
+    return res.status(200).json({ ok: true, paquete: paquetePublico(paquete), envio });
   } catch (err) {
     return responderError(res, err, 400, 'escanear');
   }

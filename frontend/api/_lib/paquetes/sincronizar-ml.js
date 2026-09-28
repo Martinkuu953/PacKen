@@ -57,6 +57,9 @@ async function sincronizarUno(supabase, pedir, paquete, stats) {
 
   if (nuevoEstado) {
     cambios.estado = nuevoEstado;
+    // Para el historial (trigger de paquete_historial): cambio automático.
+    cambios.ultimo_cambio_por = null;
+    cambios.ultimo_cambio_origen = 'sync_ml';
     if (nuevoEstado === ESTADOS.ENTREGADO) {
       cambios.fechaentrega = shipment.status_history?.date_delivered || new Date().toISOString();
     }

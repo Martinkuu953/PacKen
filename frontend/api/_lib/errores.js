@@ -26,6 +26,7 @@ export function responderError(res, err, statusPorDefecto = 500, contexto = 'API
   console.error(`[PacKen] Error en ${contexto}:`, err);
 
   if (err instanceof ErrorPublico) {
+    if (err.reintentarEnSeg) res.setHeader('Retry-After', String(err.reintentarEnSeg));
     return res.status(err.status).json({ error: err.message });
   }
 

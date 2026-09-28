@@ -2,8 +2,10 @@ import { getSupabase } from '../ml.js';
 import { autenticar } from '../auth.js';
 import { ESTADOS, canonizarEstado } from '../../../shared/estados.js';
 import { ErrorPublico, responderError } from '../errores.js';
+import { esUuid, paquetePublico } from './comun.js';
 
 // POST /api/paquetes/cambiar-estado  { id, estado }
+// `id` es el public_id (UUID) del paquete.
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -18,6 +20,9 @@ export default async function handler(req, res) {
     if (!id || !estado) {
       return res.status(400).json({ error: 'id y estado son requeridos' });
     }
+    if (!esUuid(id)) {
+      return res.status(400).json({ error: 'id de paquete inválido' });
+    }
     const estadoCanonico = canonizarEstado(estado);
     if (!estadoCanonico) {
       return res.status(400).json({ error: `Estado inválido: "${estado}"` });
@@ -27,21 +32,20 @@ export default async function handler(req, res) {
 
     const { data: paquete } = await supabase
       .from('paquete')
-      .select('estado, idempresa, idtransportista')
-      .eq('id', Number(id))
+      .select('id, estado, idempresa, idtransportista')
+      .eq('public_id', id)
       .maybeSingle();
 
-    if (!paquete) {
-      return res.status(404).json({ error: `Paquete con id=${id} no encontrado` });
-    }
-
     const propio =
-      usuario.rol === 'transportista'
+      paquete &&
+      (usuario.rol === 'transportista'
         ? paquete.idtransportista === usuario.id
-        : usuario.rol !== 'empresa' || paquete.idempresa === usuario.id;
+        : usuario.rol === 'empresa' && paquete.idempresa === usuario.id);
 
+    // Mismo mensaje para "no existe" y "no es tuyo": no confirmamos la
+    // existencia de paquetes ajenos.
     if (!propio) {
-      return res.status(403).json({ error: 'No tenés permiso para modificar este paquete' });
+      return res.status(404).json({ error: 'Paquete no encontrado' });
     }
 
     // Un paquete solo se entrega si salió a reparto: marcar como entregado algo
@@ -56,7 +60,12 @@ export default async function handler(req, res) {
       }
     }
 
-    const updateData = { estado: estadoCanonico };
+    const updateData = {
+      estado: estadoCanonico,
+      // Quién y por dónde: lo toma el trigger de paquete_historial.
+      ultimo_cambio_por: usuario.id,
+      ultimo_cambio_origen: 'manual',
+    };
     if (estadoCanonico === ESTADOS.ENTREGADO) {
       updateData.fechaentrega = new Date().toISOString();
     }
@@ -64,15 +73,15 @@ export default async function handler(req, res) {
     const { data, error } = await supabase
       .from('paquete')
       .update(updateData)
-      .eq('id', Number(id))
+      .eq('id', paquete.id)
       .select()
       .single();
 
     if (error) throw new Error(error.message);
     if (!data) throw new ErrorPublico('Paquete no encontrado', 404);
 
-    console.log(`[PacKen] Paquete ${id} → estado="${estado}"`);
-    return res.status(200).json({ ok: true, paquete: data });
+    console.log(`[PacKen] Paquete ${paquete.id} → estado="${estadoCanonico}" (usuario ${usuario.id})`);
+    return res.status(200).json({ ok: true, paquete: paquetePublico(data) });
   } catch (err) {
     return responderError(res, err, 400, 'cambiar-estado');
   }

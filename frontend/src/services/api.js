@@ -6,8 +6,21 @@ export function apiUrl(path) {
   return base ? `${base}${route}` : route;
 }
 
-function getStoredToken() {
-  return localStorage.getItem('packen_token');
+// A-03: el access token vive solo en memoria (esta variable), nunca en
+// localStorage. Un XSS ya no puede leerlo de ahí, y al recargar la página se
+// pierde: la sesión se rehidrata con el refresh token de la cookie httpOnly.
+let accessToken = null;
+
+export function setAccessToken(token) {
+  accessToken = token ?? null;
+}
+
+// Restos de versiones viejas que sí guardaban la sesión en localStorage.
+try {
+  localStorage.removeItem('packen_token');
+  localStorage.removeItem('packen_usuario');
+} catch {
+  // modo privado / storage bloqueado: no hay nada que limpiar
 }
 
 let syncHandlers = { onTokenRefreshed: null, onSessionExpired: null };
@@ -21,21 +34,32 @@ let refreshPromise = null;
 // Una sola petición de refresh en vuelo a la vez: si tres requests se topan
 // con un 401 al mismo tiempo, comparten la misma rotación en lugar de rotar
 // el token tres veces (lo que dispararía la detección de reuso).
+//
+// Entre pestañas pasa lo mismo: cada una tiene su token en memoria y todas
+// comparten la cookie. Si dos rotaran a la vez con la misma cookie, la segunda
+// usaría un token ya rotado y el servidor lo tomaría como robo (revoca todo).
+// El Web Lock las pone en fila: la segunda sale con la cookie ya rotada.
+function pedirRefresh() {
+  return fetch(apiUrl('/api/auth/refresh'), {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+  }).then(async (res) => {
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || 'No se pudo refrescar la sesión');
+    accessToken = body.token;
+    return body;
+  });
+}
+
 export function intentarRefresh() {
   if (!refreshPromise) {
-    refreshPromise = fetch(apiUrl('/api/auth/refresh'), {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-    })
-      .then(async (res) => {
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body.error || 'No se pudo refrescar la sesión');
-        return body;
-      })
-      .finally(() => {
-        refreshPromise = null;
-      });
+    const conLock = typeof navigator !== 'undefined' && navigator.locks
+      ? navigator.locks.request('packen-refresh', pedirRefresh)
+      : pedirRefresh();
+    refreshPromise = conLock.finally(() => {
+      refreshPromise = null;
+    });
   }
   return refreshPromise;
 }
@@ -63,16 +87,15 @@ function ejecutarFetch(path, options, token) {
 // el token rotado. Devuelve la Response cruda: quien llama decide si el cuerpo
 // es JSON o un archivo.
 async function fetchConSesion(path, options) {
-  const res = await ejecutarFetch(path, options, getStoredToken());
+  const res = await ejecutarFetch(path, options, accessToken);
   if (res.status !== 401 || esRutaAuthPublica(path)) return res;
 
   let refreshed;
   try {
     refreshed = await intentarRefresh();
   } catch {
+    accessToken = null;
     syncHandlers.onSessionExpired?.();
-    localStorage.removeItem('packen_token');
-    localStorage.removeItem('packen_usuario');
     window.location.href = '/login';
     throw new Error('Sesión expirada');
   }

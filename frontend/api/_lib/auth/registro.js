@@ -3,6 +3,7 @@ import { hashPassword, generateToken, perfilPublico, validarPassword, validarEma
 import { crearRefreshToken } from '../refreshTokens.js';
 import { setRefreshCookie } from '../cookies.js';
 import { responderError } from '../errores.js';
+import { LIMITES, ipDe, verificarLimites, registrarIntento } from '../rateLimit.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -35,6 +36,13 @@ export default async function handler(req, res) {
     }
 
     const supabase = getSupabase();
+
+    // C-04: cada intento de registro cuenta (no solo los fallidos), para
+    // frenar el alta masiva de cuentas desde una misma IP.
+    const claveIp = `registro:ip:${ipDe(req)}`;
+    await verificarLimites(supabase, [{ clave: claveIp, ...LIMITES.registroPorIp }]);
+    await registrarIntento(supabase, [claveIp]);
+
     const hash = hashPassword(password);
 
     const { data, error } = await supabase

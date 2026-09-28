@@ -1,13 +1,10 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { apiFetch, intentarRefresh, setAuthSyncHandlers } from '../services/api.js';
+import { apiFetch, intentarRefresh, setAccessToken, setAuthSyncHandlers } from '../services/api.js';
 
 const AuthContext = createContext(null);
 
-const STORAGE_KEY_TOKEN = 'packen_token';
-const STORAGE_KEY_USER = 'packen_usuario';
-
-// El backend ya no manda id ni email, pero una sesión guardada antes de ese
-// cambio sí los tiene: normalizamos siempre antes de persistir o usar.
+// El backend ya no manda id ni email; normalizamos igual por si algún día
+// vuelve a colarse un campo de más.
 function perfilSeguro(usuario) {
   if (!usuario) return null;
   return {
@@ -17,30 +14,29 @@ function perfilSeguro(usuario) {
   };
 }
 
+// A-03: ni el access token ni el perfil se guardan en el navegador. Viven en
+// el estado de React (y el token, además, en la variable de services/api.js,
+// que es la que usa cada request). Al recargar la página se pierden y la
+// sesión se rehidrata con el refresh token de la cookie httpOnly, que JS no
+// puede leer.
 export function AuthProvider({ children }) {
-  const [usuario, setUsuario] = useState(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_USER);
-      return stored ? perfilSeguro(JSON.parse(stored)) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [token, setToken] = useState(() => localStorage.getItem(STORAGE_KEY_TOKEN));
+  const [usuario, setUsuario] = useState(null);
+  const [token, setToken] = useState(null);
 
-  // Si no hay access token en localStorage puede que igual haya una sesión
-  // viva: el refresh token vive en una cookie httpOnly que JS no puede leer.
-  // Arrancamos "cargando" e intentamos rehidratar antes de mandar a /login.
-  const [cargandoSesion, setCargandoSesion] = useState(
-    () => !localStorage.getItem(STORAGE_KEY_TOKEN),
-  );
+  // Siempre arrancamos "cargando": sin nada guardado, la única forma de saber
+  // si hay sesión es probar el refresh contra la cookie.
+  const [cargandoSesion, setCargandoSesion] = useState(true);
 
   const guardarSesion = useCallback((nuevoToken, nuevoUsuario) => {
-    const perfil = perfilSeguro(nuevoUsuario);
-    localStorage.setItem(STORAGE_KEY_TOKEN, nuevoToken);
-    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(perfil));
+    setAccessToken(nuevoToken);
     setToken(nuevoToken);
-    setUsuario(perfil);
+    setUsuario(perfilSeguro(nuevoUsuario));
+  }, []);
+
+  const limpiarSesion = useCallback(() => {
+    setAccessToken(null);
+    setToken(null);
+    setUsuario(null);
   }, []);
 
   const cerrarSesion = useCallback(async () => {
@@ -49,12 +45,9 @@ export function AuthProvider({ children }) {
     } catch {
       // el logout local debe funcionar aunque falle la llamada al servidor
     } finally {
-      localStorage.removeItem(STORAGE_KEY_TOKEN);
-      localStorage.removeItem(STORAGE_KEY_USER);
-      setToken(null);
-      setUsuario(null);
+      limpiarSesion();
     }
-  }, []);
+  }, [limpiarSesion]);
 
   const registrar = useCallback(async (datos) => {
     const res = await apiFetch('/api/auth/registro', {
@@ -77,31 +70,21 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     setAuthSyncHandlers({
       onTokenRefreshed: guardarSesion,
-      onSessionExpired: () => {
-        localStorage.removeItem(STORAGE_KEY_TOKEN);
-        localStorage.removeItem(STORAGE_KEY_USER);
-        setToken(null);
-        setUsuario(null);
-      },
+      onSessionExpired: limpiarSesion,
     });
-  }, [guardarSesion]);
+  }, [guardarSesion, limpiarSesion]);
 
-  // Rehidratación al arrancar: sin access token, probamos canjear la cookie
-  // httpOnly por uno nuevo. Si no hay cookie (o venció) el refresh falla y
-  // seguimos deslogueados, que es el estado con el que ya arrancamos.
+  // Rehidratación al arrancar: canjeamos la cookie httpOnly por un access
+  // token nuevo. Si no hay cookie (o venció) el refresh falla y seguimos
+  // deslogueados.
   useEffect(() => {
-    if (!cargandoSesion) return undefined;
-
     let cancelado = false;
     intentarRefresh()
       .then((res) => {
         if (!cancelado) guardarSesion(res.token, res.usuario);
       })
       .catch(() => {
-        if (!cancelado) {
-          localStorage.removeItem(STORAGE_KEY_TOKEN);
-          localStorage.removeItem(STORAGE_KEY_USER);
-        }
+        if (!cancelado) limpiarSesion();
       })
       .finally(() => {
         if (!cancelado) setCargandoSesion(false);
@@ -117,7 +100,6 @@ export function AuthProvider({ children }) {
   const refrescarUsuario = useCallback(async () => {
     const res = await apiFetch('/api/auth/me');
     const updated = perfilSeguro(res.usuario);
-    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updated));
     setUsuario(updated);
     return updated;
   }, []);

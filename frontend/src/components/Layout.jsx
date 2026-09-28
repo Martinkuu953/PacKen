@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import Sidebar from './Sidebar';
 import Logo from './Logo';
+import Asistente from './Asistente';
+import { useAuth } from '../context/AuthContext';
 
 const Layout = ({ children }) => {
   const [sidebarAbierto, setSidebarAbierto] = useState(false);
+  const { esEmpresa } = useAuth();
 
   return (
     <div className="flex bg-marca-crema min-h-screen">
@@ -39,6 +42,9 @@ const Layout = ({ children }) => {
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
+
+      {/* El asistente guiado es para el administrador de la empresa. */}
+      {esEmpresa && <Asistente />}
     </div>
   );
 };

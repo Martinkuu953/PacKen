@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { getSupabase, pedirTokenPorCodigo, obtenerUsuarioML, guardarSellerYToken } from '../ml.js';
+import { PROPOSITO_STATE } from './conectar.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -19,9 +20,14 @@ export default async function callback(req, res) {
     return res.redirect(302, '/sellers?ml=error');
   }
 
+  if (!code || !state) {
+    return res.redirect(302, '/sellers?ml=error');
+  }
+
   let payload;
   try {
     payload = jwt.verify(state, JWT_SECRET);
+    if (payload.proposito !== PROPOSITO_STATE || !payload.idempresa) throw new Error('state sin propósito');
   } catch {
     console.error('[PacKen] state inválido o vencido en /api/ml/callback');
     return res.redirect(302, '/sellers?ml=error');

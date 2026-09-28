@@ -226,18 +226,69 @@ async function listar(supabase, idempresa, tipo, res) {
   return res.json({ listas, zonas, entidades, areas });
 }
 
+// GET ?historial=1 — últimos cambios de las listas de este tipo (los escriben
+// los triggers de migration-aut-v3.sql).
+async function historial(supabase, idempresa, tipo, res) {
+  const { data, error } = await supabase
+    .from('lista_historial')
+    .select('accion, lista_nombre, nombre_anterior, zona_nombre, importe_anterior, importe_nuevo, created_at')
+    .eq('idempresa', idempresa)
+    .eq('tipo', tipo)
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) throw new Error(error.message);
+
+  return res.json({
+    historial: (data ?? []).map((h) => ({
+      accion: h.accion,
+      lista: h.lista_nombre,
+      nombreAnterior: h.nombre_anterior,
+      zona: h.zona_nombre,
+      importeAnterior: h.importe_anterior == null ? null : Number(h.importe_anterior),
+      importeNuevo: h.importe_nuevo == null ? null : Number(h.importe_nuevo),
+      fecha: h.created_at,
+    })),
+  });
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 // POST — operaciones (op en el body)
 // ──────────────────────────────────────────────────────────────────────────
+const MSG_NOMBRE_REPETIDO = (nom) => `Ya existe una lista llamada "${nom}". Elegí otro nombre.`;
+
+// Dos listas con el mismo nombre ("Lista Nul" y "Lista Nul") son imposibles de
+// distinguir en los selectores de sellers/transportistas. Se compara sin
+// mayúsculas ni espacios de más, igual que el índice único uq_lista_nombre.
+async function validarNombreLista(supabase, idempresa, tipo, nombre, excluirId = null) {
+  const nom = String(nombre ?? '').trim().replace(/\s+/g, ' ');
+  if (!nom) throw new ErrorPublico('El nombre es requerido');
+  if (nom.length > 100) throw new ErrorPublico('El nombre es demasiado largo (máximo 100 caracteres)');
+
+  const { data, error } = await supabase
+    .from('lista')
+    .select('id, nombre')
+    .eq('idempresa', idempresa)
+    .eq('tipo', tipo);
+  if (error) throw new Error(error.message);
+
+  const clave = nom.toLowerCase();
+  const repetida = (data ?? []).some(
+    (l) => l.id !== excluirId && String(l.nombre).trim().replace(/\s+/g, ' ').toLowerCase() === clave,
+  );
+  if (repetida) throw new ErrorPublico(MSG_NOMBRE_REPETIDO(nom), 409);
+  return nom;
+}
+
 async function crearLista(supabase, idempresa, tipo, nombre, res) {
-  const nom = String(nombre ?? '').trim();
-  if (!nom) return res.status(400).json({ error: 'El nombre es requerido' });
+  const nom = await validarNombreLista(supabase, idempresa, tipo, nombre);
 
   const { data: lista, error } = await supabase
     .from('lista')
     .insert({ idempresa, tipo, nombre: nom })
     .select('id, public_id')
     .single();
+  // 23505 = el índice único ganó una carrera contra la validación de arriba.
+  if (error?.code === '23505') throw new ErrorPublico(MSG_NOMBRE_REPETIDO(nom), 409);
   if (error) throw new Error(error.message);
 
   // Sembrar una tarifa en 0 por cada zona de la empresa.
@@ -256,9 +307,9 @@ async function crearLista(supabase, idempresa, tipo, nombre, res) {
 async function renombrarLista(supabase, idempresa, tipo, body, res) {
   const id = await resolverLista(supabase, idempresa, tipo, body.listaId);
   if (!id) return res.status(404).json({ error: 'Lista no encontrada' });
-  const nom = String(body.nombre ?? '').trim();
-  if (!nom) return res.status(400).json({ error: 'El nombre es requerido' });
+  const nom = await validarNombreLista(supabase, idempresa, tipo, body.nombre, id);
   const { error } = await supabase.from('lista').update({ nombre: nom, updated_at: ahora() }).eq('id', id);
+  if (error?.code === '23505') throw new ErrorPublico(MSG_NOMBRE_REPETIDO(nom), 409);
   if (error) throw new Error(error.message);
   return res.json({ ok: true });
 }
@@ -559,7 +610,10 @@ export async function manejarListas(req, res, tipo) {
     const supabase = getSupabase();
     const idempresa = usuario.id;
 
-    if (req.method === 'GET') return await listar(supabase, idempresa, tipo, res);
+    if (req.method === 'GET') {
+      if (req.query?.historial) return await historial(supabase, idempresa, tipo, res);
+      return await listar(supabase, idempresa, tipo, res);
+    }
     if (req.method === 'POST') return await guardar(supabase, idempresa, tipo, req, res, { manejaZonas });
     if (req.method === 'DELETE') return await borrar(supabase, idempresa, tipo, req, res);
 

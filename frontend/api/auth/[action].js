@@ -1,3 +1,4 @@
+import asistente from '../_lib/auth/asistente.js';
 import login from '../_lib/auth/login.js';
 import logout from '../_lib/auth/logout.js';
 import me from '../_lib/auth/me.js';
@@ -10,7 +11,7 @@ import registro from '../_lib/auth/registro.js';
 // La URL real no cambia: /api/auth/login sigue resolviendo acá con
 // req.query.action === "login", así que ni el frontend ni el Edge middleware
 // (que matchea paths exactos) se ven afectados.
-const rutas = { login, logout, me, perfil, refresh, registro };
+const rutas = { asistente, login, logout, me, perfil, refresh, registro };
 
 export default function handler(req, res) {
   const fn = rutas[req.query.action];

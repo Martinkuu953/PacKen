@@ -2,6 +2,7 @@ import { getSupabase } from '../_lib/ml.js';
 import { autenticar } from '../_lib/auth.js';
 import { canonizarEstado } from '../../shared/estados.js';
 import { responderError } from '../_lib/errores.js';
+import { esUuid } from '../_lib/paquetes/comun.js';
 
 // El cliente solo conoce UUIDs opacos (public_id). Los filtros llegan con ese
 // UUID y hay que traducirlo al id interno antes de consultar paquete.
@@ -10,6 +11,44 @@ async function resolverId(supabase, tabla, publicId, filtroEmpresa) {
   if (filtroEmpresa != null) query = query.eq('idempresa', filtroEmpresa);
   const { data } = await query.maybeSingle();
   return data?.id ?? null;
+}
+
+// GET /api/paquetes?historial=<public_id> — historial de estados de un paquete.
+// Va en este mismo endpoint para no sumar una Serverless Function (límite 12
+// del plan Hobby de Vercel).
+async function historial(supabase, usuario, publicId, res) {
+  if (!esUuid(publicId)) return res.status(400).json({ error: 'id de paquete inválido' });
+
+  let query = supabase.from('paquete').select('id').eq('public_id', publicId);
+  query = usuario.rol === 'transportista'
+    ? query.eq('idtransportista', usuario.id)
+    : query.eq('idempresa', usuario.id);
+  const { data: paquete } = await query.maybeSingle();
+  if (!paquete) return res.status(404).json({ error: 'Paquete no encontrado' });
+
+  const { data, error } = await supabase
+    .from('paquete_historial')
+    .select('estado_anterior, estado_nuevo, idusuario, origen, created_at')
+    .eq('idpaquete', paquete.id)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
+
+  const usuarios = await buscarPor(
+    supabase,
+    'usuario',
+    'id, nombre',
+    [...new Set((data ?? []).map((h) => h.idusuario).filter(Boolean))],
+  );
+
+  return res.json({
+    historial: (data ?? []).map((h) => ({
+      de: h.estado_anterior,
+      a: h.estado_nuevo,
+      usuario: usuarios.get(h.idusuario)?.nombre ?? null,
+      origen: h.origen,
+      fecha: h.created_at,
+    })),
+  });
 }
 
 // GET /api/paquetes?estado=&sellerId=&transportistaId=&desde=&hasta=
@@ -23,6 +62,8 @@ export default async function handler(req, res) {
 
   try {
     const supabase = getSupabase();
+    if (req.query?.historial) return await historial(supabase, usuario, req.query.historial, res);
+
     const { estado, sellerId, transportistaId, desde, hasta } = req.query ?? {};
 
     let query = supabase.from('paquete').select('*').order('fechaingreso', { ascending: false });
@@ -83,11 +124,12 @@ export default async function handler(req, res) {
     ]);
 
     return res.json({
-      // Allowlist explícita: los ids internos (idempresa, idseller,
+      // Allowlist explícita: los ids internos (id, idempresa, idseller,
       // idtransportista, idzona) no salen del servidor, igual que en el resto
       // de los endpoints. Afuera solo viajan nombres y public_id.
       paquetes: paquetes.map((p) => ({
-        id: p.id,
+        // N-02: el id SERIAL no sale; el cliente usa el public_id (UUID).
+        id: p.public_id,
         idenvioml: p.idenvioml,
         comprador: p.comprador,
         direccion: p.direccion,

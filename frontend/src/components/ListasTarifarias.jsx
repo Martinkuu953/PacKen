@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../services/api';
 import Buscador from './Buscador';
 import MapeoBarriosLista from './MapeoBarriosLista';
+import HistorialListas from './HistorialListas';
 import { filtrarPorTexto } from '../utils/busqueda';
 
 // Pantalla única de tarifas con toggle Sellers / Transportistas.
@@ -119,10 +120,20 @@ const ListasTarifarias = () => {
   const importeDe = (lista, zonaId) =>
     lista.tarifas?.find((t) => t.zonaId === zonaId)?.importe ?? 0;
 
+  // Mismo criterio que el servidor (que es el que manda): sin mayúsculas ni
+  // espacios de más, "Lista Nul" y "lista  nul" son el mismo nombre.
+  const normalizarNombre = (n) => String(n).trim().replace(/\s+/g, ' ').toLowerCase();
+  const nombreRepetido = (nombre, excluirId = null) =>
+    listas.some((l) => l.id !== excluirId && normalizarNombre(l.nombre) === normalizarNombre(nombre));
+
   // ── Acciones ──────────────────────────────────────────────────────────────
   const crearLista = async () => {
     const nombre = nuevaLista.trim();
     if (!nombre) return;
+    if (nombreRepetido(nombre)) {
+      setError(`Ya existe una lista llamada "${nombre}". Elegí otro nombre.`);
+      return;
+    }
     if (await ejecutar({ op: 'crearLista', nombre })) setNuevaLista('');
   };
 
@@ -142,6 +153,10 @@ const ListasTarifarias = () => {
 
   const guardarNombre = async (id) => {
     const nombre = nombreEdit.trim();
+    if (nombre && nombreRepetido(nombre, id)) {
+      setError(`Ya existe una lista llamada "${nombre}". Elegí otro nombre.`);
+      return;
+    }
     if (nombre && (await ejecutar({ op: 'renombrarLista', listaId: id, nombre }))) {
       setRenombrando(null);
     }
@@ -679,6 +694,9 @@ const ListasTarifarias = () => {
             {cfg.sinEntidades}
           </p>
         )}
+
+        {/* key: al cambiar de precios a costos se remonta plegado. */}
+        <HistorialListas key={tipo} endpoint={cfg.endpoint} />
       </div>
     </div>
   );

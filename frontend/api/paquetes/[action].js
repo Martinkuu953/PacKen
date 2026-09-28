@@ -1,8 +1,8 @@
 import cambiarEstado from '../_lib/paquetes/cambiar-estado.js';
+import entregar from '../_lib/paquetes/entregar.js';
 import escanear from '../_lib/paquetes/escanear.js';
 import reasignar from '../_lib/paquetes/reasignar.js';
 import rezonificar from '../_lib/paquetes/rezonificar.js';
-import simularEntregas from '../_lib/paquetes/simular-entregas.js';
 import sincronizar from '../_lib/paquetes/sincronizar-ml.js';
 
 // Dispatcher único para /api/paquetes/<action> — consolida 3 rutas en una
@@ -11,10 +11,10 @@ import sincronizar from '../_lib/paquetes/sincronizar-ml.js';
 // /api/paquetes (sin action) sigue resolviendo aparte en paquetes/index.js.
 const rutas = {
   'cambiar-estado': cambiarEstado,
+  entregar,
   escanear,
   reasignar,
   rezonificar,
-  'simular-entregas': simularEntregas,
   sincronizar,
 };
 

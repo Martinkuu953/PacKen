@@ -11,12 +11,19 @@ const RUTAS_PUBLICAS = [
   { method: 'POST', path: '/api/auth/refresh' },
   { method: 'POST', path: '/api/auth/logout' },
   // Lo llama MercadoLibre desde afuera; GET responde el healthcheck del webhook.
+  // "Pública" solo para el edge: el handler exige el secreto compartido
+  // (ML_WEBHOOK_SECRET) y valida application_id/user_id.
   { method: 'POST', path: '/api/webhooks/mercadolibre' },
   { method: 'GET', path: '/api/webhooks/mercadolibre' },
   // Lo llama el cron de Supabase (pg_cron), que no tiene sesión de usuario.
   // "Pública" acá solo significa que se saltea el JWT del edge: el handler
   // exige el header x-cron-secret o, si no viene, una sesión de empresa.
   { method: 'POST', path: '/api/paquetes/sincronizar' },
+  // N-01: a esta URL vuelve el navegador desde mercadolibre.com después de que
+  // el seller autoriza. Es una navegación, no un fetch: no lleva header
+  // Authorization. La empresa sale del "state" firmado (y de corta vida) que
+  // armó /api/ml/conectar, y el handler lo valida.
+  { method: 'GET', path: '/api/ml/callback' },
 ];
 
 function respuesta401(error) {
@@ -41,7 +48,10 @@ export default async function middleware(req) {
 
   try {
     const secret = new TextEncoder().encode(process.env.JWT_SECRET);
-    await jwtVerify(header.slice(7), secret);
+    const { payload } = await jwtVerify(header.slice(7), secret);
+    // Solo un access token trae sub. Otros JWT firmados con el mismo secreto
+    // (el state de OAuth de ML) no sirven como sesión.
+    if (!payload.sub) throw new Error('sin sub');
   } catch {
     return respuesta401('Token inválido o expirado');
   }

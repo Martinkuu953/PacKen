@@ -4,6 +4,10 @@ import { responderError } from '../errores.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
+// Marca el JWT como "state de OAuth de ML": el callback rechaza cualquier otro
+// token firmado con el mismo secreto (por ejemplo un access token de sesión).
+export const PROPOSITO_STATE = 'ml_oauth_state';
+
 // GET /api/ml/conectar — arma la URL de autorización de ML y se la devuelve
 // al frontend (que hace window.location.href = url). La empresa que pide la
 // conexión viaja firmada en "state": /api/ml/callback la recupera de ahí, no
@@ -19,7 +23,7 @@ export default async function conectar(req, res) {
   if (!requiereRol(res, usuario, 'empresa')) return;
 
   try {
-    const state = jwt.sign({ idempresa: usuario.id }, JWT_SECRET, { expiresIn: '10m' });
+    const state = jwt.sign({ idempresa: usuario.id, proposito: PROPOSITO_STATE }, JWT_SECRET, { expiresIn: '10m' });
     const redirectUri = `https://${req.headers.host}/api/ml/callback`;
     const authDomain = process.env.ML_AUTH_DOMAIN || 'auth.mercadolibre.com.ar';
 
