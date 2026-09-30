@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../services/api';
+import { useCatalogos } from '../context/CatalogosContext';
 import Buscador from '../components/Buscador';
 import FormNuevoSeller from '../components/FormNuevoSeller';
 import DetalleSeller from '../components/DetalleSeller';
@@ -26,6 +27,7 @@ const Sellers = () => {
   const [creando, setCreando] = useState(false);
   const [sellerSeleccionado, setSellerSeleccionado] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const { recargarCatalogos } = useCatalogos();
 
   const aplicar = useCallback((res) => {
     setSellersData(res.sellers ?? []);
@@ -35,9 +37,12 @@ const Sellers = () => {
 
   // Refresco silencioso (sin volver a mostrar "Cargando...") para después de
   // conectar un seller nuevo: la tabla ya tiene datos, solo hay que actualizarla.
+  // También refresca el catálogo global, para que los filtros de Paquetes y
+  // Estadísticas vean el seller nuevo.
   const recargar = useCallback(() => {
+    recargarCatalogos();
     return apiFetch(ENDPOINT).then(aplicar).catch((err) => setError(err.message));
-  }, [aplicar]);
+  }, [aplicar, recargarCatalogos]);
 
   useEffect(() => {
     let cancelado = false;
@@ -92,7 +97,8 @@ const Sellers = () => {
   const sellerEliminado = useCallback((sellerId) => {
     setSellersData((prev) => prev.filter((s) => s.id !== sellerId));
     setSellerSeleccionado(null);
-  }, []);
+    recargarCatalogos();
+  }, [recargarCatalogos]);
 
   const sellersFiltrados = useMemo(
     () => filtrarPorTexto(sellersData, busqueda, ['nombre']),

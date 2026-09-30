@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { usePaquetes } from '../hooks/usePaquetes';
-import { useCatalogos } from '../hooks/useCatalogos';
+import { useCatalogos } from '../context/CatalogosContext';
 import { ESTADOS, canonizarEstado, colorEstado, prioridadEstado } from '../utils/estados';
 import { filtrarPorTexto } from '../utils/busqueda';
 import { marcarEntregado, reasignarTransportista, entregarPaquetes } from '../services/paquetes';

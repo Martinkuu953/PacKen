@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../services/api';
+import { useCatalogos } from '../context/CatalogosContext';
 import Buscador from '../components/Buscador';
 import FormNuevoTransportista from '../components/FormNuevoTransportista';
 import DetalleTransportista from '../components/DetalleTransportista';
@@ -22,16 +23,18 @@ const Transportistas = () => {
   const [busqueda, setBusqueda] = useState('');
   const [creando, setCreando] = useState(false);
   const [transportistaSeleccionado, setTransportistaSeleccionado] = useState(null);
+  const { recargarCatalogos } = useCatalogos();
 
   const aplicar = useCallback((res) => {
     setTransportistas(res.transportistas ?? []);
     setError('');
   }, []);
 
-  const recargar = useCallback(
-    () => apiFetch(ENDPOINT).then(aplicar).catch((err) => setError(err.message)),
-    [aplicar],
-  );
+  // También refresca el catálogo global (filtros y reasignación de Paquetes).
+  const recargar = useCallback(() => {
+    recargarCatalogos();
+    return apiFetch(ENDPOINT).then(aplicar).catch((err) => setError(err.message));
+  }, [aplicar, recargarCatalogos]);
 
   useEffect(() => {
     let cancelado = false;
@@ -54,7 +57,8 @@ const Transportistas = () => {
   const transportistaEliminado = useCallback((transportistaId) => {
     setTransportistas((prev) => prev.filter((t) => t.id !== transportistaId));
     setTransportistaSeleccionado(null);
-  }, []);
+    recargarCatalogos();
+  }, [recargarCatalogos]);
 
   // Todos los transportistas de la empresa son activos: las cuentas las crea
   // ella misma, no hay solicitudes que aprobar.

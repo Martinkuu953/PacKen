@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { CatalogosProvider } from './context/CatalogosContext';
 import Layout from './components/Layout';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
@@ -128,7 +129,10 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <AppRoutes />
+        {/* Adentro de AuthProvider: necesita saber si el usuario es empresa. */}
+        <CatalogosProvider>
+          <AppRoutes />
+        </CatalogosProvider>
       </AuthProvider>
     </Router>
   );

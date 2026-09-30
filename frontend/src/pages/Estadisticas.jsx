@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { usePaquetes } from '../hooks/usePaquetes';
-import { useCatalogos } from '../hooks/useCatalogos';
+import { useCatalogos } from '../context/CatalogosContext';
 import { ESTADOS, canonizarEstado } from '../utils/estados';
 import FiltrosPaquetes from '../components/FiltrosPaquetes';
 
