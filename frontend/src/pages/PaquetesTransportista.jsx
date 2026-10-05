@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { usePaquetes } from '../hooks/usePaquetes';
 import { ESTADOS, canonizarEstado, colorEstado } from '../utils/estados';
-import { marcarEntregado } from '../services/paquetes';
 import EscanerQR from '../components/EscanerQR';
 
 // La pantalla del transportista es deliberadamente mínima: dos acciones
@@ -44,21 +43,7 @@ const Menu = ({ onElegir, conteos }) => (
   </div>
 );
 
-const Listado = ({ vista, paquetes, loading, error, onVolver, onEscanear, onRecargar }) => {
-  const [entregando, setEntregando] = useState(null);
-
-  const handleEntregar = async (id) => {
-    setEntregando(id);
-    try {
-      await marcarEntregado(id);
-      onRecargar();
-    } catch (err) {
-      alert(`Error: ${err.message}`);
-    } finally {
-      setEntregando(null);
-    }
-  };
-
+const Listado = ({ vista, paquetes, loading, error, onVolver, onEscanear }) => {
   return (
     <div className="max-w-xl mx-auto pb-24">
       <div className="flex items-center justify-between gap-3 mb-6">
@@ -97,15 +82,6 @@ const Listado = ({ vista, paquetes, loading, error, onVolver, onEscanear, onReca
               {paquete.comprador || 'Sin comprador'} · CP {paquete.codigopostal || '—'}
             </p>
             <p className={`text-sm font-bold mt-1 ${colorEstado(paquete.estado)}`}>{paquete.estado}</p>
-            {canonizarEstado(paquete.estado) === ESTADOS.EN_CAMINO && (
-              <button
-                onClick={() => handleEntregar(paquete.id)}
-                disabled={entregando === paquete.id}
-                className="mt-3 w-full py-4 bg-green-500 text-white text-lg font-bold rounded-xl hover:bg-green-600 active:bg-green-700 disabled:opacity-50 transition-colors duration-150"
-              >
-                {entregando === paquete.id ? 'Entregando...' : 'Entregar'}
-              </button>
-            )}
           </div>
         ))}
       </div>
@@ -153,7 +129,6 @@ const PaquetesTransportista = () => {
           error={error}
           onVolver={() => setVistaActiva(null)}
           onEscanear={() => setEscaneando(true)}
-          onRecargar={recargar}
         />
         {/* El escáner es un overlay: el listado queda detrás y vuelve a
             aparecer al cerrarlo, sin remontarse. */}

@@ -1,5 +1,4 @@
 import { apiFetch } from './api.js';
-import { ESTADOS } from '../utils/estados.js';
 
 function mapPaquete(row) {
   return {
@@ -44,23 +43,10 @@ export async function cambiarEstado(id, estado) {
   });
 }
 
-export async function marcarEntregado(id) {
-  return cambiarEstado(id, ESTADOS.ENTREGADO);
-}
-
 export async function reasignarTransportista(id, idtransportista) {
   return apiFetch('/api/paquetes/reasignar', {
     method: 'POST',
     body: JSON.stringify({ id, idtransportista }),
-  });
-}
-
-// Entrega solo los paquetes elegidos (public_id). El servidor omite los que no
-// estén En camino o no sean de la empresa.
-export async function entregarPaquetes(ids) {
-  return apiFetch('/api/paquetes/entregar', {
-    method: 'POST',
-    body: JSON.stringify({ ids }),
   });
 }
 

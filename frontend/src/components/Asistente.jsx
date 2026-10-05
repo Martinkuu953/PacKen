@@ -53,13 +53,13 @@ const TEMAS = {
     ],
   },
   paquetes: {
-    titulo: 'Escanear y entregar paquetes',
+    titulo: 'Escanear paquetes',
     ruta: '/paquetes',
     pasos: [
       'El transportista entra a Paquetes y elige Colecta (cuando retira) o Reparto (cuando sale a entregar).',
       'Escanea el QR de la etiqueta de Mercado Libre. El paquete se carga solo con los datos del comprador.',
       'En tu pantalla de Paquetes podés reasignar cada paquete a otro transportista.',
-      'Para cerrar varias entregas juntas: tildá los paquetes "En camino" y tocá "Entregar seleccionados".',
+      'El estado "Entregado" llega solo desde Mercado Libre cuando el envío se entrega.',
       'El botón "Historial" de cada paquete muestra todos sus cambios de estado: quién, cuándo y por dónde.',
     ],
   },
