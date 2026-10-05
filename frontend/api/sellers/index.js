@@ -16,13 +16,12 @@ function normalizarEstado(estado) {
 }
 
 function resumenVacio() {
-  return { totales: 0, enCamino: 0, demorados: 0, entregados: 0, cancelados: 0, reprogramados: 0, monto: 0 };
+  return { totales: 0, enCamino: 0, entregados: 0, cancelados: 0, reprogramados: 0, monto: 0 };
 }
 
 function acumular(resumen, estado) {
   const e = normalizarEstado(estado);
   resumen.totales += 1;
-  if (e.includes('atrasad') || e.includes('demorad')) resumen.demorados += 1;
   if (e.includes('camino')) resumen.enCamino += 1;
   if (e.includes('entregad')) resumen.entregados += 1;
   if (e.includes('cancel')) resumen.cancelados += 1;

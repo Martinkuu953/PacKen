@@ -12,7 +12,6 @@ const ENDPOINT = '/api/sellers';
 const ESTADOS_SELLER = [
   { campo: 'enCamino', label: 'En camino', color: 'text-yellow-600' },
   { campo: 'entregados', label: 'Entregados', color: 'text-green-500' },
-  { campo: 'demorados', label: 'Demorados', color: 'text-red-500' },
   { campo: 'reprogramados', label: 'Reprogramados', color: 'text-orange-500' },
   { campo: 'cancelados', label: 'Cancelados', color: 'text-gray-500' },
 ];
@@ -220,7 +219,6 @@ const Sellers = () => {
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Nombre</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Totales</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">En camino</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Demorados</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Entregados</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Cancelados</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Reprogramados</th>
@@ -229,14 +227,14 @@ const Sellers = () => {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={7} className="py-6 px-4 text-center text-gray-500">
+                  <td colSpan={6} className="py-6 px-4 text-center text-gray-500">
                     Cargando sellers...
                   </td>
                 </tr>
               )}
               {!loading && sellersFiltrados.length === 0 && !error && (
                 <tr>
-                  <td colSpan={7} className="py-6 px-4 text-center text-gray-500">
+                  <td colSpan={6} className="py-6 px-4 text-center text-gray-500">
                     {busqueda.trim()
                       ? `Ningún seller coincide con "${busqueda.trim()}".`
                       : 'Todavía no tenés sellers cargados.'}
@@ -253,7 +251,6 @@ const Sellers = () => {
                     <td className="py-3 px-4 font-medium text-gray-800">{seller.nombre}</td>
                     <td className="py-3 px-4 text-gray-600">{seller.totales}</td>
                     <td className="py-3 px-4 text-gray-600">{seller.enCamino}</td>
-                    <td className="py-3 px-4 text-red-500 font-medium">{seller.demorados}</td>
                     <td className="py-3 px-4 text-green-500 font-medium">{seller.entregados}</td>
                     <td className="py-3 px-4 text-gray-500">{seller.cancelados}</td>
                     <td className="py-3 px-4 text-orange-500">{seller.reprogramados}</td>

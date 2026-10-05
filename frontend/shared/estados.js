@@ -10,7 +10,6 @@ export const ESTADOS = {
   CANCELADO: 'Cancelado',
   REPROGRAMADO: 'Reprogramado',
   ATRASADO: 'Atrasado',
-  DEMORADO: 'Demorado',
 };
 
 export const ESTADOS_VALIDOS = Object.values(ESTADOS);
@@ -20,7 +19,6 @@ export const ESTADOS_VALIDOS = Object.values(ESTADOS);
 // desde otra base siga cayendo en el estado correcto.
 const RAICES = [
   [ESTADOS.ATRASADO, ['atrasad']],
-  [ESTADOS.DEMORADO, ['demorad']],
   [ESTADOS.CANCELADO, ['cancel']],
   [ESTADOS.ENTREGADO, ['entregad']],
   [ESTADOS.REPROGRAMADO, ['reprogram']],
@@ -52,7 +50,6 @@ export function esEstadoValido(estado) {
 
 const COLORES = {
   [ESTADOS.ATRASADO]: 'text-red-500',
-  [ESTADOS.DEMORADO]: 'text-red-500',
   [ESTADOS.CANCELADO]: 'text-red-500',
   [ESTADOS.ENTREGADO]: 'text-green-500',
   [ESTADOS.REPROGRAMADO]: 'text-orange-500',
@@ -67,7 +64,6 @@ export function colorEstado(estado) {
 // Menor número = más urgente → aparece primero al ordenar por estado.
 const PRIORIDADES = {
   [ESTADOS.ATRASADO]: 1,
-  [ESTADOS.DEMORADO]: 1,
   [ESTADOS.REPROGRAMADO]: 2,
   [ESTADOS.EN_CAMINO]: 3,
   [ESTADOS.INGRESADO]: 4,

@@ -55,7 +55,7 @@ async function historial(supabase, usuario, publicId, res) {
   });
 }
 
-const ANCHOS_PARTIDO = [30, 10, ...COLUMNAS_ESTADO.map(() => 14), 12];
+const ANCHOS_PARTIDO = [30, 10, ...COLUMNAS_ESTADO.map(() => 14)];
 const ANCHOS_DETALLE = [18, 26, 14, 38, 14, 22, 22, 16, 16];
 
 // GET /api/paquetes?...&formato=xlsx — las estadísticas por partido de los
@@ -82,19 +82,17 @@ function responderEstadisticas(res, paquetes, filtros) {
       [negrita('Estadísticas por partido')],
       ...descripcion.map((linea) => [linea]),
       [],
-      encabezado(['Partido', 'Total', ...COLUMNAS_ESTADO.map((c) => c.label), 'Demorados']),
+      encabezado(['Partido', 'Total', ...COLUMNAS_ESTADO.map((c) => c.label)]),
       ...filas.map((f) => [
         f.partido,
         f.total,
         ...COLUMNAS_ESTADO.map((c) => f[c.estado] ?? 0),
-        f.demorados,
       ]),
       [],
       [
         negrita('Total'),
         negrita(totales.total),
         ...COLUMNAS_ESTADO.map((c) => negrita(totales[c.estado] ?? 0)),
-        negrita(totales.demorados),
       ],
     ],
   };

@@ -85,7 +85,7 @@ const Estadisticas = () => {
           </p>
         )}
 
-        {/* Mobile y tablet: una tarjeta por partido. Ocho columnas no entran en
+        {/* Mobile y tablet: una tarjeta por partido. Siete columnas no entran en
             pantalla y el scroll horizontal esconde justo los totales. */}
         <div className="lg:hidden">
           {loading && <p className="py-6 text-center text-gray-500">Cargando estadísticas...</p>}
@@ -110,10 +110,6 @@ const Estadisticas = () => {
                         <span className={`font-medium ${col.color}`}>{fila[col.estado] ?? 0}</span>
                       </div>
                     ))}
-                    <div className="flex justify-between gap-2">
-                      <span className="text-gray-500">Demorados</span>
-                      <span className="font-medium text-red-500">{fila.demorados}</span>
-                    </div>
                   </div>
                 </div>
               ))}
@@ -136,20 +132,19 @@ const Estadisticas = () => {
                 {COLUMNAS_ESTADO.map((col) => (
                   <th key={col.estado} className="py-2 px-2 whitespace-nowrap">{col.label}</th>
                 ))}
-                <th className="py-2 px-2">Demorados</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={COLUMNAS_ESTADO.length + 3} className="py-6 px-2 text-center text-gray-500">
+                  <td colSpan={COLUMNAS_ESTADO.length + 2} className="py-6 px-2 text-center text-gray-500">
                     Cargando estadísticas...
                   </td>
                 </tr>
               )}
               {!loading && filas.length === 0 && !error && (
                 <tr>
-                  <td colSpan={COLUMNAS_ESTADO.length + 3} className="py-6 px-2 text-center text-gray-500">
+                  <td colSpan={COLUMNAS_ESTADO.length + 2} className="py-6 px-2 text-center text-gray-500">
                     No hay paquetes para los filtros seleccionados.
                   </td>
                 </tr>
@@ -164,7 +159,6 @@ const Estadisticas = () => {
                         {fila[col.estado] ?? 0}
                       </td>
                     ))}
-                    <td className="py-2 px-2 font-medium text-red-500">{fila.demorados}</td>
                   </tr>
                 ))}
             </tbody>
@@ -176,7 +170,6 @@ const Estadisticas = () => {
                   {COLUMNAS_ESTADO.map((col) => (
                     <td key={col.estado} className="py-2 px-2">{totales[col.estado] ?? 0}</td>
                   ))}
-                  <td className="py-2 px-2">{totales.demorados}</td>
                 </tr>
               </tfoot>
             )}

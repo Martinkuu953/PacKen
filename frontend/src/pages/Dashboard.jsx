@@ -21,7 +21,6 @@ function calcularResumen(paquetes) {
   return {
     total: paquetes.length,
     entregados: contar(ESTADOS.ENTREGADO),
-    demorados: contar(ESTADOS.ATRASADO, ESTADOS.DEMORADO),
     enCamino: contar(ESTADOS.EN_CAMINO),
     ingresados: contar(ESTADOS.INGRESADO),
     reprogramados: contar(ESTADOS.REPROGRAMADO),
@@ -31,7 +30,6 @@ function calcularResumen(paquetes) {
 
 const STATS = [
   { key: 'entregados', label: 'Entregados', color: 'text-green-500' },
-  { key: 'demorados', label: 'Demorados', color: 'text-red-500' },
   { key: 'enCamino', label: 'En camino', color: 'text-yellow-600' },
   { key: 'ingresados', label: 'Ingresados', color: 'text-blue-500' },
   { key: 'reprogramados', label: 'Reprogramados', color: 'text-orange-500' },
@@ -83,7 +81,7 @@ const Dashboard = () => {
           </p>
         )}
 
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3 mb-4 sm:mb-6">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3 mb-4 sm:mb-6">
           {STATS.map((stat) => (
             <div
               key={stat.key}

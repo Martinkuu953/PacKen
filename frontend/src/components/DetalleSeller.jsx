@@ -4,7 +4,6 @@ import { apiFetch } from '../services/api';
 const ESTADOS_SELLER = [
   { campo: 'enCamino', label: 'En camino', color: 'text-yellow-600' },
   { campo: 'entregados', label: 'Entregados', color: 'text-green-500' },
-  { campo: 'demorados', label: 'Demorados', color: 'text-red-500' },
   { campo: 'reprogramados', label: 'Reprogramados', color: 'text-orange-500' },
   { campo: 'cancelados', label: 'Cancelados', color: 'text-gray-500' },
 ];

@@ -14,26 +14,20 @@ export const COLUMNAS_ESTADO = [
   { estado: ESTADOS.CANCELADO, label: 'Cancelados' },
 ];
 
-const DEMORADOS = [ESTADOS.ATRASADO, ESTADOS.DEMORADO];
-
 // Recibe paquetes ya mapeados (con `partido` como nombre) y devuelve una fila
 // por partido, de mayor a menor cantidad, más la fila de totales.
 export function agruparPorPartido(paquetes) {
   const porPartido = new Map();
-  const totales = { total: 0, demorados: 0 };
+  const totales = { total: 0 };
 
   for (const paquete of paquetes) {
     const partido = paquete.partido || SIN_PARTIDO;
-    if (!porPartido.has(partido)) porPartido.set(partido, { partido, total: 0, demorados: 0 });
+    if (!porPartido.has(partido)) porPartido.set(partido, { partido, total: 0 });
     const fila = porPartido.get(partido);
     fila.total += 1;
     totales.total += 1;
 
     const estado = canonizarEstado(paquete.estado);
-    if (DEMORADOS.includes(estado)) {
-      fila.demorados += 1;
-      totales.demorados += 1;
-    }
     if (estado) {
       fila[estado] = (fila[estado] ?? 0) + 1;
       totales[estado] = (totales[estado] ?? 0) + 1;
