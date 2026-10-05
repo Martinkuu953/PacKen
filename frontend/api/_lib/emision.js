@@ -395,7 +395,7 @@ export async function crear(supabase, tipo, idempresa, req, res) {
 // ──────────────────────────────────────────────────────────────────────────
 // GET ?ids= — documentos ya emitidos, en JSON (vista previa) o .xlsx / .zip
 // ──────────────────────────────────────────────────────────────────────────
-const formatearFecha = (valor) => {
+export const formatearFecha = (valor) => {
   if (!valor) return '—';
   // desde/hasta son DATE (YYYY-MM-DD, sin hora): convertirlos con zona horaria
   // los correría un día. Se muestran tal cual vinieron.
@@ -529,7 +529,7 @@ function nombresUnicos(tipo, documentos) {
   });
 }
 
-function responderArchivo(res, archivo, nombre, contentType, respaldo) {
+export function responderArchivo(res, archivo, nombre, contentType, respaldo) {
   res.setHeader('Content-Type', contentType);
   // El nombre de la contraparte puede traer acentos: filename* (RFC 5987) es
   // el que los soporta; filename queda como respaldo en ASCII.

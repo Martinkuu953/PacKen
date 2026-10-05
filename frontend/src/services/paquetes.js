@@ -11,7 +11,7 @@ function mapPaquete(row) {
     estado: row.estado ?? '',
     codigopostal: row.codigopostal ?? '',
     // zona y partido son dos cosas distintas y las dos viajan: el partido es lo
-    // que lista la pantalla de Paquetes, y la zona la que agrupa Estadísticas.
+    // que listan Paquetes y Estadísticas; la zona define la tarifa.
     zona: row.zona ?? null,
     partido: row.partido ?? null,
     seller: row.seller ?? null,

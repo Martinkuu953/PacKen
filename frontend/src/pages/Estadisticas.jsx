@@ -1,69 +1,69 @@
 import { useMemo, useState } from 'react';
 import { usePaquetes } from '../hooks/usePaquetes';
 import { useCatalogos } from '../context/CatalogosContext';
-import { ESTADOS, canonizarEstado } from '../utils/estados';
+import { ESTADOS } from '../utils/estados';
+import { apiDescargar } from '../services/api';
+import { agruparPorPartido, COLUMNAS_ESTADO as COLUMNAS } from '../../shared/estadisticas.js';
 import FiltrosPaquetes from '../components/FiltrosPaquetes';
 
 const FILTROS_VACIOS = { sellerId: '', transportistaId: '', estado: '', desde: '', hasta: '' };
 
-const SIN_ZONA = 'Sin zona';
+const COLORES = {
+  [ESTADOS.INGRESADO]: 'text-blue-500',
+  [ESTADOS.EN_CAMINO]: 'text-yellow-600',
+  [ESTADOS.ENTREGADO]: 'text-green-500',
+  [ESTADOS.REPROGRAMADO]: 'text-orange-500',
+  [ESTADOS.CANCELADO]: 'text-gray-500',
+};
 
-const COLUMNAS_ESTADO = [
-  { estado: ESTADOS.INGRESADO, label: 'Ingresados', color: 'text-blue-500' },
-  { estado: ESTADOS.EN_CAMINO, label: 'En camino', color: 'text-yellow-600' },
-  { estado: ESTADOS.ENTREGADO, label: 'Entregados', color: 'text-green-500' },
-  { estado: ESTADOS.REPROGRAMADO, label: 'Reprogramados', color: 'text-orange-500' },
-  { estado: ESTADOS.CANCELADO, label: 'Cancelados', color: 'text-gray-500' },
-];
-
-const DEMORADOS = [ESTADOS.ATRASADO, ESTADOS.DEMORADO];
-
-function agruparPorZona(paquetes) {
-  const porZona = new Map();
-
-  for (const paquete of paquetes) {
-    const zona = paquete.zona || SIN_ZONA;
-    if (!porZona.has(zona)) porZona.set(zona, { zona, total: 0, demorados: 0 });
-    const fila = porZona.get(zona);
-    fila.total += 1;
-
-    const estado = canonizarEstado(paquete.estado);
-    if (DEMORADOS.includes(estado)) fila.demorados += 1;
-    if (estado) fila[estado] = (fila[estado] ?? 0) + 1;
-  }
-
-  return [...porZona.values()].sort((a, b) => b.total - a.total);
-}
+const COLUMNAS_ESTADO = COLUMNAS.map((col) => ({ ...col, color: COLORES[col.estado] }));
 
 const Estadisticas = () => {
   const [filtros, setFiltros] = useState(FILTROS_VACIOS);
   const { paquetes, loading, error } = usePaquetes(filtros);
   const { sellers, transportistas } = useCatalogos();
+  const [descargando, setDescargando] = useState(false);
+  const [errorDescarga, setErrorDescarga] = useState('');
 
-  const filas = useMemo(() => agruparPorZona(paquetes), [paquetes]);
+  const { filas, totales } = useMemo(() => agruparPorPartido(paquetes), [paquetes]);
 
-  const totales = useMemo(
-    () =>
-      filas.reduce(
-        (acc, fila) => {
-          acc.total += fila.total;
-          acc.demorados += fila.demorados;
-          for (const { estado } of COLUMNAS_ESTADO) acc[estado] = (acc[estado] ?? 0) + (fila[estado] ?? 0);
-          return acc;
-        },
-        { total: 0, demorados: 0 },
-      ),
-    [filas],
-  );
+  // El Excel lo arma el servidor con los mismos filtros que la tabla, así sale
+  // exactamente lo que se está viendo (y una hoja con el detalle por paquete).
+  const descargarExcel = async () => {
+    setDescargando(true);
+    setErrorDescarga('');
+    try {
+      const params = new URLSearchParams({ formato: 'xlsx' });
+      for (const [clave, valor] of Object.entries(filtros)) if (valor) params.set(clave, valor);
+      const rango = filtros.desde || filtros.hasta
+        ? `-${filtros.desde || 'inicio'}_${filtros.hasta || 'hoy'}`
+        : '';
+      await apiDescargar(`/api/paquetes?${params}`, `estadisticas-por-partido${rango}.xlsx`);
+    } catch (err) {
+      setErrorDescarga(err.message);
+    } finally {
+      setDescargando(false);
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
-        <div className="flex items-center justify-between mb-4 sm:mb-6">
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Estadísticas por zona</h2>
-          <span className="text-xs sm:text-sm text-gray-500">
-            {loading ? 'Cargando...' : `${totales.total} envíos`}
-          </span>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 sm:mb-6">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Estadísticas por partido</h2>
+          <div className="flex items-center gap-3">
+            <span className="text-xs sm:text-sm text-gray-500">
+              {loading ? 'Cargando...' : `${totales.total} envíos`}
+            </span>
+            <button
+              type="button"
+              onClick={descargarExcel}
+              disabled={loading || descargando || filas.length === 0}
+              className="text-xs sm:text-sm px-3 py-1.5 bg-marca-oro text-marca-grafito rounded-lg hover:bg-marca-oro-oscuro disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-colors duration-150"
+            >
+              {descargando ? 'Descargando...' : 'Descargar Excel'}
+            </button>
+          </div>
         </div>
 
         <FiltrosPaquetes
@@ -73,13 +73,19 @@ const Estadisticas = () => {
           transportistas={transportistas}
         />
 
+        {errorDescarga && (
+          <p className="mb-4 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+            {errorDescarga}
+          </p>
+        )}
+
         {error && (
           <p className="mb-4 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-2">
             {error}
           </p>
         )}
 
-        {/* Mobile y tablet: una tarjeta por zona. Ocho columnas no entran en
+        {/* Mobile y tablet: una tarjeta por partido. Ocho columnas no entran en
             pantalla y el scroll horizontal esconde justo los totales. */}
         <div className="lg:hidden">
           {loading && <p className="py-6 text-center text-gray-500">Cargando estadísticas...</p>}
@@ -92,9 +98,9 @@ const Estadisticas = () => {
           <div className="space-y-3">
             {!loading &&
               filas.map((fila) => (
-                <div key={fila.zona} className="bg-white border border-gray-200 rounded-xl p-4">
+                <div key={fila.partido} className="bg-white border border-gray-200 rounded-xl p-4">
                   <div className="flex items-baseline justify-between gap-3">
-                    <p className="font-semibold text-gray-800">{fila.zona}</p>
+                    <p className="font-semibold text-gray-800">{fila.partido}</p>
                     <p className="text-lg font-bold text-gray-800">{fila.total}</p>
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
@@ -125,7 +131,7 @@ const Estadisticas = () => {
           <table className="w-full text-sm text-left">
             <thead className="text-xs text-gray-500 uppercase border-b border-gray-200">
               <tr>
-                <th className="py-2 px-2">Zona</th>
+                <th className="py-2 px-2">Partido</th>
                 <th className="py-2 px-2">Total</th>
                 {COLUMNAS_ESTADO.map((col) => (
                   <th key={col.estado} className="py-2 px-2 whitespace-nowrap">{col.label}</th>
@@ -150,8 +156,8 @@ const Estadisticas = () => {
               )}
               {!loading &&
                 filas.map((fila) => (
-                  <tr key={fila.zona} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                    <td className="py-2 px-2 font-medium text-gray-800">{fila.zona}</td>
+                  <tr key={fila.partido} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                    <td className="py-2 px-2 font-medium text-gray-800">{fila.partido}</td>
                     <td className="py-2 px-2 font-semibold text-gray-700">{fila.total}</td>
                     {COLUMNAS_ESTADO.map((col) => (
                       <td key={col.estado} className={`py-2 px-2 font-medium ${col.color}`}>
