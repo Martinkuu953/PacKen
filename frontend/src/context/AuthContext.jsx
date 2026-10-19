@@ -35,6 +35,10 @@ export function AuthProvider({ children }) {
   }, []);
 
   const limpiarSesion = useCallback(() => {
+    // Cualquier fin de sesión (logout, refresh vencido o revocado) borra el
+    // historial del asistente: si no, quedaba en la pestaña para quien la use
+    // después.
+    borrarHistorialAsistente();
     setAccessToken(null);
     setToken(null);
     setUsuario(null);
@@ -46,7 +50,6 @@ export function AuthProvider({ children }) {
     } catch {
       // el logout local debe funcionar aunque falle la llamada al servidor
     } finally {
-      borrarHistorialAsistente();
       limpiarSesion();
     }
   }, [limpiarSesion]);

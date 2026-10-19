@@ -124,7 +124,9 @@ export async function sincronizarPaquetes(supabase, idEmpresa = null) {
     // decidirEstadoDesdeML lo canoniza y lo descarta igual.
     .not('estado', 'in', TERMINALES_SQL)
     .gte('fechaingreso', desde)
-    .or(`ml_sincronizado_en.is.null,ml_sincronizado_en.lt.${recien}`)
+    // Entre comillas: el timestamp tiene ":" y ".", que son caracteres
+    // reservados dentro de un or() de PostgREST.
+    .or(`ml_sincronizado_en.is.null,ml_sincronizado_en.lt."${recien}"`)
     .order('ml_sincronizado_en', { ascending: true, nullsFirst: true })
     .limit(MAX_POR_CORRIDA);
 

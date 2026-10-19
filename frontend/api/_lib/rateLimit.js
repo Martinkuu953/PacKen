@@ -20,6 +20,10 @@ export const LIMITES = {
   registroPorIp: { max: 5, ventanaMin: 60 },
   // Contraseña actual incorrecta al cambiarla desde Mi Perfil.
   cambioPasswordPorUsuario: { max: 5, ventanaMin: 15 },
+  // Excel de Estadísticas: cada uno lee hasta 50.000 paquetes. Sin techo, una
+  // sesión (o un script con un token robado) podía encadenar exportaciones y
+  // saturar la base para todas las empresas.
+  exportPorUsuario: { max: 20, ventanaMin: 10 },
 };
 
 // En Vercel x-forwarded-for lo pisa la plataforma con la IP real del cliente,

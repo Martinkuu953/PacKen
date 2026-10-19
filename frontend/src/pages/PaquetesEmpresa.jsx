@@ -33,6 +33,9 @@ const POR_PAGINA = 50;
 // tecla.
 const DEMORA_BUSQUEDA_MS = 400;
 
+// Igual que el servidor (MIN_BUSQUEDA en /api/paquetes): con menos no se busca.
+const MIN_BUSQUEDA = 3;
+
 // Partido, seller y transportista son nombres de otras tablas: el servidor no
 // puede ordenar por ellos sin un join.
 const NO_ORDENABLES = new Set(['acciones', 'partido', 'seller', 'transportista']);
@@ -120,7 +123,8 @@ const PaquetesEmpresa = () => {
   // un pedido con la página vieja.
   useEffect(() => {
     const t = setTimeout(() => {
-      const texto = busqueda.trim();
+      const crudo = busqueda.trim();
+      const texto = crudo.length >= MIN_BUSQUEDA ? crudo : '';
       setBusquedaAplicada((prev) => {
         if (prev !== texto) setPagina(1);
         return texto;
@@ -234,7 +238,7 @@ const PaquetesEmpresa = () => {
             <Buscador
               valor={busqueda}
               onChange={setBusqueda}
-              placeholder="Buscar por ID de envío, comprador o dirección..." 
+              placeholder="Buscar por ID de envío, comprador o dirección (mínimo 3 caracteres)" 
             />
 
             {/* Mobile y tablet: tarjetas + un selector de orden, porque los th no

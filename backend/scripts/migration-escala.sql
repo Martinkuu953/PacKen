@@ -52,10 +52,18 @@ CREATE INDEX IF NOT EXISTS idx_usuario_empresa_rol ON usuario (idempresa, rol);
 
 -- Búsqueda por texto en el listado de Paquetes (ID de envío, comprador,
 -- dirección): ILIKE '%texto%' no puede usar un btree; con trigramas sí.
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+-- En el esquema "extensions" y no en "public": es lo que recomienda Supabase
+-- (su linter marca como advertencia de seguridad las extensiones en public).
+-- Si ya estaba instalada en public, esta línea no hace nada y los índices de
+-- abajo la usan igual.
+CREATE SCHEMA IF NOT EXISTS extensions;
+CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions;
 
 DO $$
 BEGIN
+  -- El operador de clase vive en "extensions" (o en public si la extensión ya
+  -- estaba ahí): se agregan los dos al search_path solo para este bloque.
+  PERFORM set_config('search_path', 'public, extensions', true);
   EXECUTE 'CREATE INDEX IF NOT EXISTS idx_paquete_comprador_trgm ON paquete USING gin (comprador gin_trgm_ops)';
   EXECUTE 'CREATE INDEX IF NOT EXISTS idx_paquete_direccion_trgm ON paquete USING gin (direccion gin_trgm_ops)';
   EXECUTE 'CREATE INDEX IF NOT EXISTS idx_paquete_idenvioml_trgm ON paquete USING gin (idenvioml gin_trgm_ops)';

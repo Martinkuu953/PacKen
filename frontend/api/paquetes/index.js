@@ -3,6 +3,7 @@ import { autenticar } from '../_lib/auth.js';
 import { canonizarEstado, ESTADOS, ESTADOS_VALIDOS } from '../../shared/estados.js';
 import { ErrorPublico, responderError } from '../_lib/errores.js';
 import { traerTodo, buscarPorIds } from '../_lib/consultas.js';
+import { LIMITES, verificarLimites, registrarIntento } from '../_lib/rateLimit.js';
 import { esUuid } from '../_lib/paquetes/comun.js';
 import { generarXlsx, ESTILOS_XLSX } from '../_lib/xlsx.js';
 import { formatearFecha, responderArchivo } from '../_lib/emision.js';
@@ -183,12 +184,19 @@ const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
 // El texto va dentro de un filtro or() de PostgREST: se sacan los caracteres
 // que tienen significado en esa sintaxis para que no se pueda inyectar otra
 // condición.
+//
+// Menos de 3 caracteres no se busca: los índices de trigramas necesitan 3, y
+// con 1 o 2 letras la consulta recorre todos los paquetes de la empresa (y
+// cuenta el total) en cada tecla.
+const MIN_BUSQUEDA = 3;
+
 function limpiarBusqueda(q) {
-  return String(q ?? '')
+  const texto = String(q ?? '')
     .replace(/[,()"\\*%:]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 80);
+  return texto.length >= MIN_BUSQUEDA ? texto : '';
 }
 
 function entero(valor, porDefecto, minimo, maximo) {
@@ -379,7 +387,11 @@ async function estadisticas(supabase, res, filtros) {
   return res.json(agruparConteos(await conteosPorPartido(supabase, filtros.argsRpc)));
 }
 
-async function excel(supabase, res, filtros) {
+async function excel(supabase, usuario, res, filtros) {
+  const clave = `export:${usuario.id}`;
+  await verificarLimites(supabase, [{ clave, ...LIMITES.exportPorUsuario }]);
+  await registrarIntento(supabase, [clave]);
+
   const [conteos, detalle] = await Promise.all([
     conteosPorPartido(supabase, filtros.argsRpc),
     traerTodo(
@@ -409,7 +421,7 @@ export default async function handler(req, res) {
 
     const filtros = await prepararFiltros(supabase, usuario, req.query);
 
-    if (req.query?.formato === 'xlsx') return await excel(supabase, res, filtros);
+    if (req.query?.formato === 'xlsx') return await excel(supabase, usuario, res, filtros);
     if (req.query?.vista === 'resumen') return await resumen(supabase, res, filtros);
     if (req.query?.vista === 'estadisticas') return await estadisticas(supabase, res, filtros);
     return await listado(supabase, req, res, filtros);
