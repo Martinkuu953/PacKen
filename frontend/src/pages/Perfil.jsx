@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../services/api';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { DATOS_LEGALES, esMarcador } from '../legal/datosLegales';
 
 const ENDPOINT = '/api/auth/perfil';
 
@@ -261,6 +263,32 @@ const Perfil = () => {
             </button>
           </div>
         </form>
+      </div>
+
+      {/* Derechos de acceso, rectificación y supresión (Ley 25.326): tiene que
+          haber una forma visible de ejercerlos desde la cuenta. */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
+        <h3 className="text-sm font-bold text-gray-800 mb-1">Tus datos y baja de la cuenta</h3>
+        <p className="text-sm text-gray-600">
+          Podés pedir una copia de tus datos, corregirlos o dar de baja la cuenta escribiendo
+          {esMarcador(DATOS_LEGALES.emailPrivacidad) ? (
+            ' a la casilla de privacidad indicada en la '
+          ) : (
+            <>
+              {' a '}
+              <a href={`mailto:${DATOS_LEGALES.emailPrivacidad}`} className="text-yellow-700 underline">
+                {DATOS_LEGALES.emailPrivacidad}
+              </a>
+              {' desde el email de tu cuenta. Más detalle en la '}
+            </>
+          )}
+          <Link to="/privacidad" className="text-yellow-700 underline">Política de privacidad</Link>.
+        </p>
+        <p className="mt-2 text-xs text-gray-500">
+          <Link to="/terminos" className="underline">Términos y condiciones</Link>
+          {' · '}
+          <Link to="/cookies" className="underline">Política de cookies</Link>
+        </p>
       </div>
     </div>
   );

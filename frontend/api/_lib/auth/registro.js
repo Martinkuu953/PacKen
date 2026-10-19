@@ -4,6 +4,7 @@ import { crearRefreshToken } from '../refreshTokens.js';
 import { setRefreshCookie } from '../cookies.js';
 import { responderError } from '../errores.js';
 import { LIMITES, ipDe, verificarLimites, registrarIntento } from '../rateLimit.js';
+import { VERSION_TERMINOS } from '../../../shared/legal.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -11,7 +12,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { nombre, email, password, rol } = req.body ?? {};
+    const { nombre, email, password, rol, aceptaTerminos } = req.body ?? {};
 
     if (!nombre || !email || !password || !rol) {
       return res.status(400).json({ error: 'nombre, email, password y rol son requeridos' });
@@ -22,6 +23,15 @@ export default async function handler(req, res) {
     if (rol !== 'empresa') {
       return res.status(403).json({
         error: 'Solo las empresas pueden registrarse. Pedile a tu empresa que te cree la cuenta.',
+      });
+    }
+
+    // Consentimiento expreso (Ley 25.326): sin aceptar Términos y Privacidad,
+    // y declarar que los datos son verdaderos, no hay alta. Se valida acá y no
+    // solo en el checkbox, que se saltea llamando a la API directo.
+    if (aceptaTerminos !== true) {
+      return res.status(400).json({
+        error: 'Para registrarte tenés que aceptar los Términos y condiciones y la Política de privacidad',
       });
     }
 
@@ -45,19 +55,34 @@ export default async function handler(req, res) {
 
     const hash = hashPassword(password);
 
-    const { data, error } = await supabase
-      .from('usuario')
-      .insert({
-        nombre,
-        email: email.toLowerCase().trim(),
-        password: hash,
-        dni: null,
-        rol: 'empresa',
-        idempresa: null,
-        estado_solicitud: null,
-      })
-      .select('id, public_id, nombre, rol, idempresa, estado_solicitud')
-      .single();
+    const fila = {
+      nombre,
+      email: email.toLowerCase().trim(),
+      password: hash,
+      dni: null,
+      rol: 'empresa',
+      idempresa: null,
+      estado_solicitud: null,
+      terminos_version: VERSION_TERMINOS,
+      terminos_aceptados_en: new Date().toISOString(),
+    };
+    const insertar = (valores) =>
+      supabase
+        .from('usuario')
+        .insert(valores)
+        .select('id, public_id, nombre, rol, idempresa, estado_solicitud')
+        .single();
+
+    let { data, error } = await insertar(fila);
+
+    // PGRST204: la columna no existe todavía (falta correr migration-legal.sql).
+    // El alta no se frena por eso, pero queda registrado para corregirlo: sin
+    // las columnas no hay constancia de qué versión se aceptó.
+    if (error?.code === 'PGRST204') {
+      console.error('[PacKen] Falta migration-legal.sql: el registro se guardó sin constancia de aceptación.');
+      const { terminos_version: _v, terminos_aceptados_en: _f, ...sinConstancia } = fila;
+      ({ data, error } = await insertar(sinConstancia));
+    }
 
     if (error) {
       if (error.code === '23505') {

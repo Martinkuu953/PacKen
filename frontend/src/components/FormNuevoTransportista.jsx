@@ -4,7 +4,7 @@ import { apiFetch } from '../services/api';
 const INPUT = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-marca-oro';
 const LABEL = 'block text-[11px] font-semibold text-gray-500 uppercase mb-1';
 
-const VACIO = { nombre: '', email: '', dni: '', password: '' };
+const VACIO = { nombre: '', email: '', dni: '', password: '', consentimiento: false };
 
 const FormNuevoTransportista = ({ onCreado, onCancelar }) => {
   const [valores, setValores] = useState(VACIO);
@@ -78,10 +78,31 @@ const FormNuevoTransportista = ({ onCreado, onCancelar }) => {
         El transportista queda activo al crearlo. Pasale la contraseña para que ingrese y la cambie.
       </p>
 
+      {/* La empresa carga datos personales de un tercero (nombre, email, DNI):
+          declara que son reales y que el transportista lo autorizó. El servidor
+          lo vuelve a exigir. */}
+      <label className="mt-3 flex items-start gap-2 text-xs text-gray-600">
+        <input
+          type="checkbox"
+          checked={valores.consentimiento}
+          onChange={(e) => setValores((prev) => ({ ...prev, consentimiento: e.target.checked }))}
+          required
+          className="mt-0.5 h-4 w-4 shrink-0 accent-marca-oro"
+        />
+        <span>
+          Declaro que estos datos son verdaderos y que el transportista me autorizó a cargarlos en PacKen para
+          gestionar las entregas, conforme a la{' '}
+          <a href="/privacidad" target="_blank" rel="noreferrer" className="text-yellow-700 underline">
+            Política de privacidad
+          </a>
+          .
+        </span>
+      </label>
+
       <div className="mt-4 flex gap-2">
         <button
           type="submit"
-          disabled={guardando}
+          disabled={guardando || !valores.consentimiento}
           className="text-sm px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 font-medium"
         >
           {guardando ? 'Creando...' : 'Crear transportista'}

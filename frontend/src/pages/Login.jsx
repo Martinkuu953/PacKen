@@ -87,6 +87,14 @@ const Login = () => {
             Registrate
           </Link>
         </p>
+
+        <p className="text-center text-xs text-gray-400 mt-6">
+          <Link to="/terminos" className="hover:underline">Términos</Link>
+          {' · '}
+          <Link to="/privacidad" className="hover:underline">Privacidad</Link>
+          {' · '}
+          <Link to="/cookies" className="hover:underline">Cookies</Link>
+        </p>
       </div>
     </div>
   );

@@ -1,28 +1,39 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import './Landing.css';
+// Tipografías servidas desde el propio sitio (no desde Google Fonts): así no se
+// manda la IP de cada visitante a un tercero, y la política de cookies puede
+// decir con verdad que no hay conexiones a terceros.
+import '@fontsource/space-grotesk/400.css';
+import '@fontsource/space-grotesk/500.css';
+import '@fontsource/space-grotesk/600.css';
+import '@fontsource/space-grotesk/700.css';
+import '@fontsource/manrope/400.css';
+import '@fontsource/manrope/500.css';
+import '@fontsource/manrope/600.css';
+import '@fontsource/manrope/700.css';
+import '@fontsource/instrument-serif/400.css';
+import '@fontsource/instrument-serif/400-italic.css';
 import Logo from '../components/Logo';
+import { DATOS_LEGALES, esMarcador } from '../legal/datosLegales';
 
 const FONT_DISPLAY = "'Space Grotesk', sans-serif";
 const FONT_SERIF = "'Instrument Serif', serif";
 
+// Todo lo que se afirma acá tiene que existir en la app. Nada de cifras,
+// clientes ni testimonios que no sean reales y comprobables: es publicidad
+// engañosa (Ley 24.240 art. 9, Ley 22.802).
 const FEATURES = [
-  { title: 'Envíos centralizados', body: 'Todos los envíos que reparte tu empresa en un solo panel, ordenados por zona. Sin planillas sueltas.' },
-  { title: 'Asignación por repartidor', body: 'Repartí la carga del día entre tu flota. Cada repartidor ve su lista desde el celular.' },
-  { title: 'Seguimiento en vivo', body: 'Sabé dónde está cada paquete y cada repartidor, en tiempo real, desde cualquier dispositivo.' },
-  { title: 'Reportes de operación', body: 'Entregas, tiempos e incidencias por zona y por repartidor. Entendé tu operación de un vistazo.' },
+  { title: 'Envíos centralizados', body: 'Todos los envíos de Mercado Libre que reparte tu empresa en un solo panel, con filtros por seller, transportista, estado y fecha.' },
+  { title: 'Escaneo desde el celular', body: 'El transportista escanea el QR de la etiqueta en la colecta o el reparto y el envío se carga solo, con los datos del comprador.' },
+  { title: 'Estados al día', body: 'El estado de cada envío se actualiza automáticamente con lo que informa Mercado Libre. Cada cambio queda en el historial del paquete.' },
+  { title: 'Cobros y pagos ordenados', body: 'Listas de precios y costos por zona para calcular lo que cobrás a cada seller y lo que pagás a cada transportista, exportable a Excel.' },
 ];
 
 const STEPS = [
-  { num: '01', title: 'Cargá los envíos del día', body: 'Subís la operación diaria a Packen y queda ordenada por zona, lista para repartir entre tu flota.' },
-  { num: '02', title: 'Asignás a tu equipo', body: 'Distribuís los paquetes entre tus repartidores. Cada uno ve solo lo suyo desde el celular.' },
-  { num: '03', title: 'Seguís todo en vivo', body: 'Cada entrega se actualiza al instante. La operación completa, en una sola pantalla.' },
-];
-
-const TESTIMONIALS = [
-  { quote: '“Manejamos 40 repartidores y por fin vemos toda la operación en una sola pantalla.”', initial: 'M', name: 'Martina Ruiz', role: 'Jefa de operaciones · Buenos Aires' },
-  { quote: '“Antes armábamos el día en planillas. Hoy la carga se asigna en minutos y sin errores.”', initial: 'D', name: 'Diego Sández', role: 'Gerente de logística · Córdoba' },
-  { quote: '“Cuando un cliente reclama, sabemos exactamente dónde está el paquete y quién lo lleva.”', initial: 'C', name: 'Camila Ortiz', role: 'Coordinadora de flota · Rosario' },
+  { num: '01', title: 'Conectá a tus sellers', body: 'Cada vendedor autoriza a PacKen desde su cuenta de Mercado Libre. A partir de ahí, sus envíos se sincronizan solos.' },
+  { num: '02', title: 'Escaneá los paquetes', body: 'Tus transportistas escanean las etiquetas desde el celular en la colecta y en el reparto. Cada uno ve solo lo suyo.' },
+  { num: '03', title: 'Controlá y liquidá', body: 'Seguí el estado de cada envío, reasigná cuando haga falta y generá los resúmenes de cobro y pago del período.' },
 ];
 
 const PAIN_POINTS = [
@@ -33,68 +44,63 @@ const PAIN_POINTS = [
 ];
 
 const GAIN_POINTS = [
-  'Toda la carga del día en un solo panel',
-  'Asignás la flota y cada repartidor ve su lista',
-  'El estado de cada paquete se actualiza en vivo',
-  'Reportes por zona, repartidor e incidencia',
+  'Todos los envíos en un solo panel',
+  'Cada transportista ve y escanea sus paquetes desde el celular',
+  'El estado de cada paquete se actualiza solo, desde Mercado Libre',
+  'Estadísticas por partido y resúmenes de cobro y pago en Excel',
 ];
 
 const FAQS = [
-  { q: '¿Para quién es Packen?', a: 'Para empresas de logística que reparten envíos de Mercado Libre. Está pensado para operaciones con flota propia, no para vendedores individuales.' },
-  { q: '¿Necesito instalar algo?', a: 'No. El panel funciona desde el navegador y los repartidores usan Packen desde el celular, sin instalar nada.' },
-  { q: '¿Cómo entran los envíos a Packen?', a: 'Cargás la operación del día en el panel y Packen la ordena por zona, lista para que la asignes entre tus repartidores.' },
-  { q: '¿Cuántos repartidores puedo gestionar?', a: 'No hay un límite fijo. Packen está pensado para flotas, desde equipos chicos hasta operaciones con decenas de repartidores.' },
-  { q: '¿Cómo empiezo a usarlo?', a: 'Te registrás gratis, cargás los datos de tu empresa y empezás a ordenar los envíos del día. No hace falta instalar nada ni coordinar nada por adelantado.' },
+  { q: '¿Para quién es PacKen?', a: 'Para empresas de logística que reparten envíos de Mercado Libre (por ejemplo, Flex) con su propia flota. No está pensado para vendedores individuales.' },
+  { q: '¿Necesito instalar algo?', a: 'No. El panel funciona desde el navegador y los transportistas usan PacKen desde el celular, sin instalar ninguna aplicación.' },
+  { q: '¿Cómo entran los envíos a PacKen?', a: 'Conectás las cuentas de Mercado Libre de tus sellers y tus transportistas escanean el QR de cada etiqueta. Los estados se actualizan solos con la información de Mercado Libre.' },
+  { q: '¿Las “facturas” sirven como comprobante fiscal?', a: 'No. Son resúmenes internos para saber cuánto cobrarle a cada seller y cuánto pagarle a cada transportista. Las facturas fiscales las seguís emitiendo vos ante ARCA.' },
+  { q: '¿Cuánto cuesta?', a: 'Hoy el registro y el uso son gratuitos. Si en el futuro hay planes pagos, se avisará con anticipación y no se cobrará nada sin que lo aceptes.' },
+  { q: '¿Qué pasa con los datos de los compradores?', a: 'Se usan solo para gestionar las entregas. No se venden ni se usan para publicidad. Más detalle en la Política de privacidad.' },
 ];
 
+// Ejemplos ilustrativos de la interfaz (se aclara en pantalla).
 const TABS_DATA = [
   {
     label: 'Envíos', hint: 'Todo en un lugar',
-    title: 'La carga del día, en un solo panel',
-    desc: 'Todos los envíos que reparte tu empresa, ordenados y visibles para todo el equipo.',
+    title: 'Todos los envíos, en un solo panel',
+    desc: 'Filtrá por seller, transportista, estado o fecha y buscá cualquier envío por ID, comprador o dirección.',
     rows: [
-      { tag: '#42', label: 'Palermo · 6 paquetes', meta: 'Sin asignar', badge: 'Nuevo', tone: 'green' },
-      { tag: '#43', label: 'Caballito · 3 paquetes', meta: 'Asignado a J. Pérez', badge: 'En curso', tone: 'green' },
-      { tag: '#44', label: 'Belgrano · 9 paquetes', meta: 'Prioridad alta', badge: 'Urgente', tone: 'amber' },
+      { tag: 'ML', label: 'Palermo · Av. Santa Fe 3200', meta: 'Sin asignar', badge: 'Ingresado', tone: 'amber' },
+      { tag: 'ML', label: 'Caballito · Rivadavia 5100', meta: 'Asignado a J. Pérez', badge: 'En camino', tone: 'green' },
+      { tag: 'ML', label: 'Belgrano · Cabildo 1800', meta: 'Asignado a L. Méndez', badge: 'Entregado', tone: 'gray' },
     ],
   },
   {
-    label: 'Zonas', hint: 'Carga por área',
-    title: 'Cada zona, con su carga y su gente',
-    desc: 'Agrupá los envíos por zona y repartí la carga del día entre tu flota como mejor te sirva.',
+    label: 'Zonas', hint: 'Barrios de Flex',
+    title: 'Cada barrio, en su zona',
+    desc: 'Asigná los barrios de Flex a tus zonas. La zona define cuánto cobrás y cuánto pagás por cada envío.',
     rows: [
-      { tag: 'N', label: 'Zona Norte', meta: '3 repartidores asignados', badge: '48 envíos', tone: 'gray' },
-      { tag: 'C', label: 'Zona Centro', meta: '5 repartidores asignados', badge: '76 envíos', tone: 'gray' },
-      { tag: 'S', label: 'Zona Sur', meta: '4 repartidores asignados', badge: '41 envíos', tone: 'gray' },
+      { tag: '1', label: 'Zona 1', meta: 'Palermo, Belgrano, Núñez', badge: 'Tarifa A', tone: 'gray' },
+      { tag: '2', label: 'Zona 2', meta: 'Caballito, Flores, Almagro', badge: 'Tarifa B', tone: 'gray' },
+      { tag: '3', label: 'Zona 3', meta: 'Avellaneda, Lanús, Quilmes', badge: 'Tarifa C', tone: 'gray' },
     ],
   },
   {
-    label: 'Repartidores', hint: 'En vivo',
-    title: 'Tu flota, en una pantalla',
-    desc: 'Asigná entregas y seguí a cada repartidor en tiempo real, esté donde esté.',
+    label: 'Transportistas', hint: 'Tu flota',
+    title: 'Tu flota, con sus paquetes',
+    desc: 'Cada transportista ve sus envíos en el celular. Vos ves cuántos tiene en camino, entregados y cancelados.',
     rows: [
-      { tag: 'JP', label: 'Juan Pérez', meta: '12 de 18 entregados', badge: 'En ruta', tone: 'green' },
-      { tag: 'LM', label: 'Lucía Méndez', meta: '9 de 9 entregados', badge: 'Libre', tone: 'gray' },
-      { tag: 'RG', label: 'Ramiro Gómez', meta: '5 de 14 entregados', badge: 'En ruta', tone: 'green' },
+      { tag: 'JP', label: 'Juan Pérez', meta: '12 de 18 entregados', badge: 'En camino', tone: 'green' },
+      { tag: 'LM', label: 'Lucía Méndez', meta: '9 de 9 entregados', badge: 'Completo', tone: 'gray' },
+      { tag: 'RG', label: 'Ramiro Gómez', meta: '5 de 14 entregados', badge: 'En camino', tone: 'green' },
     ],
   },
   {
-    label: 'Reportes', hint: 'Tu operación',
-    title: 'Los números que importan',
-    desc: 'Entregas, tiempos e incidencias por zona y por repartidor. Decidí con datos, no a ojo.',
+    label: 'Cobros', hint: 'Facturas y liquidaciones',
+    title: 'Cuánto cobrás y cuánto pagás',
+    desc: 'Resúmenes por período para cada seller y cada transportista, calculados con tus listas de precios y costos.',
     rows: [
-      { tag: '↑', label: 'Entregas a tiempo', meta: 'Esta semana', badge: '96%', tone: 'green' },
-      { tag: '~', label: 'Tiempo medio por entrega', meta: 'Últimos 7 días', badge: '11 min', tone: 'gray' },
-      { tag: '↓', label: 'Entregas fallidas', meta: 'vs. semana pasada', badge: '-24%', tone: 'green' },
+      { tag: '$', label: 'Resumen a seller', meta: 'Entregados del período', badge: 'Excel', tone: 'green' },
+      { tag: '$', label: 'Liquidación a transportista', meta: 'Entregados del período', badge: 'Excel', tone: 'green' },
+      { tag: '#', label: 'Estadísticas por partido', meta: 'Por estado', badge: 'Excel', tone: 'gray' },
     ],
   },
-];
-
-const STATS = [
-  { to: 120, suffix: '+', label: 'Empresas de logística' },
-  { to: 1200000, suffix: '+', format: 'compact', label: 'Envíos gestionados' },
-  { to: 96, suffix: '%', label: 'Entregas a tiempo' },
-  { to: 4.9, decimals: 1, label: 'Puntaje promedio' },
 ];
 
 const BADGE_TONE = {
@@ -152,65 +158,6 @@ function ScrollProgress() {
       ref={barRef}
       className="fixed top-0 left-0 z-[100] h-[3px] w-full origin-left scale-x-0 bg-gradient-to-r from-[#FFDE00] to-[#F5C400]"
     />
-  );
-}
-
-function fmtStat(v, stat) {
-  if (stat.format === 'compact') {
-    return `${(v / 1000000).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M${stat.suffix || ''}`;
-  }
-  const dec = stat.decimals || 0;
-  return `${v.toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec })}${stat.suffix || ''}`;
-}
-
-function StatCounter({ stat }) {
-  const ref = useRef(null);
-  const startedRef = useRef(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return undefined;
-    if (!('IntersectionObserver' in window)) {
-      el.textContent = fmtStat(stat.to, stat);
-      return undefined;
-    }
-    const run = () => {
-      const dur = 1400;
-      const t0 = performance.now();
-      const tick = (now) => {
-        const p = Math.min(1, (now - t0) / dur);
-        const eased = 1 - (1 - p) ** 3;
-        if (ref.current) ref.current.textContent = fmtStat(stat.to * eased, stat);
-        if (p < 1) requestAnimationFrame(tick);
-        else if (ref.current) ref.current.textContent = fmtStat(stat.to, stat);
-      };
-      requestAnimationFrame(tick);
-    };
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting && !startedRef.current) {
-            startedRef.current = true;
-            run();
-            io.unobserve(el);
-          }
-        });
-      },
-      { threshold: 0.4 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return (
-    <span
-      ref={ref}
-      className="font-bold text-[#FFDE00] text-[clamp(38px,5vw,56px)] tracking-[-0.03em]"
-      style={{ fontFamily: FONT_DISPLAY }}
-    >
-      {fmtStat(0, stat)}
-    </span>
   );
 }
 
@@ -282,14 +229,14 @@ const Landing = () => {
           style={{ '--r': '-7deg', transform: 'rotate(-7deg)' }}
         >
           <span className="h-[9px] w-[9px] rounded-full bg-[#1E7A3B] [animation:livePulse_1.8s_ease-out_infinite]" />
-          <span className="text-[13.5px] font-semibold" style={{ fontFamily: FONT_DISPLAY }}>#FLX-8842 · En ruta</span>
+          <span className="text-[13.5px] font-semibold" style={{ fontFamily: FONT_DISPLAY }}>#FLX-8842 · En camino</span>
         </div>
         <div
           className="hero-chip pointer-events-none absolute right-10 top-[300px] z-0 hidden items-center gap-2 rounded-[13px] bg-[#16150F] px-[15px] py-[11px] text-[#F6F5EE] shadow-[0_20px_40px_-24px_rgba(22,21,15,0.5)] [animation:floatChip_8.5s_ease-in-out_infinite_0.6s] min-[1121px]:flex"
           style={{ '--r': '6deg', transform: 'rotate(6deg)' }}
         >
           <span className="h-4 w-4 rounded-[5px] bg-[#FFDE00]" />
-          <span className="text-[13.5px] font-semibold" style={{ fontFamily: FONT_DISPLAY }}>12 repartidores en calle</span>
+          <span className="text-[13.5px] font-semibold" style={{ fontFamily: FONT_DISPLAY }}>Asignado a J. Pérez</span>
         </div>
         <div
           className="hero-chip pointer-events-none absolute right-14 top-[410px] z-0 hidden items-center gap-2 rounded-[13px] bg-[#FFDE00] px-3.5 py-[9px] shadow-[0_16px_34px_-20px_rgba(22,21,15,0.4)] [animation:floatChip_9s_ease-in-out_infinite_1.2s] min-[1121px]:flex"
@@ -329,8 +276,8 @@ const Landing = () => {
             <span className="word" style={{ animationDelay: '0.52s' }}>control.</span>
           </h1>
           <p className="mx-auto mt-6.5 max-w-[600px] text-[clamp(17px,2vw,21px)] font-[450] leading-[1.5] text-[#54513F]">
-            Packen centraliza los envíos de Mercado Libre que reparte tu empresa, los ordena por zona y te muestra
-            cada paquete y cada repartidor en tiempo real.
+            PacKen centraliza los envíos de Mercado Libre que reparte tu empresa, los ordena por zona y mantiene
+            al día el estado de cada paquete.
           </p>
           <div className="mt-9 flex flex-wrap justify-center gap-3.5">
             <Link
@@ -362,7 +309,7 @@ const Landing = () => {
               <span className="h-[11px] w-[11px] rounded-full bg-[#E6E3D6]" />
             </div>
             <div className="ml-3 text-[13px] text-[#9A9780]" style={{ fontFamily: FONT_DISPLAY }}>
-              app.packen.com/panel
+              PacKen · Panel
             </div>
           </div>
           <div className="grid min-h-[400px] grid-cols-1 sm:grid-cols-[200px_1fr]">
@@ -371,9 +318,9 @@ const Landing = () => {
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2.5 rounded-[9px] bg-[#FFDE00] px-[11px] py-[9px] text-[14px] font-semibold">
                   <span className="h-2 w-2 rounded-[2px] bg-[#16150F]" />
-                  Pedidos de hoy
+                  Paquetes
                 </div>
-                {['Zonas', 'Repartidores', 'Reportes'].map((item) => (
+                {['Zonas', 'Transportistas', 'Estadísticas'].map((item) => (
                   <div key={item} className="flex items-center gap-2.5 rounded-[9px] px-[11px] py-[9px] text-[14px] text-[#54513F]">
                     <span className="h-2 w-2 rounded-[2px] bg-[#D8D5C4]" />
                     {item}
@@ -400,8 +347,8 @@ const Landing = () => {
                   </div>
                 </div>
                 <div className="min-w-[120px] flex-1 rounded-[13px] border border-[#EFEDE3] bg-[#FFF9CC] p-[15px]">
-                  <div className="text-[12.5px] text-[#8A8770]">Repartidores en calle</div>
-                  <div className="mt-1 text-[28px] font-bold" style={{ fontFamily: FONT_DISPLAY }}>12</div>
+                  <div className="text-[12.5px] text-[#8A8770]">Sin asignar</div>
+                  <div className="mt-1 text-[28px] font-bold" style={{ fontFamily: FONT_DISPLAY }}>4</div>
                 </div>
               </div>
               <div className="overflow-hidden rounded-[13px] border border-[#EFEDE3]">
@@ -413,13 +360,13 @@ const Landing = () => {
                   <span className="text-[#54513F]">Palermo</span>
                   <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[#E9FBE9] px-[9px] py-1 text-[12px] font-semibold text-[#1E7A3B]">
                     <span className="h-1.5 w-1.5 rounded-full bg-[#1E7A3B] [animation:livePulse_1.8s_ease-out_infinite]" />
-                    En ruta
+                    En camino
                   </span>
                 </div>
                 <div className="grid grid-cols-[1.4fr_1fr_0.9fr] items-center border-b border-[#F2F1E8] px-4 py-[13px] text-[14px]">
                   <span className="font-semibold">#FLX-8843</span>
                   <span className="text-[#54513F]">Caballito</span>
-                  <span className="w-fit rounded-full bg-[#FFF3CC] px-[9px] py-1 text-[12px] font-semibold text-[#8A6A00]">Pendiente</span>
+                  <span className="w-fit rounded-full bg-[#FFF3CC] px-[9px] py-1 text-[12px] font-semibold text-[#8A6A00]">Ingresado</span>
                 </div>
                 <div className="grid grid-cols-[1.4fr_1fr_0.9fr] items-center px-4 py-[13px] text-[14px]">
                   <span className="font-semibold">#FLX-8844</span>
@@ -432,40 +379,9 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* SOCIAL PROOF STRIP */}
-      <section className="mx-auto mt-16 max-w-[1080px] px-5 sm:px-10">
-        <p className="mb-[22px] text-center text-[13px] font-semibold uppercase tracking-[0.06em] text-[#9A9780]">
-          Empresas de logística que reparten con Packen
-        </p>
-        <div
-          className="relative overflow-hidden"
-          style={{ maskImage: 'linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)', WebkitMaskImage: 'linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)' }}
-        >
-          <div className="marquee-track flex w-max gap-16 opacity-72 [animation:marquee_26s_linear_infinite]">
-            {[...Array(2)].map((_, rep) => (
-              ['EnvíoYa', 'RutaSur', 'LogiPack', 'FlexPro', 'Cadenza', 'DespachaAr'].map((n) => (
-                <span key={`${rep}-${n}`} className="text-[20px] font-bold text-[#54513F]" style={{ fontFamily: FONT_DISPLAY }}>
-                  {n}
-                </span>
-              ))
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* STATS BAND */}
-      <section className="reveal mx-auto mt-[110px] max-w-[1180px] px-5 sm:px-10">
-        <div className="rounded-[24px] bg-[#16150F] px-7 py-10 text-[#F6F5EE] sm:px-14 sm:py-16">
-          <div className="grid grid-cols-2 gap-9 text-center sm:grid-cols-4">
-            {STATS.map((stat) => (
-              <div key={stat.label}>
-                <StatCounter stat={stat} />
-                <div className="mt-2 text-[14.5px] text-[#B4B2A2]">{stat.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <p className="mx-auto mt-3 max-w-[1080px] px-5 text-center text-[12.5px] text-[#9A9780] sm:px-10">
+        Imagen ilustrativa con datos de ejemplo.
+      </p>
 
       {/* FEATURES */}
       <section id="funciones" className="mx-auto mt-[120px] max-w-[1180px] px-5 sm:px-10">
@@ -498,7 +414,7 @@ const Landing = () => {
         <div className="mb-11 max-w-[640px]">
           <p className="mb-3.5 text-[13px] font-bold uppercase tracking-[0.08em] text-[#B0862E]">En acción</p>
           <h2 className="text-[clamp(30px,4vw,46px)] font-bold leading-[1.06] tracking-[-0.025em]" style={{ fontFamily: FONT_DISPLAY }}>
-            Tocá y mirá Packen por dentro.
+            Tocá y mirá PacKen por dentro.
           </h2>
         </div>
         <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-[minmax(220px,300px)_1fr]">
@@ -585,44 +501,12 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* TESTIMONIALS */}
-      <section className="mx-auto mt-[120px] max-w-[1180px] px-5 sm:px-10">
-        <div className="mb-[52px] max-w-[640px]">
-          <p className="mb-3.5 text-[13px] font-bold uppercase tracking-[0.08em] text-[#B0862E]">Testimonios</p>
-          <h2 className="text-[clamp(30px,4vw,46px)] font-bold leading-[1.06] tracking-[-0.025em]" style={{ fontFamily: FONT_DISPLAY }}>
-            Operaciones que dejaron el caos atrás.
-          </h2>
-        </div>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {TESTIMONIALS.map((t) => (
-            <div
-              key={t.name}
-              className={`reveal-pop flex flex-col justify-between rounded-[18px] border border-[#E9E6DA] bg-white p-[30px] ${CARD_TRANSITION} hover:-translate-y-1.5 hover:shadow-[0_22px_40px_-26px_rgba(22,21,15,0.35)]`}
-            >
-              <p className="mb-6.5 text-[17px] leading-[1.5] tracking-[-0.01em] text-[#2B2A20]">{t.quote}</p>
-              <div className="flex items-center gap-3.5">
-                <div
-                  className="flex h-[42px] w-[42px] items-center justify-center rounded-full bg-[#FFDE00] text-[16px] font-bold text-[#16150F]"
-                  style={{ fontFamily: FONT_DISPLAY }}
-                >
-                  {t.initial}
-                </div>
-                <div>
-                  <div className="text-[14.5px] font-semibold">{t.name}</div>
-                  <div className="text-[13px] text-[#8A8770]">{t.role}</div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* COMPARISON */}
       <section className="mx-auto mt-[120px] max-w-[1080px] px-5 sm:px-10">
         <div className="mx-auto mb-[52px] max-w-[640px] text-center">
           <p className="mb-3.5 text-[13px] font-bold uppercase tracking-[0.08em] text-[#B0862E]">La diferencia</p>
           <h2 className="text-[clamp(30px,4vw,46px)] font-bold leading-[1.06] tracking-[-0.025em]" style={{ fontFamily: FONT_DISPLAY }}>
-            El mismo día, con o sin Packen.
+            El mismo día, con o sin PacKen.
           </h2>
         </div>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -644,7 +528,7 @@ const Landing = () => {
               <span className="flex h-5 w-5 items-center justify-center rounded-[6px] bg-[#FFDE00]">
                 <span className="h-2 w-2 rounded-[2px] bg-[#16150F]" />
               </span>
-              Con Packen
+              Con PacKen
             </h3>
             {GAIN_POINTS.map((g) => (
               <div key={g} className="flex items-start gap-3 border-t border-[#35342A] py-3.5 text-[15px] text-[#EDEBDF]">
@@ -744,21 +628,26 @@ const Landing = () => {
               <a href="#faq" className="text-[14.5px] text-[#57543F]">Preguntas</a>
             </div>
             <div className="flex flex-col gap-3">
-              <span className="mb-0.5 text-[12.5px] font-bold uppercase tracking-[0.05em] text-[#B0AD95]">Empresa</span>
-              <a href="#" className="text-[14.5px] text-[#57543F]">Nosotros</a>
-              <a href="#" className="text-[14.5px] text-[#57543F]">Contacto</a>
-              <a href="#" className="text-[14.5px] text-[#57543F]">Soporte</a>
+              <span className="mb-0.5 text-[12.5px] font-bold uppercase tracking-[0.05em] text-[#B0AD95]">Cuenta</span>
+              <Link to="/registro" className="text-[14.5px] text-[#57543F]">Registrarse</Link>
+              <Link to="/login" className="text-[14.5px] text-[#57543F]">Iniciar sesión</Link>
+              {!esMarcador(DATOS_LEGALES.emailContacto) && (
+                <a href={`mailto:${DATOS_LEGALES.emailContacto}`} className="text-[14.5px] text-[#57543F]">Contacto</a>
+              )}
             </div>
             <div className="flex flex-col gap-3">
               <span className="mb-0.5 text-[12.5px] font-bold uppercase tracking-[0.05em] text-[#B0AD95]">Legal</span>
-              <a href="#" className="text-[14.5px] text-[#57543F]">Términos</a>
-              <a href="#" className="text-[14.5px] text-[#57543F]">Privacidad</a>
+              <Link to="/terminos" className="text-[14.5px] text-[#57543F]">Términos y condiciones</Link>
+              <Link to="/privacidad" className="text-[14.5px] text-[#57543F]">Política de privacidad</Link>
+              <Link to="/cookies" className="text-[14.5px] text-[#57543F]">Política de cookies</Link>
             </div>
           </div>
         </div>
         <div className="mt-11 flex flex-wrap justify-between gap-3 border-t border-[#EDEBE2] pt-6 text-[13.5px] text-[#9A9780]">
-          <span>© 2026 Packen. Todos los derechos reservados.</span>
-          <span>No afiliado oficialmente con Mercado Libre.</span>
+          <span>
+            © {new Date().getFullYear()} {DATOS_LEGALES.razonSocial} · CUIT {DATOS_LEGALES.cuit}
+          </span>
+          <span>PacKen no está afiliado ni respaldado por Mercado Libre.</span>
         </div>
       </footer>
     </div>

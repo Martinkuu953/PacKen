@@ -14,6 +14,7 @@ const Registro = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmar, setConfirmar] = useState('');
+  const [acepta, setAcepta] = useState(false);
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
 
@@ -29,6 +30,10 @@ const Registro = () => {
       setError('Las contraseñas no coinciden');
       return;
     }
+    if (!acepta) {
+      setError('Para registrarte tenés que aceptar los Términos y condiciones y la Política de privacidad');
+      return;
+    }
 
     setCargando(true);
     try {
@@ -37,6 +42,7 @@ const Registro = () => {
         email: email.trim(),
         password,
         rol: 'empresa',
+        aceptaTerminos: true,
       });
     } catch (err) {
       setError(err.message || 'Error al registrarse');
@@ -128,9 +134,33 @@ const Registro = () => {
             />
           </div>
 
+          {/* Consentimiento expreso: no viene tildado y el servidor lo vuelve a
+              exigir (ver /api/auth/registro). */}
+          <label className="flex items-start gap-2.5 text-sm text-gray-600">
+            <input
+              type="checkbox"
+              checked={acepta}
+              onChange={(e) => setAcepta(e.target.checked)}
+              required
+              className="mt-0.5 h-4 w-4 shrink-0 accent-marca-oro"
+            />
+            <span>
+              Leí y acepto los{' '}
+              <Link to="/terminos" target="_blank" className="text-yellow-700 underline">
+                Términos y condiciones
+              </Link>{' '}
+              y la{' '}
+              <Link to="/privacidad" target="_blank" className="text-yellow-700 underline">
+                Política de privacidad
+              </Link>
+              , y declaro que los datos que ingreso son verdaderos y que tengo facultades para registrar a esta
+              empresa.
+            </span>
+          </label>
+
           <button
             type="submit"
-            disabled={cargando}
+            disabled={cargando || !acepta}
             className="w-full py-2.5 bg-marca-oro text-marca-grafito font-semibold rounded-xl hover:bg-marca-oro-oscuro disabled:opacity-50 transition-colors duration-150"
           >
             {cargando ? 'Registrando...' : 'Crear cuenta'}

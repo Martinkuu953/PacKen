@@ -54,10 +54,18 @@ async function listar(req, res, supabase, idempresa) {
 // Alta de un transportista hecha por la empresa: es la única forma de crear
 // una cuenta de transportista, no existe autorregistro. Nace aceptado.
 async function crear(req, res, supabase, idempresa) {
-  const { nombre, email, dni, password } = req.body ?? {};
+  const { nombre, email, dni, password, consentimiento } = req.body ?? {};
 
   if (!nombre || !email || !password || !dni) {
     return res.status(400).json({ error: 'nombre, email, dni y password son requeridos' });
+  }
+
+  // La empresa carga datos personales de un tercero: tiene que declarar que son
+  // verdaderos y que el transportista la autorizó (Ley 25.326, art. 5).
+  if (consentimiento !== true) {
+    return res.status(400).json({
+      error: 'Tenés que declarar que los datos son verdaderos y que el transportista te autorizó a cargarlos',
+    });
   }
 
   const errorEmail = validarEmail(email);

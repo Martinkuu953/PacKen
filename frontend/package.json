@@ -10,6 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/instrument-serif": "^5.2.8",
+    "@fontsource/manrope": "^5.2.8",
+    "@fontsource/space-grotesk": "^5.2.10",
     "@supabase/supabase-js": "^2.107.0",
     "@vercel/functions": "^3.9.9",
     "bcryptjs": "^3.0.3",

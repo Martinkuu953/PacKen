@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CatalogosProvider } from './context/CatalogosContext';
 import Layout from './components/Layout';
+import AvisoCookies from './components/AvisoCookies';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 
@@ -21,6 +22,9 @@ const Estadisticas = lazy(() => import('./pages/Estadisticas'));
 const Liquidaciones = lazy(() => import('./pages/Liquidaciones'));
 const Facturas = lazy(() => import('./pages/Facturas'));
 const Perfil = lazy(() => import('./pages/Perfil'));
+const Terminos = lazy(() => import('./pages/legal/Terminos'));
+const Privacidad = lazy(() => import('./pages/legal/Privacidad'));
+const Cookies = lazy(() => import('./pages/legal/Cookies'));
 
 function RutaProtegida({ children, rolesPermitidos }) {
   const { autenticado, usuario, aprobado } = useAuth();
@@ -78,6 +82,11 @@ function AppRoutes() {
         <Route path="/login" element={<RutaPublica><Login /></RutaPublica>} />
         <Route path="/registro" element={<RutaPublica><Registro /></RutaPublica>} />
         <Route path="/sin-acceso" element={<RutaSinAcceso />} />
+
+        {/* Legales: públicas, con o sin sesión. */}
+        <Route path="/terminos" element={<Terminos />} />
+        <Route path="/privacidad" element={<Privacidad />} />
+        <Route path="/cookies" element={<Cookies />} />
 
         <Route path="/" element={<Inicio />} />
         <Route path="/paquetes" element={<RutaProtegida><Paquetes /></RutaProtegida>} />
@@ -140,6 +149,7 @@ function App() {
         <CatalogosProvider>
           <AppRoutes />
         </CatalogosProvider>
+        <AvisoCookies />
       </AuthProvider>
     </Router>
   );
