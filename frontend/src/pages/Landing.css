@@ -1,98 +1,68 @@
-/* Animaciones de la landing. Fuera de Tailwind porque son keyframes con
-   nombre propio referenciados vía clases utilitarias arbitrarias
-   (animate-[nombre_duración_...]) en Landing.jsx. */
+/* Landing. Tipografía única (Archivo, con eje de ancho): títulos condensados
+   como los de una etiqueta de envío, texto en ancho normal. Servida desde el
+   sitio, sin conexiones a terceros. */
 
-@keyframes floatUp {
-  from { opacity: 0; transform: translateY(18px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes revealUp {
-  from { opacity: 0; transform: translateY(30px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes revealScale {
-  from { opacity: 0; transform: translateY(34px) scale(0.97); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-@keyframes marquee {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
-}
-@keyframes glowFloat {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(24px, -22px) scale(1.12); }
-}
-@keyframes glowFloat2 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(-28px, 20px) scale(1.08); }
-}
-@keyframes softPulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.45; transform: scale(0.82); }
-}
-@keyframes livePulse {
-  0% { box-shadow: 0 0 0 0 rgba(30, 122, 59, 0.45); }
-  100% { box-shadow: 0 0 0 8px rgba(30, 122, 59, 0); }
-}
-@keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-@keyframes floatChip {
-  0%, 100% { transform: translateY(0) rotate(var(--r, 0deg)); }
-  50% { transform: translateY(-16px) rotate(var(--r, 0deg)); }
-}
-@keyframes wordUp {
-  from { opacity: 0; transform: translateY(26px) rotate(2deg); }
-  to { opacity: 1; transform: translateY(0) rotate(0); }
-}
-@keyframes moveX {
-  0% { left: 2%; }
-  100% { left: 98%; }
-}
-@keyframes tick {
-  0% { opacity: 0.4; transform: translateY(-5px); }
-  100% { opacity: 1; transform: translateY(0); }
-}
-@keyframes growX {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
+.landing {
+  --grafito: #2e3136;
+  --cinta: #f2b400;
+  --etiqueta: #ffffff;
+  --piso: #f1f1ee;
+  --tinta-2: #5f636a;
+  --entregado: #1f7a4d;
+  --linea: #dcddd8;
+
+  font-family: 'Archivo Variable', system-ui, sans-serif;
+  font-variation-settings: 'wdth' 100;
+  color: var(--grafito);
+  background: var(--piso);
+  -webkit-font-smoothing: antialiased;
 }
 
-.pk-landing .reveal {
-  opacity: 0;
-  transform: translateY(30px);
-}
-.pk-landing .reveal.is-visible {
-  animation: revealUp 0.9s cubic-bezier(0.22, 0.61, 0.36, 1) both;
-}
-.pk-landing .reveal-pop {
-  opacity: 0;
-  transform: translateY(34px) scale(0.97);
-}
-.pk-landing .reveal-pop.is-visible {
-  animation: revealScale 1s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+/* Títulos: condensados y pesados. Escala modular 1.25 a partir de 17px. */
+.landing .titulo {
+  font-variation-settings: 'wdth' 75;
+  font-weight: 760;
+  letter-spacing: -0.01em;
+  line-height: 0.98;
+  text-wrap: balance;
 }
 
-.pk-landing .word {
-  display: inline-block;
-  animation: wordUp 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+.landing .texto {
+  font-size: 17px;
+  line-height: 1.6;
+  max-width: 62ch;
+  color: var(--tinta-2);
 }
 
+.landing .cifra {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Foco visible para teclado en todos los controles de la landing. */
+.landing a:focus-visible,
+.landing button:focus-visible,
+.landing summary:focus-visible {
+  outline: 3px solid var(--cinta);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* Preguntas frecuentes: <details> nativo, accesible sin JS. */
+.landing details > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.landing details > summary::-webkit-details-marker {
+  display: none;
+}
+.landing details .signo {
+  transition: transform 200ms ease;
+}
+.landing details[open] .signo {
+  transform: rotate(45deg);
+}
 @media (prefers-reduced-motion: reduce) {
-  .pk-landing .reveal,
-  .pk-landing .reveal-pop,
-  .pk-landing .word {
-    animation: none !important;
-    opacity: 1 !important;
-    transform: none !important;
-  }
-  .pk-landing .hero-chip,
-  .pk-landing .marquee-track,
-  .pk-landing .glow,
-  .pk-landing .shimmer-text,
-  .pk-landing .route-runner,
-  .pk-landing .live-dot {
-    animation: none !important;
+  .landing details .signo {
+    transition: none;
   }
 }

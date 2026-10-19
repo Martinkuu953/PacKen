@@ -18,4 +18,10 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
+  {
+    // Serverless Functions y Edge Middleware de Vercel: corren en Node, no en
+    // el navegador (process, Buffer, etc.).
+    files: ['api/**/*.js', 'middleware.js', 'shared/**/*.js'],
+    languageOptions: { globals: { ...globals.node } },
+  },
 ])

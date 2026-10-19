@@ -1,42 +1,38 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 // Pide `consultar(parametros)` al montar y cada vez que cambian los
-// parámetros. Solo aplica la respuesta del último pedido: si el usuario cambia
-// un filtro mientras otro pedido sigue en vuelo, el viejo no pisa al nuevo.
+// parámetros. Solo se aplica la respuesta del último pedido: si el usuario
+// cambia un filtro mientras otro pedido sigue en vuelo, el viejo no pisa al
+// nuevo.
+//
+// "Cargando" no es un estado que se prende y se apaga: es que la última
+// respuesta guardada no corresponde a los parámetros actuales. Así el efecto
+// solo toca el estado cuando llega una respuesta.
 export function useConsulta(consultar, parametros = {}, { inicial = null } = {}) {
-  const [datos, setDatos] = useState(inicial);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const ultimoPedido = useRef(0);
-
   // Los parámetros llegan como objeto literal nuevo en cada render.
   const clave = JSON.stringify(parametros);
   const estables = useMemo(() => JSON.parse(clave), [clave]);
+  const [version, setVersion] = useState(0);
+  const pedido = `${clave}#${version}`;
 
-  const cargar = useCallback(() => {
-    const pedido = ++ultimoPedido.current;
-    setLoading(true);
-    consultar(estables)
-      .then((res) => {
-        if (pedido !== ultimoPedido.current) return;
-        setDatos(res);
-        setError(null);
-      })
-      .catch((err) => {
-        if (pedido !== ultimoPedido.current) return;
-        setError(err.message ?? 'Error al cargar');
-        setDatos(inicial);
-      })
-      .finally(() => {
-        if (pedido === ultimoPedido.current) setLoading(false);
-      });
-    // `inicial` y `consultar` son fijos para cada pantalla.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [estables]);
+  const [resultado, setResultado] = useState({ pedido: null, datos: inicial, error: null });
 
   useEffect(() => {
-    cargar();
-  }, [cargar]);
+    let vigente = true;
+    consultar(estables)
+      .then((datos) => {
+        if (vigente) setResultado({ pedido, datos, error: null });
+      })
+      .catch((err) => {
+        if (vigente) setResultado({ pedido, datos: inicial, error: err.message ?? 'Error al cargar' });
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [consultar, estables, inicial, pedido]);
 
-  return { datos, loading, error, recargar: cargar };
+  const recargar = useCallback(() => setVersion((v) => v + 1), []);
+  const loading = resultado.pedido !== pedido;
+
+  return { datos: resultado.datos, loading, error: loading ? null : resultado.error, recargar };
 }

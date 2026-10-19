@@ -80,7 +80,9 @@ export default async function handler(req, res) {
     // las columnas no hay constancia de qué versión se aceptó.
     if (error?.code === 'PGRST204') {
       console.error('[PacKen] Falta migration-legal.sql: el registro se guardó sin constancia de aceptación.');
-      const { terminos_version: _v, terminos_aceptados_en: _f, ...sinConstancia } = fila;
+      const sinConstancia = { ...fila };
+      delete sinConstancia.terminos_version;
+      delete sinConstancia.terminos_aceptados_en;
       ({ data, error } = await insertar(sinConstancia));
     }
 
