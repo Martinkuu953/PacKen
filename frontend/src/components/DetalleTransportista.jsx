@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { apiFetch } from '../services/api';
 
+const ESTADOS_TRANSPORTISTA = [
+  { campo: 'enCamino', label: 'En camino', color: 'text-yellow-600' },
+  { campo: 'entregados', label: 'Entregados', color: 'text-green-500' },
+  { campo: 'reprogramados', label: 'Reprogramados', color: 'text-orange-500' },
+  { campo: 'cancelados', label: 'Cancelados', color: 'text-gray-500' },
+];
+
 const formatearFecha = (iso) => {
   if (!iso) return '—';
   const fecha = new Date(iso);
@@ -95,11 +102,27 @@ const DetalleTransportista = ({ transportista, onCerrar, onEliminado }) => {
         <div className="space-y-1 text-sm mb-2">
           <div className="flex justify-between">
             <span className="text-gray-500">DNI</span>
-            <span className="font-semibold text-gray-800">{transportista.dni || '—'}</span>
+            <span className="font-medium text-gray-800">{transportista.dni || '—'}</span>
           </div>
-          <div className="flex justify-between">
+          <div className="flex justify-between pb-2 mb-2 border-b border-gray-100">
             <span className="text-gray-500">Alta</span>
             <span className="font-medium text-gray-800">{formatearFecha(transportista.created_at)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-500">Totales</span>
+            <span className="font-semibold text-gray-800">{transportista.totales ?? 0}</span>
+          </div>
+          {ESTADOS_TRANSPORTISTA.map((col) => (
+            <div key={col.campo} className="flex justify-between">
+              <span className="text-gray-500">{col.label}</span>
+              <span className={`font-medium ${col.color}`}>{transportista[col.campo] ?? 0}</span>
+            </div>
+          ))}
+          <div className="flex justify-between pt-2 mt-2 border-t border-gray-100">
+            <span className="text-gray-500">Monto a pagar</span>
+            <span className="font-bold text-green-600">
+              ${Number(transportista.monto ?? 0).toLocaleString()}
+            </span>
           </div>
         </div>
 

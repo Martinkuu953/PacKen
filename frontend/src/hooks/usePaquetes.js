@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getPaquetes } from '../services/paquetes';
 
-export function usePaquetes(filtros = {}) {
+// habilitado = false no pide nada al servidor: lo usa Paquetes para no traer
+// la tabla entera antes de que el administrador elija filtros.
+export function usePaquetes(filtros = {}, { habilitado = true } = {}) {
   const [paquetes, setPaquetes] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(habilitado);
   const [error, setError] = useState(null);
   const [aviso, setAviso] = useState(null);
 
@@ -13,6 +15,13 @@ export function usePaquetes(filtros = {}) {
   const filtrosEstables = useMemo(() => JSON.parse(clave), [clave]);
 
   const cargar = useCallback(() => {
+    if (!habilitado) {
+      setPaquetes([]);
+      setAviso(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     getPaquetes(filtrosEstables)
       .then((data) => {
@@ -37,7 +46,7 @@ export function usePaquetes(filtros = {}) {
       .finally(() => {
         setLoading(false);
       });
-  }, [filtrosEstables]);
+  }, [filtrosEstables, habilitado]);
 
   useEffect(() => {
     cargar();

@@ -1,6 +1,7 @@
 import { getSupabase } from '../_lib/ml.js';
 import { responderError } from '../_lib/errores.js';
 import { revocarSesionesDeUsuario } from '../_lib/refreshTokens.js';
+import { cargarResolutorZonas } from '../_lib/zonas.js';
 import {
   autenticar,
   requiereRol,
@@ -9,25 +10,97 @@ import {
   validarEmail,
 } from '../_lib/auth.js';
 
-// GET /api/transportistas — la flota de la empresa.
+// GET /api/transportistas — la flota de la empresa, un transportista por fila
+// con sus paquetes agrupados por estado y el monto a pagarle (entregados),
+// mismo criterio que /api/sellers pero con la lista de COSTOS
+// (usuario.idlista_costo) en vez de la de precios.
+function normalizarEstado(estado) {
+  return String(estado ?? '').toLowerCase().trim();
+}
+
+function resumenVacio() {
+  return { totales: 0, enCamino: 0, entregados: 0, cancelados: 0, reprogramados: 0, monto: 0 };
+}
+
+function acumular(resumen, estado) {
+  const e = normalizarEstado(estado);
+  resumen.totales += 1;
+  if (e.includes('camino')) resumen.enCamino += 1;
+  if (e.includes('entregad')) resumen.entregados += 1;
+  if (e.includes('cancel')) resumen.cancelados += 1;
+  if (e.includes('reprogram')) resumen.reprogramados += 1;
+}
+
 async function listar(res, supabase, idempresa) {
-  const { data, error } = await supabase
-    .from('usuario')
-    .select('public_id, nombre, dni, created_at')
-    .eq('rol', 'transportista')
-    .eq('idempresa', idempresa)
-    .order('created_at', { ascending: false });
+  const [usuarios, paquetes, listas] = await Promise.all([
+    supabase
+      .from('usuario')
+      .select('id, public_id, nombre, dni, created_at, idlista_costo')
+      .eq('rol', 'transportista')
+      .eq('idempresa', idempresa)
+      .order('nombre'),
+    supabase
+      .from('paquete')
+      .select('idtransportista, idarea, idzona, estado')
+      .eq('idempresa', idempresa)
+      .not('idtransportista', 'is', null),
+    supabase.from('lista').select('id').eq('idempresa', idempresa).eq('tipo', 'costo'),
+  ]);
 
-  if (error) throw new Error(error.message);
+  if (usuarios.error) throw new Error(`usuario: ${usuarios.error.message}`);
+  if (paquetes.error) throw new Error(`paquete: ${paquetes.error.message}`);
+  if (listas.error) throw new Error(`lista: ${listas.error.message}`);
 
-  // El cliente solo conoce el UUID opaco. Ni el id interno ni el email salen
-  // de acá.
-  const transportistas = (data ?? []).map(({ public_id, ...resto }) => ({
-    id: public_id,
-    ...resto,
+  // El costo de un paquete = tarifa(lista del transportista, zona del paquete).
+  const listaIds = (listas.data ?? []).map((l) => l.id);
+  let tarifas = [];
+  if (listaIds.length) {
+    const { data, error } = await supabase
+      .from('lista_zona_tarifa')
+      .select('idlista, idzona, importe')
+      .in('idlista', listaIds);
+    if (error) throw new Error(`lista_zona_tarifa: ${error.message}`);
+    tarifas = data ?? [];
+  }
+  const tarifaPorListaZona = new Map(
+    tarifas.map((t) => [`${t.idlista}-${t.idzona}`, Number(t.importe)]),
+  );
+  const listaPorTransportista = new Map((usuarios.data ?? []).map((t) => [t.id, t.idlista_costo]));
+
+  // La zona se lee con la lista de ESE transportista: el mismo barrio puede
+  // caer en zonas distintas según la lista.
+  const zonaDe = await cargarResolutorZonas(supabase, idempresa, listaIds);
+
+  const resumenPorTransportista = new Map();
+  for (const p of paquetes.data ?? []) {
+    if (!resumenPorTransportista.has(p.idtransportista)) {
+      resumenPorTransportista.set(p.idtransportista, resumenVacio());
+    }
+    const resumen = resumenPorTransportista.get(p.idtransportista);
+    acumular(resumen, p.estado);
+
+    if (normalizarEstado(p.estado).includes('entregad')) {
+      const idlista = listaPorTransportista.get(p.idtransportista);
+      if (idlista) {
+        const idzona = zonaDe(idlista, p.idarea, p.idzona);
+        resumen.monto += tarifaPorListaZona.get(`${idlista}-${idzona}`) ?? 0;
+      }
+    }
+  }
+
+  // El cliente solo conoce el UUID opaco. Ni el id interno, ni el email, ni la
+  // lista asignada salen de acá.
+  const transportistas = (usuarios.data ?? []).map((t) => ({
+    id: t.public_id,
+    nombre: t.nombre,
+    dni: t.dni,
+    created_at: t.created_at,
+    ...(resumenPorTransportista.get(t.id) ?? resumenVacio()),
   }));
 
-  return res.json({ transportistas });
+  const montoTotal = transportistas.reduce((sum, t) => sum + t.monto, 0);
+
+  return res.json({ transportistas, montoTotal });
 }
 
 // POST /api/transportistas { nombre, email, dni, password }

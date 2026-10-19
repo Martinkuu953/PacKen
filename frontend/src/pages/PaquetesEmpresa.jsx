@@ -104,8 +104,15 @@ const TarjetaPaquete = ({ paquete, transportistas, ocupado, onReasignar, onHisto
 );
 
 const PaquetesEmpresa = () => {
-  const [filtros, setFiltros] = useState(FILTROS_VACIOS);
-  const { paquetes, loading, error, aviso, recargar } = usePaquetes(filtros);
+  // Con alto volumen no se puede traer la tabla entera: hasta que el
+  // administrador elige al menos un filtro y aprieta "Buscar", no se consulta
+  // nada. `borrador` es lo que está editando; `filtros`, lo último aplicado.
+  const [borrador, setBorrador] = useState(FILTROS_VACIOS);
+  const [filtros, setFiltros] = useState(null);
+  const { paquetes, loading, error, aviso, recargar } = usePaquetes(filtros ?? {}, {
+    habilitado: filtros !== null,
+  });
+  const sinFiltrar = filtros === null;
   const { sellers, transportistas } = useCatalogos();
 
   const [orden, setOrden] = useState({ campo: 'estado', dir: 'asc' });
@@ -149,7 +156,7 @@ const PaquetesEmpresa = () => {
     }
   };
 
-  const vacio = !loading && paquetesOrdenados.length === 0 && !error;
+  const vacio = !sinFiltrar && !loading && paquetesOrdenados.length === 0 && !error;
   const mensajeVacio = busqueda.trim()
     ? `Ningún paquete coincide con "${busqueda.trim()}".`
     : 'No hay paquetes para los filtros seleccionados.';
@@ -160,16 +167,25 @@ const PaquetesEmpresa = () => {
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4 sm:mb-6">
           <h2 className="text-lg sm:text-2xl font-bold text-gray-800">Paquetes</h2>
           <span className="text-xs sm:text-sm text-gray-500 whitespace-nowrap">
-            {loading ? 'Cargando...' : `${paquetes.length} envíos`}
+            {sinFiltrar ? 'Sin filtrar' : loading ? 'Cargando...' : `${paquetes.length} envíos`}
           </span>
         </div>
 
         <FiltrosPaquetes
-          valores={filtros}
-          onChange={setFiltros}
+          valores={borrador}
+          onChange={setBorrador}
+          onAplicar={() => setFiltros({ ...borrador })}
+          onLimpiar={() => setFiltros(null)}
           sellers={sellers}
           transportistas={transportistas}
         />
+
+        {sinFiltrar && (
+          <p className="py-10 text-center text-gray-500 text-sm">
+            Elegí al menos un filtro (seller, transportista, estado o fechas) y tocá
+            <span className="font-semibold text-gray-700"> Buscar paquetes</span> para ver los envíos.
+          </p>
+        )}
 
         {aviso && !error && (
           <p className="mb-4 text-amber-800 text-sm bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
@@ -182,137 +198,141 @@ const PaquetesEmpresa = () => {
           </p>
         )}
 
-        <Buscador
-          valor={busqueda}
-          onChange={setBusqueda}
-          placeholder="Buscar por ID, comprador, dirección, CP, partido o seller..."
-          resultados={paquetesBuscados.length}
-          total={paquetes.length}
-        />
+        {!sinFiltrar && (
+          <>
+            <Buscador
+              valor={busqueda}
+              onChange={setBusqueda}
+              placeholder="Buscar por ID, comprador, dirección, CP, partido o seller..."
+              resultados={paquetesBuscados.length}
+              total={paquetes.length}
+            />
 
-        {/* Mobile y tablet: tarjetas + un selector de orden, porque los th no
-            son clickeables cuando no hay tabla. */}
-        <div className="lg:hidden">
-          {!vacio && !loading && (
-            <div className="flex items-center gap-2 mb-3">
-              <label htmlFor="orden-mobile" className="text-xs text-gray-500 whitespace-nowrap">
-                Ordenar por
-              </label>
-              <select
-                id="orden-mobile"
-                value={orden.campo}
-                onChange={(e) => setOrden({ campo: e.target.value, dir: 'asc' })}
-                className="flex-1 min-w-0 text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white"
-              >
-                {ORDENABLES.map((col) => (
-                  <option key={col.campo} value={col.campo}>{col.label}</option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => setOrden((prev) => ({ ...prev, dir: prev.dir === 'asc' ? 'desc' : 'asc' }))}
-                aria-label="Invertir orden"
-                className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white text-gray-600"
-              >
-                {orden.dir === 'asc' ? '▲' : '▼'}
-              </button>
+            {/* Mobile y tablet: tarjetas + un selector de orden, porque los th no
+                son clickeables cuando no hay tabla. */}
+            <div className="lg:hidden">
+              {!vacio && !loading && (
+                <div className="flex items-center gap-2 mb-3">
+                  <label htmlFor="orden-mobile" className="text-xs text-gray-500 whitespace-nowrap">
+                    Ordenar por
+                  </label>
+                  <select
+                    id="orden-mobile"
+                    value={orden.campo}
+                    onChange={(e) => setOrden({ campo: e.target.value, dir: 'asc' })}
+                    className="flex-1 min-w-0 text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white"
+                  >
+                    {ORDENABLES.map((col) => (
+                      <option key={col.campo} value={col.campo}>{col.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setOrden((prev) => ({ ...prev, dir: prev.dir === 'asc' ? 'desc' : 'asc' }))}
+                    aria-label="Invertir orden"
+                    className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white text-gray-600"
+                  >
+                    {orden.dir === 'asc' ? '▲' : '▼'}
+                  </button>
+                </div>
+              )}
+
+              {loading && <p className="py-6 text-center text-gray-500">Cargando paquetes...</p>}
+              {vacio && <p className="py-6 text-center text-gray-500">{mensajeVacio}</p>}
+
+              <div className="space-y-3">
+                {!loading &&
+                  paquetesOrdenados.map((paquete, index) => (
+                    <TarjetaPaquete
+                      key={paquete.id ?? `${paquete.idenvioml}-${index}`}
+                      paquete={paquete}
+                      transportistas={transportistas}
+                      ocupado={ocupado === paquete.id}
+                      onReasignar={(destino) =>
+                        ejecutar(paquete.id, () => reasignarTransportista(paquete.id, destino))
+                      }
+                      onHistorial={() => setHistorialDe(paquete)}
+                    />
+                  ))}
+              </div>
             </div>
-          )}
 
-          {loading && <p className="py-6 text-center text-gray-500">Cargando paquetes...</p>}
-          {vacio && <p className="py-6 text-center text-gray-500">{mensajeVacio}</p>}
-
-          <div className="space-y-3">
-            {!loading &&
-              paquetesOrdenados.map((paquete, index) => (
-                <TarjetaPaquete
-                  key={paquete.id ?? `${paquete.idenvioml}-${index}`}
-                  paquete={paquete}
-                  transportistas={transportistas}
-                  ocupado={ocupado === paquete.id}
-                  onReasignar={(destino) =>
-                    ejecutar(paquete.id, () => reasignarTransportista(paquete.id, destino))
-                  }
-                  onHistorial={() => setHistorialDe(paquete)}
-                />
-              ))}
-          </div>
-        </div>
-
-        {/* Escritorio: la tabla completa. */}
-        <div className="hidden lg:block overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="text-xs text-gray-500 uppercase border-b border-gray-200">
-              <tr>
-                {COLUMNAS.map((col) => (
-                  <th
-                    key={col.campo}
-                    onClick={() => cambiarOrden(col.campo)}
-                    className="py-2 px-2 cursor-pointer select-none hover:text-gray-800 whitespace-nowrap"
-                  >
-                    {col.label}
-                    {flecha(col.campo)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={COLUMNAS.length} className="py-6 px-2 text-center text-gray-500">
-                    Cargando paquetes...
-                  </td>
-                </tr>
-              )}
-              {vacio && (
-                <tr>
-                  <td colSpan={COLUMNAS.length} className="py-6 px-2 text-center text-gray-500">
-                    {mensajeVacio}
-                  </td>
-                </tr>
-              )}
-              {!loading &&
-                paquetesOrdenados.map((paquete, index) => (
-                  <tr
-                    key={paquete.id ?? `${paquete.idenvioml}-${index}`}
-                    className="border-b border-gray-100 last:border-0 hover:bg-gray-50"
-                  >
-                    <td className="py-2 px-2 font-mono truncate">{paquete.idenvioml}</td>
-                    <td className="py-2 px-2 text-gray-700">{paquete.comprador || '—'}</td>
-                    <td className="py-2 px-2 text-gray-600 truncate max-w-[14rem]">{paquete.direccion}</td>
-                    <td className="py-2 px-2 text-gray-600">{paquete.codigopostal || '—'}</td>
-                    <td className="py-2 px-2 text-gray-600">{paquete.partido || '—'}</td>
-                    <td className="py-2 px-2 text-gray-600">{paquete.seller || '—'}</td>
-                    <td className="py-2 px-2 text-gray-600 whitespace-nowrap">
-                      {formatearFecha(paquete.fechaingreso)}
-                    </td>
-                    <td className={`py-2 px-2 font-bold truncate ${colorEstado(paquete.estado)}`}>
-                      {paquete.estado}
-                    </td>
-                    <td className="py-2 px-2">
-                      <SelectorTransportista
-                        paquete={paquete}
-                        transportistas={transportistas}
-                        ocupado={ocupado === paquete.id}
-                        onReasignar={(destino) =>
-                          ejecutar(paquete.id, () => reasignarTransportista(paquete.id, destino))
-                        }
-                        className="max-w-[10rem]"
-                      />
-                    </td>
-                    <td className="py-2 px-2 whitespace-nowrap">
-                      <button
-                        onClick={() => setHistorialDe(paquete)}
-                        className="text-xs px-2.5 py-1 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-100"
+            {/* Escritorio: la tabla completa. */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-gray-500 uppercase border-b border-gray-200">
+                  <tr>
+                    {COLUMNAS.map((col) => (
+                      <th
+                        key={col.campo}
+                        onClick={() => cambiarOrden(col.campo)}
+                        className="py-2 px-2 cursor-pointer select-none hover:text-gray-800 whitespace-nowrap"
                       >
-                        Historial
-                      </button>
-                    </td>
+                        {col.label}
+                        {flecha(col.campo)}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {loading && (
+                    <tr>
+                      <td colSpan={COLUMNAS.length} className="py-6 px-2 text-center text-gray-500">
+                        Cargando paquetes...
+                      </td>
+                    </tr>
+                  )}
+                  {vacio && (
+                    <tr>
+                      <td colSpan={COLUMNAS.length} className="py-6 px-2 text-center text-gray-500">
+                        {mensajeVacio}
+                      </td>
+                    </tr>
+                  )}
+                  {!loading &&
+                    paquetesOrdenados.map((paquete, index) => (
+                      <tr
+                        key={paquete.id ?? `${paquete.idenvioml}-${index}`}
+                        className="border-b border-gray-100 last:border-0 hover:bg-gray-50"
+                      >
+                        <td className="py-2 px-2 font-mono truncate">{paquete.idenvioml}</td>
+                        <td className="py-2 px-2 text-gray-700">{paquete.comprador || '—'}</td>
+                        <td className="py-2 px-2 text-gray-600 truncate max-w-[14rem]">{paquete.direccion}</td>
+                        <td className="py-2 px-2 text-gray-600">{paquete.codigopostal || '—'}</td>
+                        <td className="py-2 px-2 text-gray-600">{paquete.partido || '—'}</td>
+                        <td className="py-2 px-2 text-gray-600">{paquete.seller || '—'}</td>
+                        <td className="py-2 px-2 text-gray-600 whitespace-nowrap">
+                          {formatearFecha(paquete.fechaingreso)}
+                        </td>
+                        <td className={`py-2 px-2 font-bold truncate ${colorEstado(paquete.estado)}`}>
+                          {paquete.estado}
+                        </td>
+                        <td className="py-2 px-2">
+                          <SelectorTransportista
+                            paquete={paquete}
+                            transportistas={transportistas}
+                            ocupado={ocupado === paquete.id}
+                            onReasignar={(destino) =>
+                              ejecutar(paquete.id, () => reasignarTransportista(paquete.id, destino))
+                            }
+                            className="max-w-[10rem]"
+                          />
+                        </td>
+                        <td className="py-2 px-2 whitespace-nowrap">
+                          <button
+                            onClick={() => setHistorialDe(paquete)}
+                            className="text-xs px-2.5 py-1 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-100"
+                          >
+                            Historial
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
 
       {historialDe && (
