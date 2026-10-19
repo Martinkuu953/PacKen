@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FaCommentDots } from 'react-icons/fa';
 import { apiFetch } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { PREFIJO_HISTORIAL } from '../utils/historialAsistente';
 
 // Asistente guiado para el administrador (rol empresa).
 //
@@ -127,19 +130,96 @@ function checklist(e) {
   ];
 }
 
-let siguienteId = 0;
-const msg = (de, contenido, opciones = []) => ({ id: siguienteId++, de, contenido, opciones });
+// ── Historial ───────────────────────────────────────────────────────────────
+// Cada pantalla arma su propio Layout, así que al navegar (por ejemplo con
+// "Ir a ...") el asistente se vuelve a montar. Para no perder la conversación,
+// los mensajes se guardan como DATOS (no JSX) en sessionStorage y se dibujan
+// con renderContenido(). Dura lo que dura la pestaña y se borra al cerrar
+// sesión; la clave incluye al usuario para no mostrarle a otro lo ajeno.
+const MAX_MENSAJES = 200;
+
+const claveHistorial = (usuario) => `${PREFIJO_HISTORIAL}:${usuario?.rol ?? ''}:${usuario?.nombre ?? ''}`;
+
+function leerHistorial(clave) {
+  try {
+    const guardado = JSON.parse(sessionStorage.getItem(clave) ?? 'null');
+    if (guardado && Array.isArray(guardado.mensajes)) return guardado;
+  } catch {
+    // Storage bloqueado o JSON roto: se arranca de cero.
+  }
+  return { mensajes: [], abierto: false };
+}
+
+function guardarHistorial(clave, historial) {
+  try {
+    sessionStorage.setItem(
+      clave,
+      JSON.stringify({ ...historial, mensajes: historial.mensajes.slice(-MAX_MENSAJES) }),
+    );
+  } catch {
+    // Sin storage el chat funciona igual, solo que no sobrevive a la navegación.
+  }
+}
+
+const nuevoId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+const msg = (de, tipo, datos, opciones = []) => ({ id: nuevoId(), de, tipo, datos, opciones });
+const texto = (de, contenido, opciones) => msg(de, 'texto', { texto: contenido }, opciones);
+
+function renderContenido(m) {
+  const d = m.datos ?? {};
+  switch (m.tipo) {
+    case 'paso': {
+      const tema = TEMAS[d.tema];
+      if (!tema) return null;
+      return (
+        <>
+          <strong>Paso {d.indice + 1} de {tema.pasos.length}:</strong> {tema.pasos[d.indice]}
+        </>
+      );
+    }
+    case 'checklist':
+      return (
+        <ul className="space-y-1">
+          {(d.items ?? []).map((it, i) => (
+            <li key={i} className="flex gap-2">
+              <span aria-hidden="true">{it.hecho ? '✅' : '⬜'}</span>
+              <span>
+                <span className="font-medium">{it.titulo}</span>
+                <span className="block text-xs text-gray-500">{it.detalle}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      );
+    case 'proximo':
+      return (
+        <>
+          Tu próximo paso: <strong>{d.titulo}</strong>.
+          <span className="block text-xs text-gray-500 mt-1">{d.detalle}</span>
+        </>
+      );
+    default:
+      return d.texto;
+  }
+}
 
 const Asistente = () => {
   const navigate = useNavigate();
-  const [abierto, setAbierto] = useState(false);
-  const [mensajes, setMensajes] = useState([]);
+  const { usuario } = useAuth();
+  const clave = claveHistorial(usuario);
+  const [historialInicial] = useState(() => leerHistorial(clave));
+  const [abierto, setAbierto] = useState(historialInicial.abierto);
+  const [mensajes, setMensajes] = useState(historialInicial.mensajes);
   const [cargando, setCargando] = useState(false);
   const finRef = useRef(null);
 
   useEffect(() => {
+    guardarHistorial(clave, { mensajes, abierto });
+  }, [clave, mensajes, abierto]);
+
+  useEffect(() => {
     finRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [mensajes, cargando]);
+  }, [mensajes, cargando, abierto]);
 
   const decir = (...nuevos) => setMensajes((prev) => [...prev, ...nuevos]);
 
@@ -168,19 +248,19 @@ const Asistente = () => {
         : { label: 'Siguiente paso', accion: { tipo: 'paso', tema: temaId, indice: indice + 1 } },
       { label: 'Volver al menú', accion: { tipo: 'menu' } },
     ];
-    decir(msg('bot', <><strong>Paso {indice + 1} de {tema.pasos.length}:</strong> {tema.pasos[indice]}</>, opciones));
+    decir(msg('bot', 'paso', { tema: temaId, indice }, opciones));
   };
 
   const ejecutar = async (accion, etiqueta) => {
-    if (etiqueta) decir(msg('yo', etiqueta));
+    if (etiqueta) decir(texto('yo', etiqueta));
 
     switch (accion.tipo) {
       case 'menu':
-        decir(msg('bot', '¿En qué te ayudo?', opcionesMenu));
+        decir(texto('bot', '¿En qué te ayudo?', opcionesMenu));
         break;
 
       case 'temas':
-        decir(msg(
+        decir(texto(
           'bot',
           'Elegí un tema y te lo explico paso a paso:',
           Object.entries(TEMAS).map(([id, t]) => ({ label: t.titulo, accion: { tipo: 'paso', tema: id, indice: 0 } })),
@@ -192,11 +272,11 @@ const Asistente = () => {
         break;
 
       case 'ir':
-        navigate(accion.ruta);
-        decir(msg('bot', 'Listo, te llevé a esa pantalla. Cuando termines, seguimos.', [
+        decir(texto('bot', 'Listo, te llevé a esa pantalla. Cuando termines, seguimos.', [
           { label: 'Listo, ¿qué sigue?', accion: { tipo: 'proximo' } },
           { label: 'Volver al menú', accion: { tipo: 'menu' } },
         ]));
+        navigate(accion.ruta);
         break;
 
       case 'checklist':
@@ -205,25 +285,19 @@ const Asistente = () => {
         try {
           estado = await obtenerEstado();
         } catch (err) {
-          decir(msg('bot', `No pude revisar tu cuenta: ${err.message}`, opcionesMenu));
+          decir(texto('bot', `No pude revisar tu cuenta: ${err.message}`, opcionesMenu));
           break;
         }
-        const items = checklist(estado);
+        const items = checklist(estado).map((it) => ({
+          ...it,
+          titulo: it.titulo ?? TEMAS[it.tema].titulo,
+        }));
 
         if (accion.tipo === 'checklist') {
           decir(msg(
             'bot',
-            <ul className="space-y-1">
-              {items.map((it, i) => (
-                <li key={i} className="flex gap-2">
-                  <span aria-hidden="true">{it.hecho ? '✅' : '⬜'}</span>
-                  <span>
-                    <span className="font-medium">{it.titulo ?? TEMAS[it.tema].titulo}</span>
-                    <span className="block text-xs text-gray-500">{it.detalle}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>,
+            'checklist',
+            { items: items.map(({ titulo, detalle, hecho }) => ({ titulo, detalle, hecho })) },
             [{ label: '¿Qué hago ahora?', accion: { tipo: 'proximo' } }, { label: 'Volver al menú', accion: { tipo: 'menu' } }],
           ));
           break;
@@ -231,7 +305,7 @@ const Asistente = () => {
 
         const pendiente = items.find((it) => !it.hecho);
         if (!pendiente) {
-          decir(msg(
+          decir(texto(
             'bot',
             '¡Tu cuenta está completa! 🎉 Ya podés facturar a tus sellers y liquidar a tus transportistas.',
             [
@@ -245,10 +319,8 @@ const Asistente = () => {
         const tema = TEMAS[pendiente.tema];
         decir(msg(
           'bot',
-          <>
-            Tu próximo paso: <strong>{pendiente.titulo ?? tema.titulo}</strong>.
-            <span className="block text-xs text-gray-500 mt-1">{pendiente.detalle}</span>
-          </>,
+          'proximo',
+          { titulo: pendiente.titulo, detalle: pendiente.detalle },
           [
             { label: 'Guiame paso a paso', accion: { tipo: 'paso', tema: pendiente.tema, indice: 0 } },
             { label: `Ir a ${tema.titulo}`, accion: { tipo: 'ir', ruta: tema.ruta } },
@@ -263,11 +335,17 @@ const Asistente = () => {
     }
   };
 
+  const saludo = () =>
+    texto('bot', '¡Hola! Soy el asistente de PacKen. Te acompaño paso a paso para dejar tu cuenta andando.', opcionesMenu);
+
   const abrir = () => {
     setAbierto(true);
-    if (mensajes.length === 0) {
-      decir(msg('bot', '¡Hola! Soy el asistente de PacKen. Te acompaño paso a paso para dejar tu cuenta andando.', opcionesMenu));
-    }
+    if (mensajes.length === 0) decir(saludo());
+  };
+
+  const borrarHistorial = () => {
+    if (!window.confirm('¿Borrar el historial del asistente?')) return;
+    setMensajes([saludo()]);
   };
 
   // Solo el último mensaje del bot tiene opciones activas: las viejas quedan
@@ -277,12 +355,27 @@ const Asistente = () => {
   return (
     <>
       {!abierto && (
+        // En el celular es solo el círculo con el ícono, para no tapar el
+        // contenido; desde sm se suma el texto. El punto que late aparece solo
+        // mientras no se usó nunca (sin historial) y respeta "reducir movimiento".
         <button
           onClick={abrir}
-          className="fixed bottom-4 right-4 z-40 px-4 py-3 rounded-full shadow-lg bg-marca-grafito text-white text-sm font-semibold hover:opacity-90"
           aria-label="Abrir asistente"
+          className="group fixed z-40 right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] flex items-center gap-3 rounded-full bg-marca-grafito text-white p-1.5 sm:pr-5 shadow-lg shadow-marca-grafito/25 ring-1 ring-white/10 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-marca-grafito/30 active:translate-y-0 focus:outline-none focus-visible:ring-4 focus-visible:ring-marca-oro/60"
         >
-          💬 Asistente
+          <span className="relative flex h-11 w-11 items-center justify-center rounded-full bg-marca-oro text-marca-grafito transition-transform duration-200 group-hover:scale-105">
+            <FaCommentDots size={20} aria-hidden="true" />
+            {mensajes.length === 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-marca-amarillo opacity-75 motion-safe:animate-ping" />
+                <span className="relative inline-flex h-3 w-3 rounded-full bg-marca-amarillo ring-2 ring-marca-grafito" />
+              </span>
+            )}
+          </span>
+          <span className="hidden sm:flex flex-col items-start leading-tight text-left">
+            <span className="text-sm font-semibold">Asistente</span>
+            <span className="text-xs text-white/60">¿Te ayudo con algo?</span>
+          </span>
         </button>
       )}
 
@@ -293,13 +386,24 @@ const Asistente = () => {
         >
           <header className="flex items-center justify-between px-4 py-3 bg-marca-amarillo sm:rounded-t-2xl">
             <p className="font-bold text-marca-grafito">Asistente PacKen</p>
-            <button
-              onClick={() => setAbierto(false)}
-              aria-label="Cerrar asistente"
-              className="text-2xl leading-none text-marca-grafito/70 hover:text-marca-grafito"
-            >
-              ×
-            </button>
+            <div className="flex items-center gap-3">
+              {mensajes.length > 1 && (
+                <button
+                  onClick={borrarHistorial}
+                  disabled={cargando}
+                  className="text-xs text-marca-grafito/70 hover:text-marca-grafito underline disabled:opacity-50"
+                >
+                  Borrar historial
+                </button>
+              )}
+              <button
+                onClick={() => setAbierto(false)}
+                aria-label="Cerrar asistente"
+                className="text-2xl leading-none text-marca-grafito/70 hover:text-marca-grafito"
+              >
+                ×
+              </button>
+            </div>
           </header>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-3" aria-live="polite">
@@ -310,7 +414,7 @@ const Asistente = () => {
                     m.de === 'yo' ? 'bg-marca-oro text-marca-grafito' : 'bg-gray-100 text-gray-800'
                   }`}
                 >
-                  {m.contenido}
+                  {renderContenido(m)}
                 </div>
                 {m.id === ultimoConOpciones && m.opciones.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-2">

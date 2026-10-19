@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
-import { usePaquetes } from '../hooks/usePaquetes';
+import { useState } from 'react';
+import { useConsulta } from '../hooks/useConsulta';
+import { getEstadisticasPaquetes } from '../services/paquetes';
 import { useCatalogos } from '../context/CatalogosContext';
 import { ESTADOS } from '../utils/estados';
 import { apiDescargar } from '../services/api';
-import { agruparPorPartido, COLUMNAS_ESTADO as COLUMNAS } from '../../shared/estadisticas.js';
+import { COLUMNAS_ESTADO as COLUMNAS } from '../../shared/estadisticas.js';
 import FiltrosPaquetes from '../components/FiltrosPaquetes';
 
 const FILTROS_VACIOS = { sellerId: '', transportistaId: '', estado: '', desde: '', hasta: '' };
@@ -18,14 +19,18 @@ const COLORES = {
 
 const COLUMNAS_ESTADO = COLUMNAS.map((col) => ({ ...col, color: COLORES[col.estado] }));
 
+const SIN_DATOS = { filas: [], totales: { total: 0 } };
+
 const Estadisticas = () => {
   const [filtros, setFiltros] = useState(FILTROS_VACIOS);
-  const { paquetes, loading, error } = usePaquetes(filtros);
+  // La agrupación por partido la hace el servidor (en Postgres): con miles de
+  // paquetes no se pueden traer todos al navegador para contarlos.
+  const { datos, loading, error } = useConsulta(getEstadisticasPaquetes, filtros, { inicial: SIN_DATOS });
   const { sellers, transportistas } = useCatalogos();
   const [descargando, setDescargando] = useState(false);
   const [errorDescarga, setErrorDescarga] = useState('');
 
-  const { filas, totales } = useMemo(() => agruparPorPartido(paquetes), [paquetes]);
+  const { filas, totales } = datos ?? SIN_DATOS;
 
   // El Excel lo arma el servidor con los mismos filtros que la tabla, así sale
   // exactamente lo que se está viendo (y una hoja con el detalle por paquete).
@@ -53,7 +58,7 @@ const Estadisticas = () => {
           <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Estadísticas por partido</h2>
           <div className="flex items-center gap-3">
             <span className="text-xs sm:text-sm text-gray-500">
-              {loading ? 'Cargando...' : `${totales.total} envíos`}
+              {loading ? 'Cargando...' : `${totales.total.toLocaleString('es-AR')} envíos`}
             </span>
             <button
               type="button"

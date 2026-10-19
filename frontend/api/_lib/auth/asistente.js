@@ -1,6 +1,6 @@
 import { getSupabase } from '../ml.js';
 import { autenticar, requiereRol } from '../auth.js';
-import { canonizarEstado, ESTADOS } from '../../../shared/estados.js';
+import { ESTADOS } from '../../../shared/estados.js';
 import { responderError } from '../errores.js';
 
 // GET /api/auth/asistente — en qué punto de la puesta en marcha está la
@@ -22,7 +22,18 @@ export default async function handler(req, res) {
     const supabase = getSupabase();
     const idempresa = usuario.id;
 
-    const [sellersQ, transportistasQ, zonasQ, areasQ, listasQ, paquetesQ] = await Promise.all([
+    // Los paquetes solo se CUENTAN (head: true): con volumen, traerlos para
+    // contarlos en JS no escala y además se cortaba en 1000 filas.
+    const contarPaquetes = (filtrar = (q) => q) =>
+      filtrar(
+        supabase.from('paquete').select('id', { count: 'exact', head: true }).eq('idempresa', idempresa),
+      );
+    const ABIERTOS = [ESTADOS.INGRESADO, ESTADOS.EN_CAMINO];
+
+    const [
+      sellersQ, transportistasQ, zonasQ, areasQ, areasSinZonaQ, listasQ,
+      totalQ, ingresadosQ, enCaminoQ, sinTransportistaQ,
+    ] = await Promise.all([
       supabase.from('seller').select('id, idlista').eq('idempresa', idempresa),
       supabase
         .from('usuario')
@@ -30,12 +41,24 @@ export default async function handler(req, res) {
         .eq('idempresa', idempresa)
         .eq('rol', 'transportista'),
       supabase.from('zona').select('id', { count: 'exact', head: true }).eq('idempresa', idempresa),
-      supabase.from('area_flex').select('idzona').eq('idempresa', idempresa),
+      // Los barrios de Flex de AMBA pasan las 1000 filas: también se cuentan.
+      supabase.from('area_flex').select('id', { count: 'exact', head: true }).eq('idempresa', idempresa),
+      supabase
+        .from('area_flex')
+        .select('id', { count: 'exact', head: true })
+        .eq('idempresa', idempresa)
+        .is('idzona', null),
       supabase.from('lista').select('tipo').eq('idempresa', idempresa),
-      supabase.from('paquete').select('estado, idtransportista').eq('idempresa', idempresa),
+      contarPaquetes(),
+      contarPaquetes((q) => q.eq('estado', ESTADOS.INGRESADO)),
+      contarPaquetes((q) => q.eq('estado', ESTADOS.EN_CAMINO)),
+      contarPaquetes((q) => q.is('idtransportista', null).in('estado', ABIERTOS)),
     ]);
 
-    for (const q of [sellersQ, transportistasQ, zonasQ, areasQ, listasQ, paquetesQ]) {
+    for (const q of [
+      sellersQ, transportistasQ, zonasQ, areasQ, areasSinZonaQ, listasQ,
+      totalQ, ingresadosQ, enCaminoQ, sinTransportistaQ,
+    ]) {
       if (q.error) throw new Error(q.error.message);
     }
 
@@ -52,10 +75,7 @@ export default async function handler(req, res) {
 
     const transportistas = transportistasQ.data ?? [];
     const aceptados = transportistas.filter((t) => t.estado_solicitud === 'aceptado');
-    const areas = areasQ.data ?? [];
     const listas = listasQ.data ?? [];
-    const paquetes = paquetesQ.data ?? [];
-    const estadoDe = (p) => canonizarEstado(p.estado);
 
     return res.json({
       sellers: {
@@ -70,20 +90,18 @@ export default async function handler(req, res) {
       },
       zonas: { total: zonasQ.count ?? 0 },
       barrios: {
-        total: areas.length,
-        sinZona: areas.filter((a) => !a.idzona).length,
+        total: areasQ.count ?? 0,
+        sinZona: areasSinZonaQ.count ?? 0,
       },
       listas: {
         precio: listas.filter((l) => l.tipo === 'precio').length,
         costo: listas.filter((l) => l.tipo === 'costo').length,
       },
       paquetes: {
-        total: paquetes.length,
-        ingresados: paquetes.filter((p) => estadoDe(p) === ESTADOS.INGRESADO).length,
-        enCamino: paquetes.filter((p) => estadoDe(p) === ESTADOS.EN_CAMINO).length,
-        sinTransportista: paquetes.filter(
-          (p) => !p.idtransportista && [ESTADOS.INGRESADO, ESTADOS.EN_CAMINO].includes(estadoDe(p)),
-        ).length,
+        total: totalQ.count ?? 0,
+        ingresados: ingresadosQ.count ?? 0,
+        enCamino: enCaminoQ.count ?? 0,
+        sinTransportista: sinTransportistaQ.count ?? 0,
       },
     });
   } catch (err) {

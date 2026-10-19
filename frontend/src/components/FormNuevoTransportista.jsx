@@ -41,7 +41,15 @@ const FormNuevoTransportista = ({ onCreado, onCancelar }) => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div>
           <label className={LABEL} htmlFor="transp-nombre">Nombre</label>
-          <input id="transp-nombre" className={INPUT} value={valores.nombre} onChange={set('nombre')} required />
+          <input
+            id="transp-nombre"
+            className={INPUT}
+            value={valores.nombre}
+            onChange={set('nombre')}
+            pattern="[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'.\-]*"
+            title="Solo letras y espacios, sin números"
+            required
+          />
         </div>
         <div>
           <label className={LABEL} htmlFor="transp-email">Email</label>

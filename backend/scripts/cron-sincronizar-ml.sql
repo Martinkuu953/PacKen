@@ -16,18 +16,41 @@ CREATE EXTENSION IF NOT EXISTS pg_net;
 --    de lectura a la tabla cron.job puede ver el comando en texto plano.
 --    Tiene que ser EXACTAMENTE el mismo valor que la variable de entorno
 --    CRON_SECRET en Vercel. Generalo con: openssl rand -hex 32
-SELECT vault.create_secret(
-  'PEGAR_ACA_EL_MISMO_VALOR_QUE_CRON_SECRET_EN_VERCEL',
-  'packen_cron_secret',
-  'Secreto para llamar a /api/paquetes/sincronizar'
-);
+--    Si el secreto ya existe lo actualiza (rotación); si no, lo crea. Así este
+--    archivo se puede volver a correr entero sin el error de clave duplicada.
+DO $$
+DECLARE
+  nuevo_valor CONSTANT text := 'PEGAR_ACA_EL_MISMO_VALOR_QUE_CRON_SECRET_EN_VERCEL';
+  existente uuid;
+BEGIN
+  -- Sin esto, correr el archivo tal cual está en el repo pisaría el secreto
+  -- real con el texto de ejemplo y el cron empezaría a recibir 401.
+  IF nuevo_valor LIKE 'PEGAR_ACA%' THEN
+    RAISE EXCEPTION 'Reemplazá PEGAR_ACA_... por el valor real de CRON_SECRET antes de correr esto';
+  END IF;
 
--- 3) El job. Cada 15 minutos: suficiente para que un "entregado" aparezca en
---    el panel casi en el momento, sin quemar la cuota de la API de ML.
+  SELECT id INTO existente FROM vault.secrets WHERE name = 'packen_cron_secret';
+  IF existente IS NULL THEN
+    PERFORM vault.create_secret(
+      nuevo_valor,
+      'packen_cron_secret',
+      'Secreto para llamar a /api/paquetes/sincronizar'
+    );
+  ELSE
+    PERFORM vault.update_secret(existente, nuevo_valor);
+  END IF;
+END $$;
+
+-- 3) El job. Cada 5 minutos: con alto volumen, cada corrida revisa hasta
+--    SYNC_MAX_POR_CORRIDA paquetes (600 por defecto) y salta los que se
+--    consultaron hace menos de 10 minutos, así que no se quema la cuota de la
+--    API de ML aunque corra seguido.
+--    Si el job ya existía con */15, re-ejecutar este cron.schedule con el
+--    mismo nombre lo reemplaza.
 --    Reemplazar la URL si el dominio de producción es otro.
 SELECT cron.schedule(
   'packen-sincronizar-ml',
-  '*/15 * * * *',
+  '*/5 * * * *',
   $$
   SELECT net.http_post(
     url     := 'https://packen.vercel.app/api/paquetes/sincronizar',

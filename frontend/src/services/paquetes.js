@@ -22,18 +22,38 @@ function mapPaquete(row) {
   };
 }
 
-export async function getPaquetes(filtros = {}) {
+function queryString(filtros) {
   const params = new URLSearchParams();
   for (const [clave, valor] of Object.entries(filtros)) {
     if (valor !== '' && valor != null) params.set(clave, valor);
   }
   const qs = params.toString();
-  const data = await apiFetch(`/api/paquetes${qs ? `?${qs}` : ''}`);
+  return qs ? `?${qs}` : '';
+}
+
+// Una página del listado. Además de los filtros acepta pagina, limite, orden,
+// dir y q (búsqueda en el servidor).
+export async function getPaquetes(filtros = {}) {
+  const data = await apiFetch(`/api/paquetes${queryString(filtros)}`);
+  const paquetes = (data.paquetes ?? []).map(mapPaquete);
   return {
-    paquetes: (data.paquetes ?? []).map(mapPaquete),
+    paquetes,
+    total: data.total ?? paquetes.length,
+    pagina: data.pagina ?? 1,
+    limite: data.limite ?? paquetes.length,
     origen: data.origen ?? 'api',
     aviso: data.aviso ?? null,
   };
+}
+
+// Cantidades por estado, calculadas en el servidor: { total, porEstado }.
+export async function getResumenPaquetes(filtros = {}) {
+  return apiFetch(`/api/paquetes${queryString({ ...filtros, vista: 'resumen' })}`);
+}
+
+// Estadísticas por partido, calculadas en el servidor: { filas, totales }.
+export async function getEstadisticasPaquetes(filtros = {}) {
+  return apiFetch(`/api/paquetes${queryString({ ...filtros, vista: 'estadisticas' })}`);
 }
 
 export async function cambiarEstado(id, estado) {

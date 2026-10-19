@@ -52,9 +52,7 @@ const EstablecerZonas = () => {
     [areas, busqueda],
   );
 
-  const post = async (body) => {
-    await apiFetch(ENDPOINT, { method: 'POST', body: JSON.stringify(body) });
-  };
+  const post = (body) => apiFetch(ENDPOINT, { method: 'POST', body: JSON.stringify(body) });
 
   // Asignación con actualización optimista (la pantalla dice "se guarda auto").
   const asignarArea = async (areaId, zonaId) => {

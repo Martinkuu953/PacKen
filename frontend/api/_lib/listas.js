@@ -1,6 +1,8 @@
 import { getSupabase, obtenerAreasFlex } from './ml.js';
 import { autenticar, requiereRol } from './auth.js';
 import { ErrorPublico, responderError } from './errores.js';
+import { limpiarNombre, nombreRepetido } from './nombres.js';
+import { traerTodo } from './consultas.js';
 
 // Lógica compartida por /api/precios (tipo 'precio', entidad = seller) y
 // /api/costos (tipo 'costo', entidad = transportista). Vive en _lib para no
@@ -141,12 +143,15 @@ async function listar(supabase, idempresa, tipo, res) {
   // Los barrios los necesitan los dos tipos de lista: cada una agrupa los
   // barrios en zonas a su manera. Antes solo los traía /api/precios, cuando el
   // mapeo era uno solo para toda la empresa.
-  const { data: areasRows, error: eAreas } = await supabase
-    .from('area_flex')
-    .select('id, public_id, nombre, idzona')
-    .eq('idempresa', idempresa)
-    .order('nombre');
-  if (eAreas) throw new Error(eAreas.message);
+  // Paginado: los barrios de Flex de AMBA pasan las 1000 filas de max_rows.
+  const areasRows = await traerTodo(() =>
+    supabase
+      .from('area_flex')
+      .select('id, public_id, nombre, idzona')
+      .eq('idempresa', idempresa)
+      .order('nombre')
+      .order('id'),
+  );
   const areaPublicById = new Map((areasRows ?? []).map((a) => [a.id, a.public_id]));
 
   const { data: listasRows, error: e1 } = await supabase
@@ -181,12 +186,9 @@ async function listar(supabase, idempresa, tipo, res) {
   // default de la empresa (area_flex.idzona), que administra /api/precios.
   let areasRowsPorLista = [];
   if (listaIds.length) {
-    const { data, error } = await supabase
-      .from('lista_area_zona')
-      .select('idlista, idarea, idzona')
-      .in('idlista', listaIds);
-    if (error) throw new Error(error.message);
-    areasRowsPorLista = data ?? [];
+    areasRowsPorLista = await traerTodo(() =>
+      supabase.from('lista_area_zona').select('idlista, idarea, idzona').in('idlista', listaIds).order('id'),
+    );
   }
 
   const areasPorLista = new Map();
@@ -434,11 +436,16 @@ async function asignarAreaLista(supabase, idempresa, tipo, body, res) {
   return res.json({ ok: true });
 }
 
+// Dos zonas con el mismo nombre no se pueden distinguir en los selectores de
+// barrios ni en las listas: no se permite ni al crear ni al renombrar.
+const MSG_ZONA_REPETIDA = (nom) => `Ya existe una zona llamada "${nom}". Elegí otro nombre.`;
+
 async function crearZona(supabase, idempresa, body, res) {
-  const nom = String(body.nombre ?? '').trim();
+  const nom = limpiarNombre(body.nombre);
   if (!nom) return res.status(400).json({ error: 'El nombre es requerido' });
 
   const zonas = await listarZonas(supabase, idempresa);
+  if (nombreRepetido(zonas, nom)) return res.status(409).json({ error: MSG_ZONA_REPETIDA(nom) });
   const orden = zonas.reduce((m, z) => Math.max(m, z.orden ?? 0), 0) + 1;
 
   const { data: zona, error } = await supabase
@@ -464,8 +471,10 @@ async function crearZona(supabase, idempresa, body, res) {
 async function renombrarZona(supabase, idempresa, body, res) {
   const idzona = await resolverZona(supabase, idempresa, body.zonaId);
   if (!idzona) return res.status(404).json({ error: 'Zona no encontrada' });
-  const nom = String(body.nombre ?? '').trim();
+  const nom = limpiarNombre(body.nombre);
   if (!nom) return res.status(400).json({ error: 'El nombre es requerido' });
+  const zonas = await listarZonas(supabase, idempresa);
+  if (nombreRepetido(zonas, nom, idzona)) return res.status(409).json({ error: MSG_ZONA_REPETIDA(nom) });
   const { error } = await supabase.from('zona').update({ nombre: nom }).eq('id', idzona);
   if (error) throw new Error(error.message);
   return res.json({ ok: true });
@@ -521,13 +530,32 @@ async function sincronizarAreasFlex(supabase, idempresa, res) {
   const ids = sellers.map((s) => s.id);
   const { data: tokens } = await supabase.from('meli_token').select('idseller').in('idseller', ids);
   const conToken = new Set((tokens ?? []).map((t) => t.idseller));
-  const seller = sellers.find((s) => conToken.has(s.id));
-  if (!seller) {
+  const conectados = sellers.filter((s) => conToken.has(s.id) && s.idmercadolibre);
+  if (!conectados.length) {
     return res.status(400).json({ error: 'Ningún seller tiene la cuenta de MercadoLibre conectada.' });
   }
 
-  const areas = await obtenerAreasFlex(supabase, seller.id, seller.idmercadolibre);
-  const rows = areas.map((a) => ({ idempresa, nombre: a.nombre, ml_ref: a.ref }));
+  // Se prueba con todos los sellers conectados y se juntan sus barrios: antes
+  // se usaba solo el primero, y si ese no tenía Flex la sincronización fallaba
+  // aunque otro sí lo tuviera.
+  const porRef = new Map();
+  let primerError = null;
+  for (const seller of conectados) {
+    try {
+      const areas = await obtenerAreasFlex(supabase, seller.id, seller.idmercadolibre);
+      for (const a of areas) if (!porRef.has(a.ref)) porRef.set(a.ref, a);
+    } catch (err) {
+      console.error(`[PacKen] Flex: no se pudieron leer los barrios del seller ${seller.id}:`, err.message);
+      primerError ??= err;
+    }
+  }
+  if (!porRef.size) {
+    throw primerError instanceof ErrorPublico
+      ? primerError
+      : new ErrorPublico('No se pudieron traer los barrios de Flex desde Mercado Libre. Probá más tarde.');
+  }
+
+  const rows = [...porRef.values()].map((a) => ({ idempresa, nombre: a.nombre, ml_ref: a.ref }));
 
   // ignoreDuplicates: no pisamos áreas ya cargadas (preserva su zona asignada).
   const { error } = await supabase

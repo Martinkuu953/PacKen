@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import Sidebar from './Sidebar';
 import Logo from './Logo';
 import Asistente from './Asistente';
@@ -40,7 +40,13 @@ const Layout = ({ children }) => {
           <span />
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+        <main className="flex-1 p-4 sm:p-6 lg:p-8">
+          {/* Las pantallas se cargan bajo demanda (ver App.jsx): mientras baja
+              el código, el sidebar queda y solo el contenido muestra esto. */}
+          <Suspense fallback={<p className="text-center text-sm text-gray-500 py-10">Cargando...</p>}>
+            {children}
+          </Suspense>
+        </main>
       </div>
 
       {/* El asistente guiado es para el administrador de la empresa. */}

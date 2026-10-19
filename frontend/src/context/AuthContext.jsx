@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { apiFetch, intentarRefresh, setAccessToken, setAuthSyncHandlers } from '../services/api.js';
+import { borrarHistorialAsistente } from '../utils/historialAsistente.js';
 
 const AuthContext = createContext(null);
 
@@ -45,6 +46,7 @@ export function AuthProvider({ children }) {
     } catch {
       // el logout local debe funcionar aunque falle la llamada al servidor
     } finally {
+      borrarHistorialAsistente();
       limpiarSesion();
     }
   }, [limpiarSesion]);

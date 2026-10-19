@@ -1,21 +1,26 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CatalogosProvider } from './context/CatalogosContext';
 import Layout from './components/Layout';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
-import Registro from './pages/Registro';
-import SinAcceso from './pages/SinAcceso';
-import Dashboard from './pages/Dashboard';
-import Paquetes from './pages/Paquetes';
-import Sellers from './pages/Sellers';
-import ListasPrecios from './pages/ListasPrecios';
-import EstablecerZonas from './pages/EstablecerZonas';
-import Transportistas from './pages/Transportistas';
-import Estadisticas from './pages/Estadisticas';
-import Liquidaciones from './pages/Liquidaciones';
-import Facturas from './pages/Facturas';
-import Perfil from './pages/Perfil';
+
+// Cada pantalla se descarga recién cuando se abre (code splitting): el
+// transportista, que entra desde el celular y con datos móviles, no baja el
+// código de Facturas, Listas o Estadísticas que nunca va a usar.
+const Registro = lazy(() => import('./pages/Registro'));
+const SinAcceso = lazy(() => import('./pages/SinAcceso'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Paquetes = lazy(() => import('./pages/Paquetes'));
+const Sellers = lazy(() => import('./pages/Sellers'));
+const ListasPrecios = lazy(() => import('./pages/ListasPrecios'));
+const EstablecerZonas = lazy(() => import('./pages/EstablecerZonas'));
+const Transportistas = lazy(() => import('./pages/Transportistas'));
+const Estadisticas = lazy(() => import('./pages/Estadisticas'));
+const Liquidaciones = lazy(() => import('./pages/Liquidaciones'));
+const Facturas = lazy(() => import('./pages/Facturas'));
+const Perfil = lazy(() => import('./pages/Perfil'));
 
 function RutaProtegida({ children, rolesPermitidos }) {
   const { autenticado, usuario, aprobado } = useAuth();
@@ -68,60 +73,62 @@ function AppRoutes() {
   if (cargandoSesion) return <PantallaCargando />;
 
   return (
-    <Routes>
-      <Route path="/login" element={<RutaPublica><Login /></RutaPublica>} />
-      <Route path="/registro" element={<RutaPublica><Registro /></RutaPublica>} />
-      <Route path="/sin-acceso" element={<RutaSinAcceso />} />
+    <Suspense fallback={<PantallaCargando />}>
+      <Routes>
+        <Route path="/login" element={<RutaPublica><Login /></RutaPublica>} />
+        <Route path="/registro" element={<RutaPublica><Registro /></RutaPublica>} />
+        <Route path="/sin-acceso" element={<RutaSinAcceso />} />
 
-      <Route path="/" element={<Inicio />} />
-      <Route path="/paquetes" element={<RutaProtegida><Paquetes /></RutaProtegida>} />
+        <Route path="/" element={<Inicio />} />
+        <Route path="/paquetes" element={<RutaProtegida><Paquetes /></RutaProtegida>} />
 
-      <Route path="/sellers" element={
-        <RutaProtegida rolesPermitidos={['empresa']}>
-          <Sellers />
-        </RutaProtegida>
-      } />
-      <Route path="/facturas" element={
-        <RutaProtegida rolesPermitidos={['empresa']}>
-          <Facturas />
-        </RutaProtegida>
-      } />
-      <Route path="/transportistas" element={
-        <RutaProtegida rolesPermitidos={['empresa']}>
-          <Transportistas />
-        </RutaProtegida>
-      } />
-      <Route path="/estadisticas" element={
-        <RutaProtegida rolesPermitidos={['empresa']}>
-          <Estadisticas />
-        </RutaProtegida>
-      } />
-      <Route path="/listas" element={
-        <RutaProtegida rolesPermitidos={['empresa']}>
-          <ListasPrecios />
-        </RutaProtegida>
-      } />
-      {/* Alias histórico → pantalla unificada de precios/costos */}
-      <Route path="/listas-precios" element={<Navigate to="/listas" replace />} />
-      <Route path="/listas-costos" element={<Navigate to="/listas" replace />} />
-      <Route path="/zonas" element={
-        <RutaProtegida rolesPermitidos={['empresa']}>
-          <EstablecerZonas />
-        </RutaProtegida>
-      } />
-      <Route path="/liquidaciones" element={
-        <RutaProtegida rolesPermitidos={['empresa']}>
-          <Liquidaciones />
-        </RutaProtegida>
-      } />
-      <Route path="/perfil" element={
-        <RutaProtegida>
-          <Perfil />
-        </RutaProtegida>
-      } />
+        <Route path="/sellers" element={
+          <RutaProtegida rolesPermitidos={['empresa']}>
+            <Sellers />
+          </RutaProtegida>
+        } />
+        <Route path="/facturas" element={
+          <RutaProtegida rolesPermitidos={['empresa']}>
+            <Facturas />
+          </RutaProtegida>
+        } />
+        <Route path="/transportistas" element={
+          <RutaProtegida rolesPermitidos={['empresa']}>
+            <Transportistas />
+          </RutaProtegida>
+        } />
+        <Route path="/estadisticas" element={
+          <RutaProtegida rolesPermitidos={['empresa']}>
+            <Estadisticas />
+          </RutaProtegida>
+        } />
+        <Route path="/listas" element={
+          <RutaProtegida rolesPermitidos={['empresa']}>
+            <ListasPrecios />
+          </RutaProtegida>
+        } />
+        {/* Alias histórico → pantalla unificada de precios/costos */}
+        <Route path="/listas-precios" element={<Navigate to="/listas" replace />} />
+        <Route path="/listas-costos" element={<Navigate to="/listas" replace />} />
+        <Route path="/zonas" element={
+          <RutaProtegida rolesPermitidos={['empresa']}>
+            <EstablecerZonas />
+          </RutaProtegida>
+        } />
+        <Route path="/liquidaciones" element={
+          <RutaProtegida rolesPermitidos={['empresa']}>
+            <Liquidaciones />
+          </RutaProtegida>
+        } />
+        <Route path="/perfil" element={
+          <RutaProtegida>
+            <Perfil />
+          </RutaProtegida>
+        } />
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
 

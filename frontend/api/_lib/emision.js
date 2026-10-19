@@ -4,6 +4,7 @@ import { ErrorPublico, responderError } from './errores.js';
 import { canonizarEstado, ESTADOS } from '../../shared/estados.js';
 import { generarXlsx, generarZip, ESTILOS_XLSX } from './xlsx.js';
 import { cargarResolutorZonas } from './zonas.js';
+import { traerTodo, buscarPorIds } from './consultas.js';
 
 // Motor común de liquidaciones y facturas.
 //
@@ -136,28 +137,8 @@ function validarFecha(valor, campo) {
   return texto;
 }
 
-async function buscarPor(supabase, tabla, campos, ids) {
-  if (ids.length === 0) return new Map();
-  const { data } = await supabase.from(tabla).select(campos).in('id', ids);
-  return new Map((data ?? []).map((fila) => [fila.id, fila]));
-}
-
-// PostgREST corta toda respuesta en max_rows (1000 por defecto en Supabase).
-// Un mes de entregas lo pasa sin problema, y truncar en silencio acá significa
-// facturar de menos: por eso se pide página por página hasta que una venga
-// incompleta. `construir` devuelve la query de nuevo en cada vuelta porque el
-// builder de supabase-js se consume al ejecutarlo.
-const PAGINA = 1000;
-
-async function traerTodo(construir) {
-  const filas = [];
-  for (let inicio = 0; ; inicio += PAGINA) {
-    const { data, error } = await construir().range(inicio, inicio + PAGINA - 1);
-    if (error) throw new Error(error.message);
-    filas.push(...(data ?? []));
-    if ((data ?? []).length < PAGINA) return filas;
-  }
-}
+// En tandas: un mes de entregas puede traer muchos ids distintos.
+const buscarPor = buscarPorIds;
 
 const redondear = (n) => Math.round(n * 100) / 100;
 

@@ -39,6 +39,18 @@ export function validarEmail(email) {
   return null;
 }
 
+// Nombres de personas: solo letras (con tildes y ñ), espacios y los signos que
+// aparecen en nombres reales ("O'Connor", "Ana-María", "J. Pérez"). Sin números.
+const NOMBRE_VALIDO = /^[\p{L}][\p{L}\s'.-]*$/u;
+
+export function validarNombre(nombre) {
+  const limpio = typeof nombre === 'string' ? nombre.trim() : '';
+  if (limpio.length < 2) return 'El nombre es demasiado corto';
+  if (limpio.length > 255) return 'El nombre es demasiado largo';
+  if (!NOMBRE_VALIDO.test(limpio)) return 'El nombre solo puede tener letras y espacios';
+  return null;
+}
+
 // Lo que necesita el servidor para autorizar. Sale de la DB en cada request,
 // nunca del token.
 const CAMPOS_SESION = 'id, nombre, rol, idempresa, estado_solicitud';

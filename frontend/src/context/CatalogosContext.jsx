@@ -18,8 +18,8 @@ export function CatalogosProvider({ children }) {
   const pedirCatalogos = useCallback(
     () =>
       Promise.all([
-        apiFetch('/api/sellers').catch(() => ({ sellers: [] })),
-        apiFetch('/api/transportistas').catch(() => ({ transportistas: [] })),
+        apiFetch('/api/sellers?soloNombres=1').catch(() => ({ sellers: [] })),
+        apiFetch('/api/transportistas?soloNombres=1').catch(() => ({ transportistas: [] })),
       ]).then(([resSellers, resTransportistas]) => ({
         sellers: (resSellers.sellers ?? []).map((s) => ({ id: s.id, nombre: s.nombre })),
         transportistas: (resTransportistas.transportistas ?? []).map((t) => ({

@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FaBoxOpen,
@@ -11,20 +10,24 @@ import {
   FaTruck,
 } from 'react-icons/fa';
 import { usePaquetes } from '../hooks/usePaquetes';
-import { ESTADOS, canonizarEstado, colorEstado, prioridadEstado } from '../utils/estados';
+import { useConsulta } from '../hooks/useConsulta';
+import { getResumenPaquetes } from '../services/paquetes';
+import { ESTADOS, colorEstado } from '../utils/estados';
 import { useAuth } from '../context/AuthContext';
 
-function calcularResumen(paquetes) {
-  const contar = (...estados) =>
-    paquetes.filter((p) => estados.includes(canonizarEstado(p.estado))).length;
+// Los conteos los calcula el servidor (no se traen todos los paquetes para
+// contarlos acá) y la tabla muestra solo los últimos ingresados.
+const RECIENTES = 10;
 
+function calcularResumen(datos) {
+  const de = (estado) => datos?.porEstado?.[estado] ?? 0;
   return {
-    total: paquetes.length,
-    entregados: contar(ESTADOS.ENTREGADO),
-    enCamino: contar(ESTADOS.EN_CAMINO),
-    ingresados: contar(ESTADOS.INGRESADO),
-    reprogramados: contar(ESTADOS.REPROGRAMADO),
-    cancelados: contar(ESTADOS.CANCELADO),
+    total: datos?.total ?? 0,
+    entregados: de(ESTADOS.ENTREGADO),
+    enCamino: de(ESTADOS.EN_CAMINO),
+    ingresados: de(ESTADOS.INGRESADO),
+    reprogramados: de(ESTADOS.REPROGRAMADO),
+    cancelados: de(ESTADOS.CANCELADO),
   };
 }
 
@@ -48,15 +51,17 @@ const ALL_SHORTCUTS = [
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { paquetes, loading, error, aviso } = usePaquetes();
+  const { paquetes, loading: cargandoRecientes, error: errorRecientes, aviso } = usePaquetes({
+    limite: RECIENTES,
+    orden: 'fechaingreso',
+    dir: 'desc',
+  });
+  const { datos, loading: cargandoResumen, error: errorResumen } = useConsulta(getResumenPaquetes);
   const { usuario } = useAuth();
 
-  const resumen = useMemo(() => calcularResumen(paquetes), [paquetes]);
-
-  const paquetesOrdenados = useMemo(
-    () => [...paquetes].sort((a, b) => prioridadEstado(a.estado) - prioridadEstado(b.estado)),
-    [paquetes],
-  );
+  const resumen = calcularResumen(datos);
+  const loading = cargandoRecientes || cargandoResumen;
+  const error = errorResumen || errorRecientes;
 
   const handleNavigation = (path) => {
     navigate(path);
@@ -91,12 +96,15 @@ const Dashboard = () => {
                 {stat.label}
               </p>
               <p className={`text-sm sm:text-lg font-bold ${stat.color}`}>
-                {loading ? '…' : `${resumen[stat.key]}/${resumen.total}`}
+                {cargandoResumen
+                  ? '…'
+                  : `${resumen[stat.key].toLocaleString('es-AR')}/${resumen.total.toLocaleString('es-AR')}`}
               </p>
             </div>
           ))}
         </div>
 
+        <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Últimos paquetes ingresados</p>
         <div className="bg-gray-50 rounded-xl p-3 sm:p-4 overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="text-xs text-gray-500 uppercase border-b border-gray-200">
@@ -109,22 +117,22 @@ const Dashboard = () => {
               </tr>
             </thead>
             <tbody>
-              {loading && (
+              {cargandoRecientes && (
                 <tr>
                   <td colSpan={5} className="py-6 px-2 text-center text-gray-500">
                     Cargando paquetes...
                   </td>
                 </tr>
               )}
-              {!loading && paquetes.length === 0 && !error && (
+              {!cargandoRecientes && paquetes.length === 0 && !error && (
                 <tr>
                   <td colSpan={5} className="py-6 px-2 text-center text-gray-500">
                     No hay paquetes registrados.
                   </td>
                 </tr>
               )}
-              {!loading &&
-                paquetesOrdenados.map((paquete, index) => (
+              {!cargandoRecientes &&
+                paquetes.map((paquete, index) => (
                   <tr key={paquete.id ?? `${paquete.idenvioml}-${index}`} className="border-b border-gray-100 last:border-0">
                     <td className="py-2 px-2 font-mono text-xs">{paquete.idenvioml}</td>
                     <td className="py-2 px-2 font-medium hidden lg:table-cell">{paquete.comprador || '—'}</td>
@@ -157,7 +165,9 @@ const Dashboard = () => {
                 <p className="text-sm text-gray-500 mt-1">Colecta y reparto</p>
               </div>
             </div>
-            <span className="text-3xl font-bold text-yellow-500">{loading ? '…' : resumen.total}</span>
+            <span className="text-3xl font-bold text-yellow-500">
+              {loading ? '…' : resumen.total.toLocaleString('es-AR')}
+            </span>
           </div>
         </button>
       )}

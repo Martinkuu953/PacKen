@@ -1,8 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePaquetes } from '../hooks/usePaquetes';
 import { useCatalogos } from '../context/CatalogosContext';
-import { colorEstado, prioridadEstado } from '../utils/estados';
-import { filtrarPorTexto } from '../utils/busqueda';
+import { colorEstado } from '../utils/estados';
 import { reasignarTransportista } from '../services/paquetes';
 import Buscador from '../components/Buscador';
 import FiltrosPaquetes from '../components/FiltrosPaquetes';
@@ -25,9 +24,18 @@ const COLUMNAS = [
   { campo: 'acciones', label: '' },
 ];
 
-const CAMPOS_BUSQUEDA = ['idenvioml', 'comprador', 'direccion', 'codigopostal', 'partido', 'seller'];
+// Paginado en el servidor: con miles de paquetes por día no se puede traer la
+// tabla entera al navegador. La búsqueda y el orden también los resuelve el
+// servidor, sobre TODOS los paquetes filtrados y no solo sobre la página.
+const POR_PAGINA = 50;
 
-const NO_ORDENABLES = new Set(['acciones']);
+// Espera antes de buscar mientras se escribe, para no pegarle a la API en cada
+// tecla.
+const DEMORA_BUSQUEDA_MS = 400;
+
+// Partido, seller y transportista son nombres de otras tablas: el servidor no
+// puede ordenar por ellos sin un join.
+const NO_ORDENABLES = new Set(['acciones', 'partido', 'seller', 'transportista']);
 const ORDENABLES = COLUMNAS.filter((c) => !NO_ORDENABLES.has(c.campo));
 
 const formatearFecha = (iso) => {
@@ -35,18 +43,6 @@ const formatearFecha = (iso) => {
   const fecha = new Date(iso);
   return Number.isNaN(fecha.getTime()) ? '—' : fecha.toLocaleDateString('es-AR');
 };
-
-function compararPaquetes(a, b, campo, dir) {
-  let resultado;
-  if (campo === 'estado') {
-    resultado = prioridadEstado(a.estado) - prioridadEstado(b.estado);
-  } else if (campo === 'fechaingreso') {
-    resultado = String(a.fechaingreso ?? '').localeCompare(String(b.fechaingreso ?? ''));
-  } else {
-    resultado = String(a[campo] ?? '').localeCompare(String(b[campo] ?? ''));
-  }
-  return dir === 'asc' ? resultado : -resultado;
-}
 
 const SelectorTransportista = ({ paquete, transportistas, ocupado, onReasignar, className = '' }) => (
   <select
@@ -109,33 +105,57 @@ const PaquetesEmpresa = () => {
   // sin filtros trae todos). `borrador` es lo que está editando; `filtros`, lo último aplicado.
   const [borrador, setBorrador] = useState(FILTROS_VACIOS);
   const [filtros, setFiltros] = useState(null);
-  const { paquetes, loading, error, aviso, recargar } = usePaquetes(filtros ?? {}, {
-    habilitado: filtros !== null,
-  });
   const sinFiltrar = filtros === null;
   const { sellers, transportistas } = useCatalogos();
 
-  const [orden, setOrden] = useState({ campo: 'estado', dir: 'asc' });
+  const [orden, setOrden] = useState({ campo: 'fechaingreso', dir: 'desc' });
   const [busqueda, setBusqueda] = useState('');
+  const [busquedaAplicada, setBusquedaAplicada] = useState('');
+  const [pagina, setPagina] = useState(1);
   const [ocupado, setOcupado] = useState(null);
   const [historialDe, setHistorialDe] = useState(null);
 
-  const paquetesBuscados = useMemo(
-    () => filtrarPorTexto(paquetes, busqueda, CAMPOS_BUSQUEDA),
-    [paquetes, busqueda],
+  // Cambiar filtros, búsqueda u orden vuelve a la primera página. Se hace en
+  // el mismo paso que el cambio (y no en un efecto aparte) para no disparar
+  // un pedido con la página vieja.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const texto = busqueda.trim();
+      setBusquedaAplicada((prev) => {
+        if (prev !== texto) setPagina(1);
+        return texto;
+      });
+    }, DEMORA_BUSQUEDA_MS);
+    return () => clearTimeout(t);
+  }, [busqueda]);
+
+  const ordenarPor = (valor) => {
+    setOrden(valor);
+    setPagina(1);
+  };
+
+  const { paquetes, total, loading, error, aviso, recargar } = usePaquetes(
+    {
+      ...(filtros ?? {}),
+      q: busquedaAplicada,
+      pagina,
+      limite: POR_PAGINA,
+      orden: orden.campo,
+      dir: orden.dir,
+    },
+    { habilitado: filtros !== null },
   );
 
-  const paquetesOrdenados = useMemo(
-    () => [...paquetesBuscados].sort((a, b) => compararPaquetes(a, b, orden.campo, orden.dir)),
-    [paquetesBuscados, orden],
-  );
+  const totalPaginas = Math.max(1, Math.ceil(total / POR_PAGINA));
+  const desdeFila = total === 0 ? 0 : (pagina - 1) * POR_PAGINA + 1;
+  const hastaFila = Math.min(pagina * POR_PAGINA, total);
 
   const cambiarOrden = (campo) => {
     if (NO_ORDENABLES.has(campo)) return;
-    setOrden((prev) =>
+    ordenarPor((prev) =>
       prev.campo === campo
         ? { campo, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
-        : { campo, dir: 'asc' },
+        : { campo, dir: campo === 'fechaingreso' ? 'desc' : 'asc' },
     );
   };
 
@@ -156,9 +176,9 @@ const PaquetesEmpresa = () => {
     }
   };
 
-  const vacio = !sinFiltrar && !loading && paquetesOrdenados.length === 0 && !error;
-  const mensajeVacio = busqueda.trim()
-    ? `Ningún paquete coincide con "${busqueda.trim()}".`
+  const vacio = !sinFiltrar && !loading && paquetes.length === 0 && !error;
+  const mensajeVacio = busquedaAplicada
+    ? `Ningún paquete coincide con "${busquedaAplicada}".`
     : 'No hay paquetes para los filtros seleccionados.';
 
   return (
@@ -167,15 +187,25 @@ const PaquetesEmpresa = () => {
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4 sm:mb-6">
           <h2 className="text-lg sm:text-2xl font-bold text-gray-800">Paquetes</h2>
           <span className="text-xs sm:text-sm text-gray-500 whitespace-nowrap">
-            {sinFiltrar ? 'Sin filtrar' : loading ? 'Cargando...' : `${paquetes.length} envíos`}
+            {sinFiltrar
+              ? 'Sin filtrar'
+              : loading
+                ? 'Cargando...'
+                : `${total.toLocaleString('es-AR')} envío${total === 1 ? '' : 's'}`}
           </span>
         </div>
 
         <FiltrosPaquetes
           valores={borrador}
           onChange={setBorrador}
-          onAplicar={() => setFiltros({ ...borrador })}
-          onLimpiar={() => setFiltros(null)}
+          onAplicar={() => {
+            setFiltros({ ...borrador });
+            setPagina(1);
+          }}
+          onLimpiar={() => {
+            setFiltros(null);
+            setPagina(1);
+          }}
           sellers={sellers}
           transportistas={transportistas}
         />
@@ -204,9 +234,7 @@ const PaquetesEmpresa = () => {
             <Buscador
               valor={busqueda}
               onChange={setBusqueda}
-              placeholder="Buscar por ID, comprador, dirección, CP, partido o seller..."
-              resultados={paquetesBuscados.length}
-              total={paquetes.length}
+              placeholder="Buscar por ID de envío, comprador o dirección..." 
             />
 
             {/* Mobile y tablet: tarjetas + un selector de orden, porque los th no
@@ -220,7 +248,9 @@ const PaquetesEmpresa = () => {
                   <select
                     id="orden-mobile"
                     value={orden.campo}
-                    onChange={(e) => setOrden({ campo: e.target.value, dir: 'asc' })}
+                    onChange={(e) =>
+                  ordenarPor({ campo: e.target.value, dir: e.target.value === 'fechaingreso' ? 'desc' : 'asc' })
+                }
                     className="flex-1 min-w-0 text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white"
                   >
                     {ORDENABLES.map((col) => (
@@ -229,7 +259,7 @@ const PaquetesEmpresa = () => {
                   </select>
                   <button
                     type="button"
-                    onClick={() => setOrden((prev) => ({ ...prev, dir: prev.dir === 'asc' ? 'desc' : 'asc' }))}
+                    onClick={() => ordenarPor((prev) => ({ ...prev, dir: prev.dir === 'asc' ? 'desc' : 'asc' }))}
                     aria-label="Invertir orden"
                     className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white text-gray-600"
                   >
@@ -243,7 +273,7 @@ const PaquetesEmpresa = () => {
 
               <div className="space-y-3">
                 {!loading &&
-                  paquetesOrdenados.map((paquete, index) => (
+                  paquetes.map((paquete, index) => (
                     <TarjetaPaquete
                       key={paquete.id ?? `${paquete.idenvioml}-${index}`}
                       paquete={paquete}
@@ -267,7 +297,9 @@ const PaquetesEmpresa = () => {
                       <th
                         key={col.campo}
                         onClick={() => cambiarOrden(col.campo)}
-                        className="py-2 px-2 cursor-pointer select-none hover:text-gray-800 whitespace-nowrap"
+                        className={`py-2 px-2 select-none whitespace-nowrap ${
+                          NO_ORDENABLES.has(col.campo) ? '' : 'cursor-pointer hover:text-gray-800'
+                        }`}
                       >
                         {col.label}
                         {flecha(col.campo)}
@@ -291,7 +323,7 @@ const PaquetesEmpresa = () => {
                     </tr>
                   )}
                   {!loading &&
-                    paquetesOrdenados.map((paquete, index) => (
+                    paquetes.map((paquete, index) => (
                       <tr
                         key={paquete.id ?? `${paquete.idenvioml}-${index}`}
                         className="border-b border-gray-100 last:border-0 hover:bg-gray-50"
@@ -332,6 +364,36 @@ const PaquetesEmpresa = () => {
                 </tbody>
               </table>
             </div>
+
+          {total > 0 && (
+            <div className="mt-4 pt-3 border-t border-gray-200 flex flex-wrap items-center justify-between gap-3 text-sm">
+              <span className="text-gray-500">
+                {desdeFila.toLocaleString('es-AR')}–{hastaFila.toLocaleString('es-AR')} de{' '}
+                {total.toLocaleString('es-AR')}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                  disabled={loading || pagina <= 1}
+                  className="px-3 py-1.5 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Anterior
+                </button>
+                <span className="text-gray-600 whitespace-nowrap">
+                  Página {pagina} de {totalPaginas.toLocaleString('es-AR')}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
+                  disabled={loading || pagina >= totalPaginas}
+                  className="px-3 py-1.5 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          )}
           </>
         )}
       </div>

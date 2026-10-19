@@ -103,7 +103,9 @@ const Listado = ({ vista, paquetes, loading, error, onVolver, onEscanear }) => {
 };
 
 const PaquetesTransportista = () => {
-  const { paquetes, loading, error, recargar } = usePaquetes();
+  // Solo Ingresado y En camino, que es lo único que muestran Colecta y
+  // Reparto: los entregados de meses anteriores no viajan al celular.
+  const { paquetes, loading, error, recargar } = usePaquetes({ abiertos: 1, limite: 500 });
   const [vistaActiva, setVistaActiva] = useState(null);
   const [escaneando, setEscaneando] = useState(false);
 

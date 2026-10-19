@@ -1,96 +1,43 @@
 import { getSupabase } from '../_lib/ml.js';
 import { responderError } from '../_lib/errores.js';
 import { revocarSesionesDeUsuario } from '../_lib/refreshTokens.js';
-import { cargarResolutorZonas } from '../_lib/zonas.js';
+import { resumenVacio, resumenPorEntidad } from '../_lib/consultas.js';
+import { limpiarNombre, nombreRepetido } from '../_lib/nombres.js';
 import {
   autenticar,
   requiereRol,
   hashPassword,
   validarPassword,
   validarEmail,
+  validarNombre,
 } from '../_lib/auth.js';
 
 // GET /api/transportistas — la flota de la empresa, un transportista por fila
 // con sus paquetes agrupados por estado y el monto a pagarle (entregados),
 // mismo criterio que /api/sellers pero con la lista de COSTOS
-// (usuario.idlista_costo) en vez de la de precios.
-function normalizarEstado(estado) {
-  return String(estado ?? '').toLowerCase().trim();
-}
+// (usuario.idlista_costo). Se calcula en Postgres con
+// resumen_paquetes_por_entidad() (ver migration-escala.sql).
+// GET ?soloNombres=1 devuelve solo { id, nombre }, para los selectores.
+async function listar(req, res, supabase, idempresa) {
+  const { data: usuarios, error } = await supabase
+    .from('usuario')
+    .select('id, public_id, nombre, dni, created_at')
+    .eq('rol', 'transportista')
+    .eq('idempresa', idempresa)
+    .order('nombre');
+  if (error) throw new Error(`usuario: ${error.message}`);
 
-function resumenVacio() {
-  return { totales: 0, enCamino: 0, entregados: 0, cancelados: 0, reprogramados: 0, monto: 0 };
-}
-
-function acumular(resumen, estado) {
-  const e = normalizarEstado(estado);
-  resumen.totales += 1;
-  if (e.includes('camino')) resumen.enCamino += 1;
-  if (e.includes('entregad')) resumen.entregados += 1;
-  if (e.includes('cancel')) resumen.cancelados += 1;
-  if (e.includes('reprogram')) resumen.reprogramados += 1;
-}
-
-async function listar(res, supabase, idempresa) {
-  const [usuarios, paquetes, listas] = await Promise.all([
-    supabase
-      .from('usuario')
-      .select('id, public_id, nombre, dni, created_at, idlista_costo')
-      .eq('rol', 'transportista')
-      .eq('idempresa', idempresa)
-      .order('nombre'),
-    supabase
-      .from('paquete')
-      .select('idtransportista, idarea, idzona, estado')
-      .eq('idempresa', idempresa)
-      .not('idtransportista', 'is', null),
-    supabase.from('lista').select('id').eq('idempresa', idempresa).eq('tipo', 'costo'),
-  ]);
-
-  if (usuarios.error) throw new Error(`usuario: ${usuarios.error.message}`);
-  if (paquetes.error) throw new Error(`paquete: ${paquetes.error.message}`);
-  if (listas.error) throw new Error(`lista: ${listas.error.message}`);
-
-  // El costo de un paquete = tarifa(lista del transportista, zona del paquete).
-  const listaIds = (listas.data ?? []).map((l) => l.id);
-  let tarifas = [];
-  if (listaIds.length) {
-    const { data, error } = await supabase
-      .from('lista_zona_tarifa')
-      .select('idlista, idzona, importe')
-      .in('idlista', listaIds);
-    if (error) throw new Error(`lista_zona_tarifa: ${error.message}`);
-    tarifas = data ?? [];
+  if (req.query?.soloNombres) {
+    return res.json({
+      transportistas: (usuarios ?? []).map((t) => ({ id: t.public_id, nombre: t.nombre })),
+    });
   }
-  const tarifaPorListaZona = new Map(
-    tarifas.map((t) => [`${t.idlista}-${t.idzona}`, Number(t.importe)]),
-  );
-  const listaPorTransportista = new Map((usuarios.data ?? []).map((t) => [t.id, t.idlista_costo]));
 
-  // La zona se lee con la lista de ESE transportista: el mismo barrio puede
-  // caer en zonas distintas según la lista.
-  const zonaDe = await cargarResolutorZonas(supabase, idempresa, listaIds);
-
-  const resumenPorTransportista = new Map();
-  for (const p of paquetes.data ?? []) {
-    if (!resumenPorTransportista.has(p.idtransportista)) {
-      resumenPorTransportista.set(p.idtransportista, resumenVacio());
-    }
-    const resumen = resumenPorTransportista.get(p.idtransportista);
-    acumular(resumen, p.estado);
-
-    if (normalizarEstado(p.estado).includes('entregad')) {
-      const idlista = listaPorTransportista.get(p.idtransportista);
-      if (idlista) {
-        const idzona = zonaDe(idlista, p.idarea, p.idzona);
-        resumen.monto += tarifaPorListaZona.get(`${idlista}-${idzona}`) ?? 0;
-      }
-    }
-  }
+  const resumenPorTransportista = await resumenPorEntidad(supabase, idempresa, 'transportista');
 
   // El cliente solo conoce el UUID opaco. Ni el id interno, ni el email, ni la
   // lista asignada salen de acá.
-  const transportistas = (usuarios.data ?? []).map((t) => ({
+  const transportistas = (usuarios ?? []).map((t) => ({
     id: t.public_id,
     nombre: t.nombre,
     dni: t.dni,
@@ -123,10 +70,24 @@ async function crear(req, res, supabase, idempresa) {
     return res.status(400).json({ error: 'El DNI debe ser numérico' });
   }
 
+  const errorNombre = validarNombre(String(nombre));
+  if (errorNombre) return res.status(400).json({ error: errorNombre });
+
+  const nom = limpiarNombre(nombre);
+  const { data: existentes, error: errExistentes } = await supabase
+    .from('usuario')
+    .select('id, nombre')
+    .eq('rol', 'transportista')
+    .eq('idempresa', idempresa);
+  if (errExistentes) throw new Error(errExistentes.message);
+  if (nombreRepetido(existentes, nom)) {
+    return res.status(409).json({ error: `Ya existe un transportista llamado "${nom}". Elegí otro nombre.` });
+  }
+
   const { data, error } = await supabase
     .from('usuario')
     .insert({
-      nombre: String(nombre).trim(),
+      nombre: nom,
       email: String(email).toLowerCase().trim(),
       password: hashPassword(password),
       dni: String(dni).trim(),
@@ -229,7 +190,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST') return await crear(req, res, supabase, usuario.id);
     if (req.method === 'PATCH') return await restablecerPassword(req, res, supabase, usuario.id);
     if (req.method === 'DELETE') return await borrar(req, res, supabase, usuario.id);
-    return await listar(res, supabase, usuario.id);
+    return await listar(req, res, supabase, usuario.id);
   } catch (err) {
     return responderError(res, err, ['POST', 'PATCH'].includes(req.method) ? 400 : 500, '/api/transportistas');
   }

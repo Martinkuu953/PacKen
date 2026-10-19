@@ -1,5 +1,5 @@
 import { getSupabase } from '../ml.js';
-import { autenticar, comparePassword, hashPassword, validarPassword } from '../auth.js';
+import { autenticar, comparePassword, hashPassword, validarNombre, validarPassword } from '../auth.js';
 import { crearRefreshToken, revocarSesionesDeUsuario } from '../refreshTokens.js';
 import { setRefreshCookie } from '../cookies.js';
 import { ErrorPublico, responderError } from '../errores.js';
@@ -39,10 +39,9 @@ async function editar(req, res, usuario) {
   const cambios = {};
 
   if (nombre !== undefined) {
-    const limpio = String(nombre).trim();
-    if (limpio.length < 2) throw new ErrorPublico('El nombre es demasiado corto');
-    if (limpio.length > 255) throw new ErrorPublico('El nombre es demasiado largo');
-    cambios.nombre = limpio;
+    const errorNombre = validarNombre(String(nombre));
+    if (errorNombre) throw new ErrorPublico(errorNombre);
+    cambios.nombre = String(nombre).trim();
   }
 
   const cambiaPassword = passwordNueva !== undefined;

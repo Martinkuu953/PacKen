@@ -1,3 +1,5 @@
+import { traerTodo } from './consultas.js';
+
 // Resolución de la zona de un paquete DENTRO de una lista de precios/costos.
 //
 // Un paquete no tiene una zona sola: tiene la que le corresponde en la lista
@@ -23,22 +25,20 @@
  * cientos de consultas en una liquidación.
  */
 export async function cargarResolutorZonas(supabase, idempresa, idsListas = []) {
-  const { data: areas, error } = await supabase
-    .from('area_flex')
-    .select('id, idzona')
-    .eq('idempresa', idempresa);
-  if (error) throw new Error(error.message);
+  // Paginado: una empresa en AMBA supera las 1000 filas de max_rows de
+  // PostgREST, y un barrio cortado acá liquida con la zona equivocada.
+  const areas = await traerTodo(() =>
+    supabase.from('area_flex').select('id, idzona').eq('idempresa', idempresa).order('id'),
+  );
 
   const porDefecto = new Map((areas ?? []).map((a) => [a.id, a.idzona]));
 
   const listas = [...new Set(idsListas.filter((id) => id != null))];
   let overrides = new Map();
   if (listas.length) {
-    const { data, error: errOv } = await supabase
-      .from('lista_area_zona')
-      .select('idlista, idarea, idzona')
-      .in('idlista', listas);
-    if (errOv) throw new Error(errOv.message);
+    const data = await traerTodo(() =>
+      supabase.from('lista_area_zona').select('idlista, idarea, idzona').in('idlista', listas).order('id'),
+    );
     overrides = new Map((data ?? []).map((o) => [`${o.idlista}:${o.idarea}`, o.idzona]));
   }
 

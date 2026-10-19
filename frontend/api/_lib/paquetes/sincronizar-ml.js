@@ -14,14 +14,26 @@ import { responderError } from '../errores.js';
 // real. Los dos comparten la misma política (decidirEstadoDesdeML), así que no
 // pueden discrepar.
 
-// Tope por corrida. Está atado al maxDuration de la función (60s): 200
-// shipments con CONCURRENCIA=5 son ~40 rondas, muy holgado. Lo que no entra en
-// una corrida entra en la siguiente, porque el orden es por ml_sincronizado_en
-// ascendente (round-robin natural).
-const MAX_POR_CORRIDA = 200;
+// Tope por corrida. Lo que no entra en una corrida entra en la siguiente,
+// porque el orden es por ml_sincronizado_en ascendente (round-robin natural).
+// Con alto volumen se puede subir con SYNC_MAX_POR_CORRIDA sin redeployar
+// código; el corte por tiempo de abajo evita pasarse del maxDuration (60s).
+const MAX_POR_CORRIDA = Number(process.env.SYNC_MAX_POR_CORRIDA) || 600;
 
-// Conservador a propósito: la API de ML tira 429 y el token es por seller.
-const CONCURRENCIA = 5;
+// Concurrencia por seller (el token y el rate limit de ML son por cuenta).
+// Los sellers se procesan en paralelo entre sí, hasta SELLERS_EN_PARALELO.
+const CONCURRENCIA = 6;
+const SELLERS_EN_PARALELO = 4;
+
+// Se deja de tomar paquetes nuevos a los 45s: lo que esté en vuelo termina y
+// la función responde antes del corte de 60s de Vercel. Lo pendiente queda
+// primero en la cola de la próxima corrida.
+const PRESUPUESTO_MS = 45_000;
+
+// Un paquete que el webhook o el sync tocaron hace menos de esto no se vuelve a
+// consultar: con miles de paquetes abiertos, la cuota de ML tiene que ir a los
+// que hace más que no se miran.
+const MINUTOS_ENTRE_CONSULTAS = 10;
 
 // Un paquete ingresado hace más de un mes que sigue sin cerrarse ya no se
 // resuelve solo; dejarlo en la cola solo gasta llamadas a ML todos los días.
@@ -31,10 +43,12 @@ const DIAS_VENTANA = 30;
 const TERMINALES_SQL = '("Entregado","Cancelado")';
 
 // Corre `tarea` sobre `items` con un pool de tamaño fijo.
-async function enPool(items, limite, tarea) {
+// `seguir()` permite cortar antes: los trabajadores dejan de tomar ítems
+// nuevos cuando devuelve false.
+async function enPool(items, limite, tarea, seguir = () => true) {
   let indice = 0;
   const trabajadores = Array.from({ length: Math.min(limite, items.length) }, async () => {
-    while (indice < items.length) {
+    while (indice < items.length && seguir()) {
       await tarea(items[indice++]);
     }
   });
@@ -95,7 +109,10 @@ async function marcarIntento(supabase, id) {
 
 // Sincroniza los paquetes abiertos. `idEmpresa` null = todas (modo cron).
 export async function sincronizarPaquetes(supabase, idEmpresa = null) {
-  const desde = new Date(Date.now() - DIAS_VENTANA * 24 * 60 * 60 * 1000).toISOString();
+  const inicio = Date.now();
+  const hayTiempo = () => Date.now() - inicio < PRESUPUESTO_MS;
+  const desde = new Date(inicio - DIAS_VENTANA * 24 * 60 * 60 * 1000).toISOString();
+  const recien = new Date(inicio - MINUTOS_ENTRE_CONSULTAS * 60 * 1000).toISOString();
 
   let query = supabase
     .from('paquete')
@@ -107,6 +124,7 @@ export async function sincronizarPaquetes(supabase, idEmpresa = null) {
     // decidirEstadoDesdeML lo canoniza y lo descarta igual.
     .not('estado', 'in', TERMINALES_SQL)
     .gte('fechaingreso', desde)
+    .or(`ml_sincronizado_en.is.null,ml_sincronizado_en.lt.${recien}`)
     .order('ml_sincronizado_en', { ascending: true, nullsFirst: true })
     .limit(MAX_POR_CORRIDA);
 
@@ -115,8 +133,9 @@ export async function sincronizarPaquetes(supabase, idEmpresa = null) {
   const { data: paquetes, error } = await query;
   if (error) throw new Error(error.message);
 
-  const stats = { revisados: paquetes?.length ?? 0, actualizados: 0, errores: 0, cambios: [] };
-  if (!stats.revisados) return stats;
+  const stats = { revisados: 0, actualizados: 0, errores: 0, pendientes: 0, cambios: [] };
+  stats.enCola = paquetes?.length ?? 0;
+  if (!stats.enCola) return stats;
 
   // Agrupados por seller para resolver el token de ML una sola vez por cuenta
   // en vez de una vez por paquete.
@@ -126,7 +145,8 @@ export async function sincronizarPaquetes(supabase, idEmpresa = null) {
     porSeller.get(paquete.idseller).push(paquete);
   }
 
-  for (const [idseller, delSeller] of porSeller) {
+  const sincronizarSeller = async ([idseller, delSeller]) => {
+    if (!hayTiempo()) return;
     let pedir;
     try {
       pedir = await crearClienteML(supabase, idseller);
@@ -135,20 +155,36 @@ export async function sincronizarPaquetes(supabase, idEmpresa = null) {
       // de las cuentas se sincroniza igual.
       console.error(`[PacKen Sync] Seller ${idseller} sin token utilizable:`, err.message);
       stats.errores += delSeller.length;
+      stats.revisados += delSeller.length;
       await Promise.all(delSeller.map((p) => marcarIntento(supabase, p.id)));
-      continue;
+      return;
     }
 
-    await enPool(delSeller, CONCURRENCIA, async (paquete) => {
-      try {
-        await sincronizarUno(supabase, pedir, paquete, stats);
-      } catch (err) {
-        stats.errores += 1;
-        console.error(`[PacKen Sync] Error en shipment ${paquete.idenvioml}:`, err.message);
-        await marcarIntento(supabase, paquete.id);
-      }
-    });
-  }
+    await enPool(
+      delSeller,
+      CONCURRENCIA,
+      async (paquete) => {
+        stats.revisados += 1;
+        try {
+          await sincronizarUno(supabase, pedir, paquete, stats);
+        } catch (err) {
+          stats.errores += 1;
+          console.error(`[PacKen Sync] Error en shipment ${paquete.idenvioml}:`, err.message);
+          await marcarIntento(supabase, paquete.id);
+        }
+      },
+      hayTiempo,
+    );
+  };
+
+  // Varios sellers a la vez: cada uno tiene su propio token y su propio
+  // límite en ML, así que no compiten entre sí.
+  await enPool([...porSeller], SELLERS_EN_PARALELO, sincronizarSeller, hayTiempo);
+
+  stats.pendientes = stats.enCola - stats.revisados;
+  // El detalle de cambios es para depurar: con cientos por corrida, el JSON de
+  // respuesta y el log no necesitan más que una muestra.
+  if (stats.cambios.length > 50) stats.cambios = stats.cambios.slice(0, 50);
 
   return stats;
 }
@@ -188,7 +224,8 @@ export default async function handler(req, res) {
     const stats = await sincronizarPaquetes(getSupabase(), idEmpresa);
     console.log(
       `[PacKen Sync] ${idEmpresa == null ? 'cron' : `empresa ${idEmpresa}`}: ` +
-        `${stats.revisados} revisados, ${stats.actualizados} actualizados, ${stats.errores} con error`,
+        `${stats.revisados} revisados, ${stats.actualizados} actualizados, ${stats.errores} con error, ` +
+        `${stats.pendientes} para la próxima corrida`,
     );
     return res.status(200).json({ ok: true, ...stats });
   } catch (err) {

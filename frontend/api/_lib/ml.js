@@ -27,13 +27,23 @@ export const TIPOS_ESCANEO = ['colecta', 'reparto'];
 // a la publishable key era peor que un error: la API habría arrancado con la
 // key anónima y fallado recién al chocar contra RLS, en runtime y sin decir
 // por qué.
+// Un solo cliente por instancia de la función: Vercel reutiliza la instancia
+// entre requests mientras está "caliente", y crear el cliente en cada llamada
+// (varias por request) solo suma trabajo. Es la service role y no guarda
+// sesión de usuario, así que compartirlo entre requests es seguro.
+let clienteSupabase = null;
+
 export function getSupabase() {
+  if (clienteSupabase) return clienteSupabase;
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
   if (!url || !key) {
     throw new Error('SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY no configurados en Vercel');
   }
-  return createClient(url, key);
+  clienteSupabase = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  return clienteSupabase;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -490,17 +500,52 @@ export async function obtenerShipment(supabase, idSellerInterno, shipmentIdCrudo
 
 const SITE_ID = 'MLA';
 
-function extraerFlexServiceId(prefs) {
-  const servicios = prefs?.services || prefs?.logistics || [];
-  for (const s of servicios) {
-    const tipo = String(s?.type || s?.mode || s?.logistic_type || s?.name || '').toLowerCase();
-    if (tipo.includes('self_service') || tipo.includes('flex')) {
-      return s.id ?? s.service_id ?? s.shipping_service_id ?? null;
+// Candidatos a service_id de Flex, en orden de preferencia. ML no expone el
+// mismo formato en todos lados: en shipping_preferences los tipos vienen
+// anidados (logistics[].types[].type = "self_service") y "services" puede ser
+// una lista de números; en las suscripciones de Flex viene como service_id o
+// service.id. Se recorre todo el objeto buscando nodos que parezcan Flex.
+function esFlex(nodo) {
+  const texto = [nodo?.type, nodo?.mode, nodo?.logistic_type, nodo?.name]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return texto.includes('self_service') || texto.includes('flex');
+}
+
+function idDeServicio(nodo) {
+  const id = nodo?.service_id ?? nodo?.service?.id ?? nodo?.shipping_service_id ?? nodo?.id;
+  return id != null && /^\d+$/.test(String(id)) ? String(id) : null;
+}
+
+function extraerFlexServiceIds(...fuentes) {
+  const ids = [];
+  const agregar = (id) => {
+    if (id && !ids.includes(id)) ids.push(id);
+  };
+  const recorrer = (nodo, dentroDeFlex = false) => {
+    if (Array.isArray(nodo)) {
+      nodo.forEach((n) => recorrer(n, dentroDeFlex));
+      return;
+    }
+    if (!nodo || typeof nodo !== 'object') return;
+    const flex = dentroDeFlex || esFlex(nodo);
+    if (flex) agregar(idDeServicio(nodo));
+    for (const valor of Object.values(nodo)) {
+      if (valor && typeof valor === 'object') recorrer(valor, flex);
+    }
+  };
+  fuentes.forEach((f) => recorrer(f));
+
+  // Fallback: si la cuenta tiene un único servicio, es ese.
+  for (const f of fuentes) {
+    const servicios = Array.isArray(f?.services) ? f.services : [];
+    if (servicios.length === 1) {
+      const unico = servicios[0];
+      agregar(typeof unico === 'object' ? idDeServicio(unico) : String(unico));
     }
   }
-  // Fallback: si hay un único service, usarlo.
-  if (servicios.length === 1) return servicios[0].id ?? servicios[0].service_id ?? null;
-  return null;
+  return ids;
 }
 
 function aplanarAreasFlex(data) {
@@ -529,22 +574,32 @@ function aplanarAreasFlex(data) {
 
 // Devuelve las áreas de cobertura Flex del seller como [{ ref, nombre }].
 export async function obtenerAreasFlex(supabase, idSellerInterno, sellerMlId) {
-  const prefs = await mlFetchConReintento(
-    supabase,
-    idSellerInterno,
-    `/users/${sellerMlId}/shipping_preferences`,
-  );
-  const serviceId = extraerFlexServiceId(prefs);
-  if (!serviceId) {
+  const pedir = await crearClienteML(supabase, idSellerInterno);
+  const intentar = (path) =>
+    pedir(path).catch((err) => {
+      console.warn(`[PacKen] Flex: ${path} falló:`, err.message);
+      return null;
+    });
+
+  // Las dos fuentes se piden igual: si una no existe para esta cuenta (404),
+  // la otra puede alcanzar.
+  const [suscripciones, prefs] = await Promise.all([
+    intentar(`/flex/sites/${SITE_ID}/users/${sellerMlId}/subscriptions/v1`),
+    intentar(`/users/${sellerMlId}/shipping_preferences`),
+  ]);
+
+  const serviceIds = extraerFlexServiceIds(suscripciones, prefs);
+  if (!serviceIds.length) {
     throw new ErrorPublico('No se encontró un servicio de Flex en la cuenta de ML del seller.');
   }
 
-  const path = `/flex/sites/${SITE_ID}/users/${sellerMlId}/services/${serviceId}/configurations/coverage/zones/v1?show_availables=true`;
-  const data = await mlFetchConReintento(supabase, idSellerInterno, path);
-
-  const areas = aplanarAreasFlex(data);
-  if (!areas.length) {
-    throw new ErrorPublico('Flex no devolvió barrios/áreas de cobertura para sincronizar.');
+  // Se prueba cada servicio candidato hasta que uno devuelva barrios.
+  for (const serviceId of serviceIds) {
+    const path = `/flex/sites/${SITE_ID}/users/${sellerMlId}/services/${serviceId}/configurations/coverage/zones/v1?show_availables=true`;
+    const data = await intentar(path);
+    const areas = aplanarAreasFlex(data);
+    if (areas.length) return areas;
   }
-  return areas;
+
+  throw new ErrorPublico('Flex no devolvió barrios/áreas de cobertura para sincronizar.');
 }

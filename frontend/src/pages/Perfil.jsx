@@ -178,6 +178,8 @@ const Perfil = () => {
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 minLength={2}
+                pattern="[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'.\-]*"
+                title="Solo letras y espacios, sin números"
                 required
               />
             </div>

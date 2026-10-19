@@ -14,23 +14,25 @@ export const COLUMNAS_ESTADO = [
   { estado: ESTADOS.CANCELADO, label: 'Cancelados' },
 ];
 
-// Recibe paquetes ya mapeados (con `partido` como nombre) y devuelve una fila
+// Recibe conteos ya agregados [{ partido, estado, cantidad }] (lo que devuelve
+// /api/paquetes?vista=estadisticas, calculado en Postgres) y devuelve una fila
 // por partido, de mayor a menor cantidad, más la fila de totales.
-export function agruparPorPartido(paquetes) {
+export function agruparConteos(conteos) {
   const porPartido = new Map();
   const totales = { total: 0 };
 
-  for (const paquete of paquetes) {
-    const partido = paquete.partido || SIN_PARTIDO;
+  for (const { partido: crudo, estado: estadoCrudo, cantidad } of conteos) {
+    const n = Number(cantidad) || 0;
+    const partido = crudo || SIN_PARTIDO;
     if (!porPartido.has(partido)) porPartido.set(partido, { partido, total: 0 });
     const fila = porPartido.get(partido);
-    fila.total += 1;
-    totales.total += 1;
+    fila.total += n;
+    totales.total += n;
 
-    const estado = canonizarEstado(paquete.estado);
+    const estado = canonizarEstado(estadoCrudo);
     if (estado) {
-      fila[estado] = (fila[estado] ?? 0) + 1;
-      totales[estado] = (totales[estado] ?? 0) + 1;
+      fila[estado] = (fila[estado] ?? 0) + n;
+      totales[estado] = (totales[estado] ?? 0) + n;
     }
   }
 
@@ -38,4 +40,9 @@ export function agruparPorPartido(paquetes) {
     (a, b) => b.total - a.total || a.partido.localeCompare(b.partido, 'es'),
   );
   return { filas, totales };
+}
+
+// Lo mismo a partir de paquetes sueltos ya mapeados (con `partido` como nombre).
+export function agruparPorPartido(paquetes) {
+  return agruparConteos(paquetes.map((p) => ({ partido: p.partido, estado: p.estado, cantidad: 1 })));
 }
