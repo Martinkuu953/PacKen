@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaCommentDots } from 'react-icons/fa';
 import { apiFetch } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { PREFIJO_HISTORIAL } from '../utils/historialAsistente';
+import Packi from './Packi';
 
 // Asistente guiado para el administrador (rol empresa).
 //
@@ -355,26 +355,32 @@ const Asistente = () => {
   return (
     <>
       {!abierto && (
-        // En el celular es solo el círculo con el ícono, para no tapar el
-        // contenido; desde sm se suma el texto. El punto que late aparece solo
-        // mientras no se usó nunca (sin historial) y respeta "reducir movimiento".
+        // Packi, la mascota, asoma de un círculo amarillo. En pantallas
+        // grandes tiene un globito: siempre visible mientras el asistente no se
+        // usó, y después solo al pasar el mouse. En el celular, solo Packi, para
+        // no tapar el contenido.
         <button
           onClick={abrir}
           aria-label="Abrir asistente"
-          className="group fixed z-40 right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] flex items-center gap-3 rounded-full bg-marca-grafito text-white p-1.5 sm:pr-5 shadow-lg shadow-marca-grafito/25 ring-1 ring-white/10 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-marca-grafito/30 active:translate-y-0 focus:outline-none focus-visible:ring-4 focus-visible:ring-marca-oro/60"
+          className="group fixed z-40 right-3 sm:right-5 bottom-[max(0.75rem,env(safe-area-inset-bottom))] flex items-end gap-2 focus:outline-none"
         >
-          <span className="relative flex h-11 w-11 items-center justify-center rounded-full bg-marca-oro text-marca-grafito transition-transform duration-200 group-hover:scale-105">
-            <FaCommentDots size={20} aria-hidden="true" />
-            {mensajes.length === 0 && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-marca-amarillo opacity-75 motion-safe:animate-ping" />
-                <span className="relative inline-flex h-3 w-3 rounded-full bg-marca-amarillo ring-2 ring-marca-grafito" />
-              </span>
+          <span
+            className={`hidden sm:block mb-12 max-w-[13rem] rounded-2xl rounded-br-sm bg-white border border-gray-200 shadow-md px-3 py-2 text-left text-sm text-marca-grafito transition-all duration-200 ${
+              mensajes.length === 0
+                ? 'opacity-100'
+                : 'opacity-0 translate-y-1 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-focus-visible:opacity-100'
+            }`}
+          >
+            {mensajes.length === 0 ? (
+              <>
+                <span className="font-semibold">¡Hola! Soy Packi.</span> ¿Te ayudo a dejar tu cuenta andando?
+              </>
+            ) : (
+              '¿Seguimos?'
             )}
           </span>
-          <span className="hidden sm:flex flex-col items-start leading-tight text-left">
-            <span className="text-sm font-semibold">Asistente</span>
-            <span className="text-xs text-white/60">¿Te ayudo con algo?</span>
+          <span className="relative flex h-16 w-16 items-end justify-center rounded-full bg-marca-amarillo shadow-lg shadow-marca-grafito/20 ring-4 ring-white transition-transform duration-200 group-hover:scale-105 group-active:scale-95 group-focus-visible:ring-marca-oro">
+            <Packi size={62} animado className="-mb-1" />
           </span>
         </button>
       )}
@@ -385,7 +391,15 @@ const Asistente = () => {
           className="fixed z-40 bottom-0 right-0 sm:bottom-4 sm:right-4 w-full sm:w-96 h-[75vh] sm:h-[32rem] bg-white sm:rounded-2xl shadow-2xl border border-gray-200 flex flex-col"
         >
           <header className="flex items-center justify-between px-4 py-3 bg-marca-amarillo sm:rounded-t-2xl">
-            <p className="font-bold text-marca-grafito">Asistente PacKen</p>
+            <div className="flex items-center gap-2">
+              <span className="flex h-9 w-9 items-end justify-center rounded-full bg-white/70">
+                <Packi size={34} />
+              </span>
+              <div className="leading-tight">
+                <p className="font-bold text-marca-grafito">Packi</p>
+                <p className="text-xs text-marca-grafito/70">Asistente de PacKen</p>
+              </div>
+            </div>
             <div className="flex items-center gap-3">
               {mensajes.length > 1 && (
                 <button
@@ -409,15 +423,20 @@ const Asistente = () => {
           <div className="flex-1 overflow-y-auto p-4 space-y-3" aria-live="polite">
             {mensajes.map((m) => (
               <div key={m.id} className={m.de === 'yo' ? 'flex justify-end' : ''}>
-                <div
-                  className={`inline-block max-w-[90%] rounded-2xl px-3 py-2 text-sm ${
-                    m.de === 'yo' ? 'bg-marca-oro text-marca-grafito' : 'bg-gray-100 text-gray-800'
-                  }`}
-                >
-                  {renderContenido(m)}
+                <div className={m.de === 'yo' ? 'contents' : 'flex items-end gap-2'}>
+                  {m.de !== 'yo' && <Packi size={26} className="shrink-0 mb-0.5" />}
+                  <div
+                    className={`inline-block max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
+                      m.de === 'yo'
+                        ? 'bg-marca-oro text-marca-grafito rounded-br-sm'
+                        : 'bg-gray-100 text-gray-800 rounded-bl-sm'
+                    }`}
+                  >
+                    {renderContenido(m)}
+                  </div>
                 </div>
                 {m.id === ultimoConOpciones && m.opciones.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
+                  <div className="mt-2 pl-8 flex flex-wrap gap-2">
                     {m.opciones.map((o) => (
                       <button
                         key={o.label}
