@@ -358,10 +358,10 @@ const Asistente = () => {
         <button
           onClick={abrir}
           aria-label="Abrir asistente"
-          title="Asistente"
-          className="fixed z-40 right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] flex h-14 w-14 items-center justify-center rounded-full bg-marca-amarillo shadow-md transition-shadow duration-150 hover:shadow-lg focus:outline-none focus-visible:ring-4 focus-visible:ring-marca-oro/60"
+          className="fixed z-40 right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] flex items-center gap-2 rounded-full bg-marca-amarillo pl-3 pr-4 py-2.5 text-sm font-semibold text-marca-grafito shadow-md transition-shadow duration-150 hover:shadow-lg focus:outline-none focus-visible:ring-4 focus-visible:ring-marca-oro/60"
         >
-          <Packi size={34} />
+          <Packi size={24} />
+          Asistente
         </button>
       )}
 
