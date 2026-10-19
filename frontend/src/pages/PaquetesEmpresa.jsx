@@ -105,8 +105,8 @@ const TarjetaPaquete = ({ paquete, transportistas, ocupado, onReasignar, onHisto
 
 const PaquetesEmpresa = () => {
   // Con alto volumen no se puede traer la tabla entera: hasta que el
-  // administrador elige al menos un filtro y aprieta "Buscar", no se consulta
-  // nada. `borrador` es lo que está editando; `filtros`, lo último aplicado.
+  // administrador aprieta "Buscar", no se consulta nada (por ahora, buscar
+  // sin filtros trae todos). `borrador` es lo que está editando; `filtros`, lo último aplicado.
   const [borrador, setBorrador] = useState(FILTROS_VACIOS);
   const [filtros, setFiltros] = useState(null);
   const { paquetes, loading, error, aviso, recargar } = usePaquetes(filtros ?? {}, {
@@ -182,8 +182,9 @@ const PaquetesEmpresa = () => {
 
         {sinFiltrar && (
           <p className="py-10 text-center text-gray-500 text-sm">
-            Elegí al menos un filtro (seller, transportista, estado o fechas) y tocá
+            Elegí los filtros que quieras y tocá
             <span className="font-semibold text-gray-700"> Buscar paquetes</span> para ver los envíos.
+            Sin filtros, se muestran todos.
           </p>
         )}
 

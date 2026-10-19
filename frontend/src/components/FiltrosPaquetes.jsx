@@ -20,7 +20,9 @@ const FiltrosPaquetes = ({ valores, onChange, onAplicar, onLimpiar, sellers = []
 
   const aplicar = (e) => {
     e.preventDefault();
-    if (hayFiltros) onAplicar?.();
+    // Por ahora, con pocos paquetes, buscar sin filtros trae todos. Cuando
+    // crezca el volumen, volver a exigir al menos un filtro: if (hayFiltros).
+    onAplicar?.();
   };
 
   return (
@@ -77,7 +79,6 @@ const FiltrosPaquetes = ({ valores, onChange, onAplicar, onLimpiar, sellers = []
           {onAplicar && (
             <button
               type="submit"
-              disabled={!hayFiltros}
               className="text-sm px-4 py-1.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors duration-150 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Buscar paquetes
