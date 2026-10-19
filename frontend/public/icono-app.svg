@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Ícono de la app (acceso directo): el mismo dibujo que packen-icono-amarillo.png,
+       con margen para que Android lo pueda recortar en círculo (maskable). -->
+  <rect width="512" height="512" fill="#F2B400"/>
+  <polygon points="150,152 386,152 358,372 122,372" fill="#2E3136"/>
+  <polygon points="150,152 386,152 377,222 141,222" fill="#4A4E55"/>
+  <polygon points="252,152 296,152 268,372 224,372" fill="#FCFBF8"/>
+</svg>

@@ -2,6 +2,7 @@ import { Suspense, useState } from 'react';
 import Sidebar from './Sidebar';
 import Logo from './Logo';
 import Asistente from './Asistente';
+import AccesoDirecto from './AccesoDirecto';
 import { useAuth } from '../context/AuthContext';
 
 const Layout = ({ children }) => {
@@ -41,6 +42,8 @@ const Layout = ({ children }) => {
         </header>
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
+          {/* Solo en el celular y hasta que lo instale o lo descarte. */}
+          <AccesoDirecto />
           {/* Las pantallas se cargan bajo demanda (ver App.jsx): mientras baja
               el código, el sidebar queda y solo el contenido muestra esto. */}
           <Suspense fallback={<p className="text-center text-sm text-gray-500 py-10">Cargando...</p>}>

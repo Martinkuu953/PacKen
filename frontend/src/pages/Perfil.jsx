@@ -3,6 +3,7 @@ import { apiFetch } from '../services/api';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { DATOS_LEGALES, esMarcador } from '../legal/datosLegales';
+import AccesoDirecto from '../components/AccesoDirecto';
 
 const ENDPOINT = '/api/auth/perfil';
 
@@ -264,6 +265,8 @@ const Perfil = () => {
           </div>
         </form>
       </div>
+
+      <AccesoDirecto modo="completo" />
 
       {/* Derechos de acceso, rectificación y supresión (Ley 25.326): tiene que
           haber una forma visible de ejercerlos desde la cuenta. */}

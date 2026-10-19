@@ -1,0 +1,17 @@
+{
+  "name": "PacKen",
+  "short_name": "PacKen",
+  "description": "Gestión de envíos para empresas que reparten paquetes de Mercado Libre.",
+  "lang": "es-AR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FCFBF8",
+  "theme_color": "#FDE047",
+  "icons": [
+    { "src": "/icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
