@@ -355,33 +355,13 @@ const Asistente = () => {
   return (
     <>
       {!abierto && (
-        // Packi, la mascota, asoma de un círculo amarillo. En pantallas
-        // grandes tiene un globito: siempre visible mientras el asistente no se
-        // usó, y después solo al pasar el mouse. En el celular, solo Packi, para
-        // no tapar el contenido.
         <button
           onClick={abrir}
           aria-label="Abrir asistente"
-          className="group fixed z-40 right-3 sm:right-5 bottom-[max(0.75rem,env(safe-area-inset-bottom))] flex items-end gap-2 focus:outline-none"
+          title="Asistente"
+          className="fixed z-40 right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] flex h-14 w-14 items-center justify-center rounded-full bg-marca-amarillo shadow-md transition-shadow duration-150 hover:shadow-lg focus:outline-none focus-visible:ring-4 focus-visible:ring-marca-oro/60"
         >
-          <span
-            className={`hidden sm:block mb-12 max-w-[13rem] rounded-2xl rounded-br-sm bg-white border border-gray-200 shadow-md px-3 py-2 text-left text-sm text-marca-grafito transition-all duration-200 ${
-              mensajes.length === 0
-                ? 'opacity-100'
-                : 'opacity-0 translate-y-1 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-focus-visible:opacity-100'
-            }`}
-          >
-            {mensajes.length === 0 ? (
-              <>
-                <span className="font-semibold">¡Hola! Soy Packi.</span> ¿Te ayudo a dejar tu cuenta andando?
-              </>
-            ) : (
-              '¿Seguimos?'
-            )}
-          </span>
-          <span className="relative flex h-16 w-16 items-end justify-center rounded-full bg-marca-amarillo shadow-lg shadow-marca-grafito/20 ring-4 ring-white transition-transform duration-200 group-hover:scale-105 group-active:scale-95 group-focus-visible:ring-marca-oro">
-            <Packi size={62} animado className="-mb-1" />
-          </span>
+          <Packi size={34} />
         </button>
       )}
 
@@ -392,13 +372,8 @@ const Asistente = () => {
         >
           <header className="flex items-center justify-between px-4 py-3 bg-marca-amarillo sm:rounded-t-2xl">
             <div className="flex items-center gap-2">
-              <span className="flex h-9 w-9 items-end justify-center rounded-full bg-white/70">
-                <Packi size={34} />
-              </span>
-              <div className="leading-tight">
-                <p className="font-bold text-marca-grafito">Packi</p>
-                <p className="text-xs text-marca-grafito/70">Asistente de PacKen</p>
-              </div>
+              <Packi size={24} />
+              <p className="font-bold text-marca-grafito">Asistente PacKen</p>
             </div>
             <div className="flex items-center gap-3">
               {mensajes.length > 1 && (
@@ -423,20 +398,15 @@ const Asistente = () => {
           <div className="flex-1 overflow-y-auto p-4 space-y-3" aria-live="polite">
             {mensajes.map((m) => (
               <div key={m.id} className={m.de === 'yo' ? 'flex justify-end' : ''}>
-                <div className={m.de === 'yo' ? 'contents' : 'flex items-end gap-2'}>
-                  {m.de !== 'yo' && <Packi size={26} className="shrink-0 mb-0.5" />}
-                  <div
-                    className={`inline-block max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
-                      m.de === 'yo'
-                        ? 'bg-marca-oro text-marca-grafito rounded-br-sm'
-                        : 'bg-gray-100 text-gray-800 rounded-bl-sm'
-                    }`}
-                  >
-                    {renderContenido(m)}
-                  </div>
+                <div
+                  className={`inline-block max-w-[90%] rounded-2xl px-3 py-2 text-sm ${
+                    m.de === 'yo' ? 'bg-marca-oro text-marca-grafito' : 'bg-gray-100 text-gray-800'
+                  }`}
+                >
+                  {renderContenido(m)}
                 </div>
                 {m.id === ultimoConOpciones && m.opciones.length > 0 && (
-                  <div className="mt-2 pl-8 flex flex-wrap gap-2">
+                  <div className="mt-2 flex flex-wrap gap-2">
                     {m.opciones.map((o) => (
                       <button
                         key={o.label}
