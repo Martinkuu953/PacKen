@@ -42,7 +42,7 @@ const TEMAS = {
       'Creá una lista con un nombre que no se repita (por ejemplo "Tarifa estándar").',
       'Abrí la lista y cargá el importe de cada zona. Con "Ajustar varias zonas" podés aplicar un aumento por porcentaje.',
       'Asigná la lista a cada seller (o transportista). Sin lista asignada no se puede facturar ni liquidar.',
-      'Abajo de todo, en "Historial de cambios", queda registrado cada cambio de precio.',
+      'Dentro de cada lista, en "Historial de cambios de esta lista", queda registrado cada cambio de precio.',
     ],
   },
   transportistas: {

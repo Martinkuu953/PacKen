@@ -31,9 +31,10 @@ function describir(h) {
   }
 }
 
-// Historial de cambios de las listas del tipo actual. Plegado por defecto: se
-// pide al servidor recién cuando se abre, y se vuelve a pedir en cada apertura.
-const HistorialListas = ({ endpoint }) => {
+// Historial de cambios de una lista; va adentro de su detalle. Plegado por
+// defecto: se pide al servidor recién cuando se abre, y se vuelve a pedir en
+// cada apertura.
+const HistorialListas = ({ endpoint, listaId }) => {
   const [abierto, setAbierto] = useState(false);
   const [historial, setHistorial] = useState(null);
   const [error, setError] = useState('');
@@ -47,7 +48,7 @@ const HistorialListas = ({ endpoint }) => {
     setHistorial(null);
     setError('');
     try {
-      const res = await apiFetch(`${endpoint}?historial=1`);
+      const res = await apiFetch(`${endpoint}?historial=${encodeURIComponent(listaId)}`);
       setHistorial(res.historial ?? []);
     } catch (err) {
       setError(err.message);
@@ -55,14 +56,14 @@ const HistorialListas = ({ endpoint }) => {
   };
 
   return (
-    <div className="mt-6 border-t border-gray-200 pt-4">
+    <div>
       <button
         type="button"
         onClick={alternar}
-        className="text-sm font-semibold text-gray-700 hover:text-gray-900"
+        className="text-xs font-semibold text-gray-500 uppercase hover:text-gray-700"
         aria-expanded={abierto}
       >
-        {abierto ? '▼' : '▶'} Historial de cambios
+        {abierto ? '▼' : '▶'} Historial de cambios de esta lista
       </button>
 
       {abierto && (
@@ -73,7 +74,7 @@ const HistorialListas = ({ endpoint }) => {
             <p className="text-sm text-gray-500">Todavía no hay cambios registrados.</p>
           )}
           {historial?.length > 0 && (
-            <ul className="divide-y divide-gray-100 max-h-80 overflow-y-auto text-sm">
+            <ul className="divide-y divide-gray-100 max-h-64 overflow-y-auto text-sm">
               {historial.map((h, i) => (
                 <li key={i} className="py-2 flex flex-wrap justify-between gap-x-4 gap-y-0.5">
                   <span className="text-gray-700">{describir(h)}</span>

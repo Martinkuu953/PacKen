@@ -228,16 +228,24 @@ async function listar(supabase, idempresa, tipo, res) {
   return res.json({ listas, zonas, entidades, areas });
 }
 
-// GET ?historial=1 — últimos cambios de las listas de este tipo (los escriben
-// los triggers de migration-aut-v3.sql).
-async function historial(supabase, idempresa, tipo, res) {
+// GET ?historial=<listaId> — últimos cambios de UNA lista (los escriben los
+// triggers de migration-aut-v3.sql). Es por lista y no de todas juntas: con
+// muchas listas, el historial general traía de más y saturaba al cliente.
+// Los borrados no aparecen: quedan con idlista NULL y la lista ya no está
+// para abrirla.
+const HISTORIAL_LISTA_MAX = 50;
+
+async function historial(supabase, idempresa, tipo, listaPublicId, res) {
+  const idlista = await resolverLista(supabase, idempresa, tipo, listaPublicId);
+  if (!idlista) return res.status(404).json({ error: 'Lista no encontrada' });
+
   const { data, error } = await supabase
     .from('lista_historial')
     .select('accion, lista_nombre, nombre_anterior, zona_nombre, importe_anterior, importe_nuevo, created_at')
     .eq('idempresa', idempresa)
-    .eq('tipo', tipo)
+    .eq('idlista', idlista)
     .order('created_at', { ascending: false })
-    .limit(200);
+    .limit(HISTORIAL_LISTA_MAX);
   if (error) throw new Error(error.message);
 
   return res.json({
@@ -639,7 +647,7 @@ export async function manejarListas(req, res, tipo) {
     const idempresa = usuario.id;
 
     if (req.method === 'GET') {
-      if (req.query?.historial) return await historial(supabase, idempresa, tipo, res);
+      if (req.query?.historial) return await historial(supabase, idempresa, tipo, req.query.historial, res);
       return await listar(supabase, idempresa, tipo, res);
     }
     if (req.method === 'POST') return await guardar(supabase, idempresa, tipo, req, res, { manejaZonas });

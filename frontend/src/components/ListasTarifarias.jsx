@@ -682,6 +682,9 @@ const ListasTarifarias = () => {
                           </select>
                         )}
                       </div>
+
+                      {/* Historial de esta lista */}
+                      <HistorialListas endpoint={cfg.endpoint} listaId={lista.id} />
                     </div>
                   )}
                 </div>
@@ -694,9 +697,6 @@ const ListasTarifarias = () => {
             {cfg.sinEntidades}
           </p>
         )}
-
-        {/* key: al cambiar de precios a costos se remonta plegado. */}
-        <HistorialListas key={tipo} endpoint={cfg.endpoint} />
       </div>
     </div>
   );
