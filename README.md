@@ -35,6 +35,7 @@ Las siguientes variables de entorno deben estar configuradas en el panel de Verc
 | `CRON_SECRET` | Secreto que autentica al cron de Supabase contra `/api/paquetes/sincronizar` (`openssl rand -hex 32`) |
 | `VITE_API_URL` | URL base de la API (ej. `https://packen.vercel.app`) |
 | `ANTHROPIC_API_KEY` | API key de Claude para el asistente de texto libre (solo servidor). Sin ella, el chat responde "no configurado" y el resto de la app funciona igual |
+| `PACKEN_ASISTENTE_MOCK` | Opcional. Con `1`, el asistente funciona sin `ANTHROPIC_API_KEY`: simula el razonamiento de Claude (sin costo) pero ejecuta las herramientas MCP de verdad. Solo para probar la mecánica; escribí "demo-accion" para ver el flujo de confirmación. Dejar sin definir en producción |
 
 ## Rutas y Endpoints Principales
 

@@ -101,6 +101,30 @@ const ListasTarifarias = () => {
     [tipo, cargar],
   );
 
+  // Barrio→zona de una lista, con actualización optimista como en "Establecer
+  // zonas": se pinta al instante y el POST va por detrás, sin recargar la
+  // pantalla (que hacía saltar el scroll y bloqueaba los botones). Si falla,
+  // se vuelve al estado anterior.
+  const asignarAreaLista = async (listaId, areaId, zonaId) => {
+    const previo = listas;
+    setListas((prev) =>
+      prev.map((l) => {
+        if (l.id !== listaId) return l;
+        const resto = (l.areas ?? []).filter((a) => a.areaId !== areaId);
+        return { ...l, areas: zonaId ? [...resto, { areaId, zonaId }] : resto };
+      }),
+    );
+    try {
+      await apiFetch(CONFIG[tipo].endpoint, {
+        method: 'POST',
+        body: JSON.stringify({ op: 'asignarAreaLista', listaId, areaId, zonaId }),
+      });
+    } catch (err) {
+      setError(err.message);
+      setListas(previo);
+    }
+  };
+
   const cambiarTipo = (nuevo) => {
     if (nuevo === tipo) return;
     setExpandida(null);
@@ -616,10 +640,7 @@ const ListasTarifarias = () => {
                           lista={lista}
                           areas={areas}
                           zonas={zonas}
-                          busy={busy}
-                          onAsignar={(areaId, zonaId) =>
-                            ejecutar({ op: 'asignarAreaLista', listaId: lista.id, areaId, zonaId })
-                          }
+                          onAsignar={(areaId, zonaId) => asignarAreaLista(lista.id, areaId, zonaId)}
                         />
                       </div>
 

@@ -39,6 +39,41 @@ const MAX_CONVERSACION_BYTES = 400_000;
 let cliente = null;
 const claude = () => (cliente ??= new Anthropic());
 
+// Modo de prueba sin costo: con PACKEN_ASISTENTE_MOCK=1 no se llama a la API de
+// Claude (no hace falta ANTHROPIC_API_KEY). Se simula solo el razonamiento del
+// modelo; las herramientas MCP corren igual contra la cuenta con el token del
+// usuario, así se prueba toda la mecánica (MCP, ejecución, confirmación, UI) de
+// punta a punta. Escribí "demo-accion" para probar el camino de confirmación.
+const MODO_MOCK = process.env.PACKEN_ASISTENTE_MOCK === '1';
+
+function respuestaMock(mensajes) {
+  const ultimo = mensajes.at(-1);
+  const hayResultado = Array.isArray(ultimo?.content) && ultimo.content.some((b) => b.type === 'tool_result');
+  if (hayResultado) {
+    return {
+      stop_reason: 'end_turn',
+      content: [{ type: 'text', text: '(demo) Ejecuté la herramienta; esta respuesta es simulada. Configurá ANTHROPIC_API_KEY para usar el asistente real.' }],
+    };
+  }
+  const texto = typeof ultimo?.content === 'string' ? ultimo.content.toLowerCase() : '';
+  if (texto.includes('demo-accion')) {
+    return {
+      stop_reason: 'tool_use',
+      content: [
+        { type: 'text', text: '(demo) Voy a crear la lista de precios "Demo".' },
+        { type: 'tool_use', id: `mock_${Date.now()}`, name: 'crear_lista', input: { nombre: 'Demo', tipo: 'precio' } },
+      ],
+    };
+  }
+  return {
+    stop_reason: 'tool_use',
+    content: [
+      { type: 'text', text: '(demo) Consulto el estado de la cuenta.' },
+      { type: 'tool_use', id: `mock_${Date.now()}`, name: 'estado_cuenta', input: {} },
+    ],
+  };
+}
+
 function sistema() {
   const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
   return `Sos el asistente de PacKen, el sistema con el que una empresa de logística gestiona envíos Flex de Mercado Libre: sellers (los vendedores a los que les cobra), transportistas (a los que les paga), paquetes, zonas, barrios y listas de precios y costos. Hablás con el administrador de la empresa, en español rioplatense, de forma breve y concreta. Hoy es ${hoy} (hora de Argentina).
@@ -53,12 +88,21 @@ Respondé en texto plano, sin markdown ni tablas: el chat es chico. Los importes
 }
 
 // Las herramientas MCP en el formato de la API de Claude.
+//
+// El prompt de sistema y estas herramientas no cambian dentro del día (el
+// sistema solo lleva la fecha), así que se marca la última herramienta con
+// cache_control: a partir de la 2ª vuelta de un pedido —y del 2º mensaje de la
+// conversación— la API cobra esa parte como lectura de caché (~10% del precio)
+// en vez de reenviarla entera. El bloque cacheado cubre system + todas las
+// herramientas porque van antes que los mensajes.
 function herramientasParaClaude(tools) {
-  return tools.map((t) => {
+  const lista = tools.map((t) => {
     const esquema = { ...(t.inputSchema ?? { type: 'object', properties: {} }) };
     delete esquema.$schema;
     return { name: t.name, description: t.description ?? t.title ?? t.name, input_schema: esquema };
   });
+  if (lista.length) lista[lista.length - 1].cache_control = { type: 'ephemeral' };
+  return lista;
 }
 
 function validarConversacion(mensajes) {
@@ -153,9 +197,12 @@ export async function conversar(token, body) {
 
     const inicio = Date.now();
     for (let vuelta = 0; vuelta < MAX_VUELTAS && Date.now() - inicio < PRESUPUESTO_MS; vuelta++) {
-      const respuesta = await claude().beta.messages.create({
+      const respuesta = MODO_MOCK ? respuestaMock(mensajes) : await claude().beta.messages.create({
         model: MODELO,
-        max_tokens: 16000,
+        // Las respuestas son texto corto; una vuelta con varias llamadas a
+        // herramientas entra de sobra. Un tope bajo no cambia lo que se cobra
+        // (solo se paga lo generado) pero acota el peor caso.
+        max_tokens: 2048,
         // Chat corto y con herramientas: a esfuerzo bajo responde rápido y
         // alcanza para resolver qué consultar.
         output_config: { effort: 'low' },
@@ -163,8 +210,9 @@ export async function conversar(token, body) {
         // reintenta sola en el modelo recomendado para ese caso.
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
-        cache_control: { type: 'ephemeral' },
-        system: sistema(),
+        // Prompt de sistema cacheado (estable dentro del día). Las herramientas
+        // llevan su propio cache_control en herramientasParaClaude().
+        system: [{ type: 'text', text: sistema(), cache_control: { type: 'ephemeral' } }],
         tools: herramientas,
         messages: mensajes,
       });
@@ -228,7 +276,7 @@ export default async function handler(req, res) {
   if (!requiereRol(res, usuario, 'empresa')) return;
 
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!MODO_MOCK && !process.env.ANTHROPIC_API_KEY) {
       throw new ErrorPublico('El asistente no está configurado (falta ANTHROPIC_API_KEY en el servidor).', 503);
     }
 
