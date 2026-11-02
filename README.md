@@ -34,6 +34,7 @@ Las siguientes variables de entorno deben estar configuradas en el panel de Verc
 | `DATABASE_URL` | Connection string de Postgres, solo para los scripts de `backend/scripts` |
 | `CRON_SECRET` | Secreto que autentica al cron de Supabase contra `/api/paquetes/sincronizar` (`openssl rand -hex 32`) |
 | `VITE_API_URL` | URL base de la API (ej. `https://packen.vercel.app`) |
+| `ANTHROPIC_API_KEY` | API key de Claude para el asistente de texto libre (solo servidor). Sin ella, el chat responde "no configurado" y el resto de la app funciona igual |
 
 ## Rutas y Endpoints Principales
 

@@ -5,12 +5,20 @@ import { useAuth } from '../context/AuthContext';
 import { PREFIJO_HISTORIAL } from '../utils/historialAsistente';
 import Packi from './Packi';
 
-// Asistente guiado para el administrador (rol empresa).
+// Asistente para el administrador (rol empresa). Tiene dos modos que conviven
+// en el mismo chat:
 //
-// Es un chat "dirigido": no se escribe texto libre, se elige entre opciones.
-// Mira en qué punto de la puesta en marcha está la empresa (GET
-// /api/auth/asistente) y propone el próximo paso, con el botón para ir a la
-// pantalla donde se hace. Cada tema también se puede recorrer paso a paso.
+//  - Guiado: opciones fijas. Mira en qué punto de la puesta en marcha está la
+//    empresa (GET /api/auth/asistente) y propone el próximo paso, con el botón
+//    para ir a la pantalla donde se hace.
+//  - Texto libre: el usuario escribe lo que quiere hacer y lo resuelve Claude
+//    con las herramientas del servidor MCP de PacKen (POST
+//    /api/auth/asistente-chat). Las consultas se responden solas; lo que
+//    modifica datos aparece con botones de Confirmar / Cancelar.
+//
+// La conversación con Claude (`conversacion`, en el formato de su API) la
+// guarda el navegador y viaja entera en cada pedido: el servidor no tiene
+// estado.
 
 // ── Temas: guías paso a paso ────────────────────────────────────────────────
 const TEMAS = {
@@ -143,12 +151,30 @@ const claveHistorial = (usuario) => `${PREFIJO_HISTORIAL}:${usuario?.rol ?? ''}:
 function leerHistorial(clave) {
   try {
     const guardado = JSON.parse(sessionStorage.getItem(clave) ?? 'null');
-    if (guardado && Array.isArray(guardado.mensajes)) return guardado;
+    if (guardado && Array.isArray(guardado.mensajes)) {
+      return { conversacion: [], ...guardado };
+    }
   } catch {
     // Storage bloqueado o JSON roto: se arranca de cero.
   }
-  return { mensajes: [], abierto: false };
+  return { mensajes: [], abierto: false, conversacion: [] };
 }
+
+// Hay una acción esperando confirmación si el último turno de Claude terminó
+// pidiendo herramientas (el servidor solo corta así ante una acción).
+const hayPendiente = (conversacion) => {
+  const ultimo = conversacion.at(-1);
+  return (
+    ultimo?.role === 'assistant' &&
+    Array.isArray(ultimo.content) &&
+    ultimo.content.some((b) => b.type === 'tool_use')
+  );
+};
+
+const OPCIONES_DECISION = [
+  { label: 'Confirmar', accion: { tipo: 'decision', valor: 'confirmar' } },
+  { label: 'Cancelar', accion: { tipo: 'decision', valor: 'cancelar' } },
+];
 
 function guardarHistorial(clave, historial) {
   try {
@@ -198,6 +224,20 @@ function renderContenido(m) {
           <span className="block text-xs text-gray-500 mt-1">{d.detalle}</span>
         </>
       );
+    case 'ia':
+      return (
+        <>
+          {d.texto && <span className="whitespace-pre-line">{d.texto}</span>}
+          {d.pendiente?.length > 0 && (
+            <span className="block mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+              <span className="font-semibold">Necesito tu confirmación para:</span>
+              {d.pendiente.map((p, i) => (
+                <span key={i} className="block">• {p.titulo}</span>
+              ))}
+            </span>
+          )}
+        </>
+      );
     default:
       return d.texto;
   }
@@ -210,12 +250,15 @@ const Asistente = () => {
   const [historialInicial] = useState(() => leerHistorial(clave));
   const [abierto, setAbierto] = useState(historialInicial.abierto);
   const [mensajes, setMensajes] = useState(historialInicial.mensajes);
+  const [conversacion, setConversacion] = useState(historialInicial.conversacion);
   const [cargando, setCargando] = useState(false);
+  const [pensando, setPensando] = useState(false);
+  const [borrador, setBorrador] = useState('');
   const finRef = useRef(null);
 
   useEffect(() => {
-    guardarHistorial(clave, { mensajes, abierto });
-  }, [clave, mensajes, abierto]);
+    guardarHistorial(clave, { mensajes, abierto, conversacion });
+  }, [clave, mensajes, abierto, conversacion]);
 
   useEffect(() => {
     finRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -237,6 +280,44 @@ const Asistente = () => {
       setCargando(false);
     }
   }, []);
+
+  // Un pedido al asistente de texto libre: o un mensaje nuevo ({ texto }) o la
+  // respuesta a una acción pendiente ({ decision }).
+  const consultarIA = async (pedido) => {
+    setCargando(true);
+    setPensando(true);
+    try {
+      const res = await apiFetch('/api/auth/asistente-chat', {
+        method: 'POST',
+        body: JSON.stringify({ mensajes: conversacion, ...pedido }),
+      });
+      setConversacion(res.mensajes ?? []);
+      const opciones = res.pendiente?.length
+        ? OPCIONES_DECISION
+        : (res.pantallas ?? []).map((p) => ({ label: `Ir a ${p.titulo}`, accion: { tipo: 'ir', ruta: p.ruta } }));
+      decir(msg('bot', 'ia', { texto: res.respuesta, pendiente: res.pendiente ?? [] }, opciones));
+    } catch (err) {
+      // Si había una acción esperando, los botones vuelven a aparecer para
+      // poder reintentar: la conversación no cambió.
+      decir(texto(
+        'bot',
+        `No pude responder: ${err.message}`,
+        hayPendiente(conversacion) ? OPCIONES_DECISION : [],
+      ));
+    } finally {
+      setCargando(false);
+      setPensando(false);
+    }
+  };
+
+  const enviarTexto = (e) => {
+    e.preventDefault();
+    const contenido = borrador.trim();
+    if (!contenido || cargando) return;
+    setBorrador('');
+    decir(texto('yo', contenido));
+    consultarIA({ texto: contenido });
+  };
 
   const mostrarPaso = (temaId, indice) => {
     const tema = TEMAS[temaId];
@@ -269,6 +350,10 @@ const Asistente = () => {
 
       case 'paso':
         mostrarPaso(accion.tema, accion.indice);
+        break;
+
+      case 'decision':
+        await consultarIA({ decision: accion.valor });
         break;
 
       case 'ir':
@@ -336,7 +421,12 @@ const Asistente = () => {
   };
 
   const saludo = () =>
-    texto('bot', '¡Hola! Soy el asistente de PacKen. Te acompaño paso a paso para dejar tu cuenta andando.', opcionesMenu);
+    texto(
+      'bot',
+      '¡Hola! Soy el asistente de PacKen. Escribime lo que necesites (por ejemplo "¿cuántos paquetes ' +
+        'se entregaron ayer?" o "subí 10% la lista Estándar"), o elegí una opción para que te guíe paso a paso.',
+      opcionesMenu,
+    );
 
   const abrir = () => {
     setAbierto(true);
@@ -346,7 +436,11 @@ const Asistente = () => {
   const borrarHistorial = () => {
     if (!window.confirm('¿Borrar el historial del asistente?')) return;
     setMensajes([saludo()]);
+    setConversacion([]);
   };
+
+  // Con una acción esperando, primero hay que confirmarla o cancelarla.
+  const esperandoDecision = hayPendiente(conversacion);
 
   // Solo el último mensaje del bot tiene opciones activas: las viejas quedan
   // como registro de la conversación pero no se pueden volver a tocar.
@@ -421,9 +515,36 @@ const Asistente = () => {
                 )}
               </div>
             ))}
-            {cargando && <p className="text-xs text-gray-400">Revisando tu cuenta...</p>}
+            {cargando && (
+              <p className="text-xs text-gray-400">{pensando ? 'Pensando...' : 'Revisando tu cuenta...'}</p>
+            )}
             <div ref={finRef} />
           </div>
+
+          <form onSubmit={enviarTexto} className="flex items-end gap-2 border-t border-gray-200 p-3">
+            <label htmlFor="asistente-texto" className="sr-only">Mensaje para el asistente</label>
+            <textarea
+              id="asistente-texto"
+              rows={1}
+              value={borrador}
+              onChange={(e) => setBorrador(e.target.value)}
+              onKeyDown={(e) => {
+                // Enter envía; Shift+Enter hace un salto de línea.
+                if (e.key === 'Enter' && !e.shiftKey) enviarTexto(e);
+              }}
+              maxLength={2000}
+              disabled={cargando || esperandoDecision}
+              placeholder={esperandoDecision ? 'Confirmá o cancelá la acción de arriba' : 'Escribí qué querés hacer...'}
+              className="flex-1 min-w-0 resize-none max-h-28 rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-marca-oro disabled:bg-gray-50"
+            />
+            <button
+              type="submit"
+              disabled={cargando || esperandoDecision || !borrador.trim()}
+              className="rounded-xl bg-marca-oro px-3 py-2 text-sm font-semibold text-marca-grafito hover:bg-marca-oro-oscuro disabled:opacity-50"
+            >
+              Enviar
+            </button>
+          </form>
         </section>
       )}
     </>

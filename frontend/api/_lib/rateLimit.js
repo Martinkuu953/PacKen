@@ -24,6 +24,9 @@ export const LIMITES = {
   // sesión (o un script con un token robado) podía encadenar exportaciones y
   // saturar la base para todas las empresas.
   exportPorUsuario: { max: 20, ventanaMin: 10 },
+  // Asistente de texto libre: cada mensaje son una o varias llamadas pagas a
+  // Claude. Alcanza para una conversación fluida, no para un script.
+  asistentePorUsuario: { max: 40, ventanaMin: 10 },
 };
 
 // En Vercel x-forwarded-for lo pisa la plataforma con la IP real del cliente,

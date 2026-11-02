@@ -13,7 +13,16 @@ import registro from '../_lib/auth/registro.js';
 // (que matchea paths exactos) se ven afectados.
 const rutas = { asistente, login, logout, me, perfil, refresh, registro };
 
-export default function handler(req, res) {
+// El chat del asistente trae el SDK de Claude y el de MCP: se carga recién
+// cuando se usa, para no sumarle ese peso al arranque en frío del login.
+const rutasDiferidas = {
+  'asistente-chat': () => import('../_lib/asistente/chat.js'),
+};
+
+export default async function handler(req, res) {
+  const diferida = rutasDiferidas[req.query.action];
+  if (diferida) return (await diferida()).default(req, res);
+
   const fn = rutas[req.query.action];
   if (!fn) {
     return res.status(404).json({ error: 'Ruta de auth no encontrada' });
