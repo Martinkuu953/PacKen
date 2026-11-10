@@ -25,6 +25,7 @@ const Perfil = lazy(() => import('./pages/Perfil'));
 const Terminos = lazy(() => import('./pages/legal/Terminos'));
 const Privacidad = lazy(() => import('./pages/legal/Privacidad'));
 const Cookies = lazy(() => import('./pages/legal/Cookies'));
+const ConectarML = lazy(() => import('./pages/ConectarML'));
 
 function RutaProtegida({ children, rolesPermitidos }) {
   const { autenticado, usuario, aprobado } = useAuth();
@@ -87,6 +88,11 @@ function AppRoutes() {
         <Route path="/terminos" element={<Terminos />} />
         <Route path="/privacidad" element={<Privacidad />} />
         <Route path="/cookies" element={<Cookies />} />
+
+        {/* Link de invitación del seller: pública con o sin sesión. Sin
+            RutaPublica a propósito, que mandaría a / a una empresa logueada
+            que abre su propio link para probarlo. */}
+        <Route path="/conectar-ml" element={<ConectarML />} />
 
         <Route path="/" element={<Inicio />} />
         <Route path="/paquetes" element={<RutaProtegida><Paquetes /></RutaProtegida>} />

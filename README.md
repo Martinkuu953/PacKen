@@ -34,6 +34,9 @@ Las siguientes variables de entorno deben estar configuradas en el panel de Verc
 | `DATABASE_URL` | Connection string de Postgres, solo para los scripts de `backend/scripts` |
 | `CRON_SECRET` | Secreto que autentica al cron de Supabase contra `/api/paquetes/sincronizar` (`openssl rand -hex 32`) |
 | `VITE_API_URL` | URL base de la API (ej. `https://packen.vercel.app`) |
+| `APP_URL` | URL pública fija (`https://packen.vercel.app`). Arma el `redirect_uri` de ML y los links de invitación; sin ella salen del header `Host` y un deploy de preview genera una URL que ML rechaza |
+| `ML_TOKEN_KEY` | Clave con la que se cifran los tokens de ML en `meli_token`. Sin ella se guardan en plano (y queda un aviso en el log) |
+| `ML_AUTH_DOMAIN` | Opcional. Dominio de autorización de ML (default `auth.mercadolibre.com.ar`) |
 | `ANTHROPIC_API_KEY` | API key de Claude para el asistente de texto libre (solo servidor). Sin ella, el chat responde "no configurado" y el resto de la app funciona igual |
 | `PACKEN_ASISTENTE_MOCK` | Opcional. Con `1`, el asistente funciona sin `ANTHROPIC_API_KEY`: simula el razonamiento de Claude (sin costo) pero ejecuta las herramientas MCP de verdad. Solo para probar la mecánica; escribí "demo-accion" para ver el flujo de confirmación. Dejar sin definir en producción |
 
@@ -48,6 +51,7 @@ No hay `/health`: era del Express viejo, que ya no existe. El diagnóstico de la
 * **Listas de precios / costos:** `GET|POST|DELETE /api/precios`, `/api/costos`
 * **Liquidaciones y facturas:** las dos rutas tienen exactamente la misma forma — `GET /api/liquidaciones` y `GET /api/facturas` (las contrapartes emitibles), `?contraparteIds=...` (+ las últimas 5 de cada una), `POST` (crear), `?ids=...` (descargar el .xlsx), `?ids=...&modo=separado` (un .zip con un archivo por documento), `?ids=...&formato=json` (detalle para la vista previa)
 * **Conectar seller con Mercado Libre:** `GET /api/ml/conectar` (arranca el OAuth; el callback es `/api/ml/callback`)
+* **Invitar seller por link:** `POST /api/ml/invitacion` (la empresa crea el link) y `GET /api/ml/invitacion?inv=...` (público: lo abre el seller)
 * **Consultar envío ML:** `GET /api/envios/:shipmentId?sellerId=...`
 * **Webhook de Mercado Libre (público):** `POST /api/webhooks/mercadolibre`
 * **Sincronizar estados con ML:** `POST /api/paquetes/sincronizar` (cron con header `x-cron-secret`, o una empresa con `Bearer` para forzarlo a mano)
@@ -83,6 +87,32 @@ Puesta en marcha, **en este orden**:
 3. Correr `backend/scripts/cron-sincronizar-ml.sql` en Supabase, con el mismo secreto.
 
 > El cron vive en Supabase (`pg_cron` + `pg_net`) y no en `vercel.json` porque el plan Hobby de Vercel solo permite una ejecución diaria de un cron job.
+
+## Conectar sellers con Mercado Libre
+
+Para leer los envíos de un seller, PacKen necesita que el seller lo autorice en Mercado Libre (OAuth). Al autorizar, el seller se crea solo en la empresa y sus tokens quedan cifrados en `meli_token`; desde ahí el escaneo, el webhook y el sync pueden consultar sus envíos. Hay dos formas, en la pantalla **Sellers**:
+
+| | Invitar seller | Conectar con Mercado Libre |
+| --- | --- | --- |
+| Quién autoriza | el seller, **desde su propio celular** | quien esté en la compu de la empresa |
+| Cómo | se le manda un link (copiar o WhatsApp) | el botón redirige a ML en esa misma pestaña |
+| Al terminar | el seller ve `/conectar-ml?estado=ok` | la empresa vuelve a `/sellers?ml=ok` |
+
+El flujo del link de invitación, paso a paso:
+
+1. La empresa toca **Invitar seller** → `POST /api/ml/invitacion` firma un token (JWT con el `public_id` de la empresa, audience propio, **vence a las 72 h**) y devuelve `https://packen.vercel.app/conectar-ml?inv=<token>`.
+2. El seller abre el link. La página pública `/conectar-ml` valida el token (`GET /api/ml/invitacion?inv=`) y le muestra **qué empresa lo invita** antes de mandarlo a ML.
+3. El seller toca **Conectar con Mercado Libre** → `GET /api/ml/invitacion?inv=...&autorizar=1` deja la cookie de nonce **en el navegador del seller** y redirige a ML.
+4. El seller inicia sesión en ML y acepta. ML vuelve a `/api/ml/callback`, que valida igual que siempre (firma del state + cookie de nonce), crea el seller y guarda los tokens.
+5. Como el state dice `via: invitacion`, el callback manda al seller a `/conectar-ml?estado=ok` y no a `/sellers`, que lo rebotaría al login.
+
+Por qué no alcanza con mandar el link de ML: el callback exige que el OAuth termine en **el mismo navegador** que lo empezó (cookie de nonce). Esa cookie es la que impide que una empresa se quede con los tokens de un seller que no sabe a quién está autorizando, así que no se saca: el link de invitación hace que el flujo empiece recién en el navegador del seller, después de que vio quién lo invita.
+
+El link **se puede reusar hasta que vence** (sirve para varios sellers: cada uno conecta su propia cuenta) y no hay forma de revocarlo antes. Quien lo consiga solo puede conectar **su propia** cuenta de ML a la empresa; un seller que ya es de otra empresa no se mueve (`SELLER_DE_OTRA_EMPRESA`). Hacerlo de un solo uso requeriría una tabla de invitaciones.
+
+**Requisitos en el DevCenter de Mercado Libre:** Redirect URI exactamente `https://packen.vercel.app/api/ml/callback`, y el scope `offline_access` habilitado (sin él ML no devuelve `refresh_token` y el acceso del seller muere a las 6 horas).
+
+**Trampa común:** ML autoriza la cuenta que esté logueada en ese navegador. Si la empresa usa el botón con su propia sesión de ML abierta, conecta su cuenta en vez de la del seller: hacerlo en incógnito. Y como el flujo tiene que terminar en el mismo navegador donde empezó, el seller conviene que abra el link en Chrome o Safari: si lo abre en el navegador interno de otra app y ML lo devuelve a otro navegador, la cookie no está y la conexión falla (ve el error en `/conectar-ml` y puede reintentar con el mismo link).
 
 ## Rezonificar paquetes
 

@@ -24,6 +24,11 @@ const RUTAS_PUBLICAS = [
   // Authorization. La empresa sale del "state" firmado (y de corta vida) que
   // armó /api/ml/conectar, y el handler lo valida.
   { method: 'GET', path: '/api/ml/callback' },
+  // Link de invitación: lo abre el seller desde su celular, sin cuenta en
+  // PacKen. Solo el GET (leer la invitación / arrancar el OAuth); el handler
+  // exige un token de invitación firmado y vigente. Crear el link es POST y
+  // sigue requiriendo sesión de empresa acá en el edge.
+  { method: 'GET', path: '/api/ml/invitacion' },
 ];
 
 function respuesta401(error) {

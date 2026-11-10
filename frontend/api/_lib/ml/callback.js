@@ -18,6 +18,23 @@ function leerCookie(req, nombre) {
   return par ? par.slice(nombre.length + 1) : null;
 }
 
+// A qué pantalla se vuelve depende de quién arrancó el flujo. La empresa vuelve
+// a Sellers; el seller que vino por un link de invitación no tiene sesión en
+// PacKen (/sellers lo rebotaría al login), así que va a la página pública
+// /conectar-ml.
+//
+// `via` se lee del state SIN verificar la firma, a propósito: tiene que
+// funcionar también cuando lo que está mal es justamente el state, para que el
+// seller vea un error entendible y no la pantalla de login. Es seguro porque lo
+// único que decide es cuál de dos páginas internas se muestra; la verificación
+// de verdad (firma, vencimiento, nonce) es la de más abajo.
+function destino(state) {
+  const via = typeof state === 'string' ? jwt.decode(state)?.via : null;
+  return via === 'invitacion'
+    ? (resultado) => `/conectar-ml?estado=${resultado}`
+    : (resultado) => `/sellers?ml=${resultado}`;
+}
+
 function mismoNonce(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
   const ba = Buffer.from(a);
@@ -31,17 +48,18 @@ function mismoNonce(a, b) {
 // prueba que quien vuelve es el mismo navegador que pidió la conexión.
 export default async function callback(req, res) {
   const { code, state, error } = req.query;
+  const volver = destino(state);
 
   // La cookie es de un solo uso: se borra siempre, salga bien o mal.
   res.setHeader('Set-Cookie', `${COOKIE_NONCE}=; Path=/api/ml; Max-Age=0; HttpOnly; Secure; SameSite=Lax`);
 
   if (error) {
     console.error('[PacKen] ML no autorizó la conexión:', error);
-    return res.redirect(302, '/sellers?ml=error');
+    return res.redirect(302, volver('error'));
   }
 
   if (!code || !state) {
-    return res.redirect(302, '/sellers?ml=error');
+    return res.redirect(302, volver('error'));
   }
 
   let payload;
@@ -50,12 +68,12 @@ export default async function callback(req, res) {
     if (!payload.idempresa) throw new Error('state sin empresa');
   } catch {
     console.error('[PacKen] state inválido o vencido en /api/ml/callback');
-    return res.redirect(302, '/sellers?ml=error');
+    return res.redirect(302, volver('error'));
   }
 
   if (!mismoNonce(leerCookie(req, COOKIE_NONCE), payload.nonce)) {
     console.error('[PacKen] /api/ml/callback sin cookie de nonce válida: link de otro navegador, se rechaza');
-    return res.redirect(302, '/sellers?ml=error');
+    return res.redirect(302, volver('error'));
   }
 
   try {
@@ -75,13 +93,13 @@ export default async function callback(req, res) {
     });
 
     console.log(`[PacKen] Seller conectado vía OAuth: "${nombre}" (idmercadolibre=${usuarioML.id}, idempresa=${payload.idempresa})`);
-    return res.redirect(302, '/sellers?ml=ok');
+    return res.redirect(302, volver('ok'));
   } catch (err) {
     if (err.message === 'SELLER_DE_OTRA_EMPRESA') {
       console.warn(`[PacKen] OAuth rechazado: el seller ya pertenece a otra empresa (idempresa pedida=${payload.idempresa})`);
-      return res.redirect(302, '/sellers?ml=otra-empresa');
+      return res.redirect(302, volver('otra-empresa'));
     }
     console.error('[PacKen] Error en callback de ML:', err.message);
-    return res.redirect(302, '/sellers?ml=error');
+    return res.redirect(302, volver('error'));
   }
 }

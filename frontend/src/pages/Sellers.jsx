@@ -4,6 +4,7 @@ import { apiFetch } from '../services/api';
 import { useCatalogos } from '../context/CatalogosContext';
 import Buscador from '../components/Buscador';
 import FormNuevoSeller from '../components/FormNuevoSeller';
+import InvitarSeller from '../components/InvitarSeller';
 import DetalleSeller from '../components/DetalleSeller';
 import { filtrarPorTexto } from '../utils/busqueda';
 
@@ -24,6 +25,7 @@ const Sellers = () => {
   const [busqueda, setBusqueda] = useState('');
   const [conectando, setConectando] = useState(false);
   const [creando, setCreando] = useState(false);
+  const [invitando, setInvitando] = useState(false);
   const [sellerSeleccionado, setSellerSeleccionado] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const { recargarCatalogos } = useCatalogos();
@@ -125,8 +127,16 @@ const Sellers = () => {
             </button>
             <button
               type="button"
+              onClick={() => setInvitando((prev) => !prev)}
+              className="text-sm px-3 py-1.5 bg-green-100 text-green-800 border border-green-200 rounded-lg hover:bg-green-200 transition-colors duration-150 font-medium whitespace-nowrap"
+            >
+              Invitar seller
+            </button>
+            <button
+              type="button"
               onClick={conectarSeller}
               disabled={conectando}
+              title="Conecta la cuenta de Mercado Libre que se loguee en este navegador"
               className="text-sm px-3 py-1.5 bg-blue-100 text-blue-800 border border-blue-200 rounded-lg hover:bg-blue-200 transition-colors duration-150 font-medium whitespace-nowrap disabled:opacity-60"
             >
               {conectando ? 'Redirigiendo...' : 'Conectar con Mercado Libre'}
@@ -141,6 +151,17 @@ const Sellers = () => {
               recargar();
             }}
             onCancelar={() => setCreando(false)}
+          />
+        )}
+
+        {/* Al cerrar se recarga: el seller pudo haber aceptado mientras el
+            panel estaba abierto, y así aparece sin tener que refrescar. */}
+        {invitando && (
+          <InvitarSeller
+            onCerrar={() => {
+              setInvitando(false);
+              recargar();
+            }}
           />
         )}
 

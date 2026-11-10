@@ -25,6 +25,40 @@ export function baseUrl(req) {
   return fija || `https://${req.headers.host}`;
 }
 
+// Arranca el OAuth de ML para `idempresa` en el navegador que hace esta
+// request: firma el state, deja la cookie de nonce y devuelve la URL de
+// autorización. Lo comparten las dos puertas de entrada al flujo:
+//
+//   - el botón "Conectar con Mercado Libre" de la empresa (conectar, abajo)
+//   - el link de invitación que abre el seller en su celular (invitacion.js)
+//
+// En las dos, la cookie queda en el navegador que va a ir a ML, así que el
+// chequeo del callback (cookie == nonce del state) es el mismo para ambas.
+// `via` viaja en el state solo para que el callback sepa a qué pantalla
+// devolver a quien vuelve de ML.
+export function iniciarAutorizacion(req, res, { idempresa, via }) {
+  const nonce = randomBytes(24).toString('hex');
+  const state = jwt.sign({ idempresa, nonce, via }, JWT_SECRET, {
+    expiresIn: '10m',
+    audience: AUDIENCE_STATE,
+    algorithm: 'HS256',
+  });
+  const redirectUri = `${baseUrl(req)}/api/ml/callback`;
+  const authDomain = process.env.ML_AUTH_DOMAIN || 'auth.mercadolibre.com.ar';
+
+  const url = new URL(`https://${authDomain}/authorization`);
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('client_id', process.env.ML_CLIENT_ID);
+  url.searchParams.set('redirect_uri', redirectUri);
+  url.searchParams.set('state', state);
+
+  res.setHeader(
+    'Set-Cookie',
+    `${COOKIE_NONCE}=${nonce}; Path=/api/ml; Max-Age=600; HttpOnly; Secure; SameSite=Lax`,
+  );
+  return url.toString();
+}
+
 // GET /api/ml/conectar — arma la URL de autorización de ML y se la devuelve
 // al frontend (que hace window.location.href = url). La empresa que pide la
 // conexión viaja firmada en "state"; el nonce, en el state y en la cookie.
@@ -38,26 +72,8 @@ export default async function conectar(req, res) {
   if (!requiereRol(res, usuario, 'empresa')) return;
 
   try {
-    const nonce = randomBytes(24).toString('hex');
-    const state = jwt.sign({ idempresa: usuario.id, nonce }, JWT_SECRET, {
-      expiresIn: '10m',
-      audience: AUDIENCE_STATE,
-      algorithm: 'HS256',
-    });
-    const redirectUri = `${baseUrl(req)}/api/ml/callback`;
-    const authDomain = process.env.ML_AUTH_DOMAIN || 'auth.mercadolibre.com.ar';
-
-    const url = new URL(`https://${authDomain}/authorization`);
-    url.searchParams.set('response_type', 'code');
-    url.searchParams.set('client_id', process.env.ML_CLIENT_ID);
-    url.searchParams.set('redirect_uri', redirectUri);
-    url.searchParams.set('state', state);
-
-    res.setHeader(
-      'Set-Cookie',
-      `${COOKIE_NONCE}=${nonce}; Path=/api/ml; Max-Age=600; HttpOnly; Secure; SameSite=Lax`,
-    );
-    return res.json({ url: url.toString() });
+    const url = iniciarAutorizacion(req, res, { idempresa: usuario.id, via: 'empresa' });
+    return res.json({ url });
   } catch (err) {
     return responderError(res, err, 500, 'ml/conectar');
   }
