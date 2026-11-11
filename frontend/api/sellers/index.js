@@ -11,10 +11,14 @@ import { limpiarNombre, nombreRepetido } from '../_lib/nombres.js';
 //
 // Todo filtrado por la empresa del token, mismo criterio que /api/precios.
 
-// POST /api/sellers { nombre, idmercadolibre, listaId }
-// Alta manual de un seller: las cuentas las crea la empresa, no se
-// autorregistran. listaId es el public_id de una lista de precios y queda
-// asignado en el alta para no tener que hacerlo en un segundo paso.
+// POST /api/sellers { nombre, listaId }
+// Alta de un seller: es el único lugar donde se crean (las cuentas las crea la
+// empresa, no se autorregistran). listaId es el public_id de una lista de
+// precios y queda asignado en el alta para no tener que hacerlo en un segundo
+// paso. Nace sin conectar: la cuenta de ML y los tokens los suma después la
+// conexión (ver conectarSeller en _lib/ml.js), que completa esta misma fila.
+// Todavía acepta `idmercadolibre` por compatibilidad, pero el formulario ya no
+// lo manda: un número tipeado a mano no está verificado.
 async function crear(req, res, supabase, idempresa) {
   const { nombre, idmercadolibre, listaId } = req.body ?? {};
 
@@ -61,7 +65,9 @@ async function crear(req, res, supabase, idempresa) {
     throw new Error(error.message);
   }
 
-  return res.status(201).json({ seller: { id: data.public_id, nombre: data.nombre } });
+  // `conectado: false` porque nace sin tokens: la pantalla abre directo el panel
+  // para conectarlo con Mercado Libre.
+  return res.status(201).json({ seller: { id: data.public_id, nombre: data.nombre, conectado: false } });
 }
 
 // DELETE /api/sellers?sellerId=<public_id>
@@ -130,9 +136,19 @@ export default async function handler(req, res) {
     // cortaba en 1000 filas.
     const resumenPorSeller = await resumenPorEntidad(supabase, idempresa, 'seller');
 
+    // Conectado = tiene tokens de ML, que es lo que hace falta para leer sus
+    // envíos. Un seller recién creado en "Nuevo seller" arranca sin, y hasta
+    // que se conecte el escaneo de sus paquetes falla.
+    const ids = (sellers ?? []).map((s) => s.id);
+    const { data: tokens, error: errTokens } = ids.length
+      ? await supabase.from('meli_token').select('idseller').in('idseller', ids)
+      : { data: [], error: null };
+    if (errTokens) throw new Error(`meli_token: ${errTokens.message}`);
+    const conectados = new Set((tokens ?? []).map((t) => t.idseller));
+
     const listado = (sellers ?? []).map((s) => {
       const resumen = resumenPorSeller.get(s.id) ?? resumenVacio();
-      return { id: s.public_id, nombre: s.nombre, ...resumen };
+      return { id: s.public_id, nombre: s.nombre, conectado: conectados.has(s.id), ...resumen };
     });
 
     const montoTotal = listado.reduce((sum, s) => sum + s.monto, 0);

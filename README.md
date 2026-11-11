@@ -50,8 +50,8 @@ No hay `/health`: era del Express viejo, que ya no existe. El diagnóstico de la
 * **Sellers / Transportistas:** `GET|POST|DELETE /api/sellers`, `/api/transportistas`
 * **Listas de precios / costos:** `GET|POST|DELETE /api/precios`, `/api/costos`
 * **Liquidaciones y facturas:** las dos rutas tienen exactamente la misma forma — `GET /api/liquidaciones` y `GET /api/facturas` (las contrapartes emitibles), `?contraparteIds=...` (+ las últimas 5 de cada una), `POST` (crear), `?ids=...` (descargar el .xlsx), `?ids=...&modo=separado` (un .zip con un archivo por documento), `?ids=...&formato=json` (detalle para la vista previa)
-* **Conectar seller con Mercado Libre:** `GET /api/ml/conectar` (arranca el OAuth; el callback es `/api/ml/callback`)
-* **Invitar seller por link:** `POST /api/ml/invitacion` (la empresa crea el link) y `GET /api/ml/invitacion?inv=...` (público: lo abre el seller)
+* **Conectar un seller con Mercado Libre desde la compu de la empresa:** `GET /api/ml/conectar?sellerId=...` (arranca el OAuth; el callback es `/api/ml/callback`)
+* **Link para que el seller se conecte desde su celular:** `POST /api/ml/invitacion {sellerId}` (la empresa crea el link) y `GET /api/ml/invitacion?inv=...` (público: lo abre el seller)
 * **Consultar envío ML:** `GET /api/envios/:shipmentId?sellerId=...`
 * **Webhook de Mercado Libre (público):** `POST /api/webhooks/mercadolibre`
 * **Sincronizar estados con ML:** `POST /api/paquetes/sincronizar` (cron con header `x-cron-secret`, o una empresa con `Bearer` para forzarlo a mano)
@@ -90,29 +90,39 @@ Puesta en marcha, **en este orden**:
 
 ## Conectar sellers con Mercado Libre
 
-Para leer los envíos de un seller, PacKen necesita que el seller lo autorice en Mercado Libre (OAuth). Al autorizar, el seller se crea solo en la empresa y sus tokens quedan cifrados en `meli_token`; desde ahí el escaneo, el webhook y el sync pueden consultar sus envíos. Hay dos formas, en la pantalla **Sellers**:
+Un seller se da de alta **una sola vez y en un solo lugar**: **Sellers → Nuevo seller**, con su nombre y su lista de precios. Nace *Sin conectar*: para leer sus envíos, PacKen necesita además que el seller lo autorice en Mercado Libre (OAuth). Esa conexión **completa la misma fila** —le suma la cuenta de ML y los tokens, cifrados en `meli_token`— y nunca crea un seller nuevo ni toca el nombre o la lista que puso la empresa. Hasta que se conecte, el escaneo de sus paquetes falla con "Seller no encontrado" (el QR se resuelve por la cuenta de ML).
 
-| | Invitar seller | Conectar con Mercado Libre |
+Al crear el seller se abre solo el panel para conectarlo, con dos caminos (después se reabre desde el botón **Conectar** de su fila):
+
+| | Mandar el link | Desde esta compu |
 | --- | --- | --- |
 | Quién autoriza | el seller, **desde su propio celular** | quien esté en la compu de la empresa |
-| Cómo | se le manda un link (copiar o WhatsApp) | el botón redirige a ML en esa misma pestaña |
+| Cómo | copiar el link o mandarlo por WhatsApp | redirige a ML en esa misma pestaña |
 | Al terminar | el seller ve `/conectar-ml?estado=ok` | la empresa vuelve a `/sellers?ml=ok` |
 
-El flujo del link de invitación, paso a paso:
+El flujo del link, paso a paso:
 
-1. La empresa toca **Invitar seller** → `POST /api/ml/invitacion` firma un token (JWT con el `public_id` de la empresa, audience propio, **vence a las 72 h**) y devuelve `https://packen.vercel.app/conectar-ml?inv=<token>`.
-2. El seller abre el link. La página pública `/conectar-ml` valida el token (`GET /api/ml/invitacion?inv=`) y le muestra **qué empresa lo invita** antes de mandarlo a ML.
-3. El seller toca **Conectar con Mercado Libre** → `GET /api/ml/invitacion?inv=...&autorizar=1` deja la cookie de nonce **en el navegador del seller** y redirige a ML.
-4. El seller inicia sesión en ML y acepta. ML vuelve a `/api/ml/callback`, que valida igual que siempre (firma del state + cookie de nonce), crea el seller y guarda los tokens.
-5. Como el state dice `via: invitacion`, el callback manda al seller a `/conectar-ml?estado=ok` y no a `/sellers`, que lo rebotaría al login.
+1. La empresa crea el seller en **Nuevo seller** (o toca **Conectar** en uno existente) → `POST /api/ml/invitacion { sellerId }` firma un token con el `public_id` **de ese seller** (audience propio, **vence a las 72 h**) y devuelve `https://packen.vercel.app/conectar-ml?inv=<token>`.
+2. El seller abre el link. La página pública `/conectar-ml` valida el token (`GET /api/ml/invitacion?inv=`) y le muestra **qué empresa lo invita y con qué nombre lo dio de alta**.
+3. El seller toca **Conectar con Mercado Libre** → `GET /api/ml/invitacion?inv=...&autorizar=1` deja la cookie de nonce **en el navegador del seller** y redirige a ML. El state lleva firmados la empresa y el seller.
+4. El seller inicia sesión en ML y acepta. ML vuelve a `/api/ml/callback`, que valida igual que siempre (firma del state + cookie de nonce) y llama a `conectarSeller` (`api/_lib/ml.js`), que completa esa fila.
+5. Como el state dice `via: invitacion`, el callback manda al seller a `/conectar-ml?estado=...` y no a `/sellers`, que lo rebotaría al login.
 
-Por qué no alcanza con mandar el link de ML: el callback exige que el OAuth termine en **el mismo navegador** que lo empezó (cookie de nonce). Esa cookie es la que impide que una empresa se quede con los tokens de un seller que no sabe a quién está autorizando, así que no se saca: el link de invitación hace que el flujo empiece recién en el navegador del seller, después de que vio quién lo invita.
+`conectarSeller` rechaza —sin tocar nada— tres casos, y cada pantalla tiene su mensaje:
 
-El link **se puede reusar hasta que vence** (sirve para varios sellers: cada uno conecta su propia cuenta) y no hay forma de revocarlo antes. Quien lo consiga solo puede conectar **su propia** cuenta de ML a la empresa; un seller que ya es de otra empresa no se mueve (`SELLER_DE_OTRA_EMPRESA`). Hacerlo de un solo uso requeriría una tabla de invitaciones.
+| Resultado | Cuándo |
+| --- | --- |
+| `duplicado` | la cuenta de ML ya está conectada a **otro seller de la misma empresa** (dos filas partirían sus paquetes y su facturación) |
+| `otra-empresa` | la cuenta ya es un seller de **otra empresa** (no se muda sola: lo resuelve un administrador) |
+| `otra-cuenta` | el seller **ya estaba conectado** y ahora se autorizó una cuenta distinta (típico: otra sesión de ML abierta en ese navegador) |
+
+Por eso el link no necesita una tabla para no reusarse: después de la primera conexión el seller queda atado a esa cuenta, y el link ya solo sirve para que **la misma cuenta se reconecte** (por ejemplo, si quitó el permiso en ML). Quien lo consiga no puede conectar otra cuenta ni ver nada. Un `idmercadolibre` cargado a mano en versiones viejas del formulario, que nunca se conectó, no cuenta como verificado: lo reemplaza la cuenta que autorice ML.
+
+Por qué no alcanza con mandar el link de ML: el callback exige que el OAuth termine en **el mismo navegador** que lo empezó (cookie de nonce). Esa cookie es la que impide que una empresa se quede con los tokens de un seller que no sabe a quién está autorizando, así que no se saca: el link de PacKen hace que el flujo empiece recién en el navegador del seller, después de que vio quién lo invita.
 
 **Requisitos en el DevCenter de Mercado Libre:** Redirect URI exactamente `https://packen.vercel.app/api/ml/callback`, y el scope `offline_access` habilitado (sin él ML no devuelve `refresh_token` y el acceso del seller muere a las 6 horas).
 
-**Trampa común:** ML autoriza la cuenta que esté logueada en ese navegador. Si la empresa usa el botón con su propia sesión de ML abierta, conecta su cuenta en vez de la del seller: hacerlo en incógnito. Y como el flujo tiene que terminar en el mismo navegador donde empezó, el seller conviene que abra el link en Chrome o Safari: si lo abre en el navegador interno de otra app y ML lo devuelve a otro navegador, la cookie no está y la conexión falla (ve el error en `/conectar-ml` y puede reintentar con el mismo link).
+**Trampa común:** ML autoriza la cuenta que esté logueada en ese navegador. Si la empresa usa **Desde esta compu** con su propia sesión de ML abierta, intenta conectar su cuenta en vez de la del seller: hacerlo en incógnito. Y como el flujo tiene que terminar en el mismo navegador donde empezó, el seller conviene que abra el link en Chrome o Safari: si lo abre en el navegador interno de otra app y ML lo devuelve a otro navegador, la cookie no está y la conexión falla (ve el error en `/conectar-ml` y puede reintentar con el mismo link).
 
 ## Rezonificar paquetes
 

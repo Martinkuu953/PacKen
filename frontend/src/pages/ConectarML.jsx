@@ -24,6 +24,18 @@ const RESULTADOS = {
       'Tu cuenta de Mercado Libre ya trabaja con otra empresa en PacKen, y no se puede mover sola. ' +
       'Avisale a la empresa que te invitó.',
   },
+  duplicado: {
+    titulo: 'Esta cuenta ya está conectada',
+    texto:
+      'Tu cuenta de Mercado Libre ya está conectada con esta empresa, con otro nombre. ' +
+      'No hace falta hacer nada más: avisale a la empresa que te invitó.',
+  },
+  'otra-cuenta': {
+    titulo: 'Conectaste una cuenta distinta',
+    texto:
+      'Ya tenías otra cuenta de Mercado Libre conectada con esta empresa, y no se reemplazó. ' +
+      'Si en este navegador estaba abierta otra cuenta, cerrala y volvé a abrir el link.',
+  },
   vencida: {
     titulo: 'La invitación venció',
     texto: 'Pedile a la empresa que te mande un link nuevo.',
@@ -129,9 +141,19 @@ const ConectarML = () => {
       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide text-center mb-2">
         Invitación
       </p>
-      <h2 className="text-xl font-bold text-gray-800 text-center mb-4">
+      <h2 className="text-xl font-bold text-gray-800 text-center mb-1">
         {invitacion.empresa} te invita a conectar tu cuenta de Mercado Libre
       </h2>
+      <p className="text-sm text-gray-500 text-center mb-4">
+        Te dio de alta como <span className="font-semibold text-gray-700">{invitacion.seller}</span>
+      </p>
+
+      {invitacion.conectado && (
+        <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+          Tu cuenta ya está conectada. Volvé a conectarla solo si la empresa te lo pidió, y con la misma
+          cuenta de Mercado Libre.
+        </p>
+      )}
 
       <p className="text-sm text-gray-600 mb-4">
         PacKen usa este acceso para leer los envíos Flex que le despachás a{' '}
@@ -154,7 +176,7 @@ const ConectarML = () => {
         href={urlAutorizar}
         className="block w-full text-center py-3 px-4 bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-bold rounded-xl transition-colors duration-150"
       >
-        Conectar con Mercado Libre
+        {invitacion.conectado ? 'Volver a conectar' : 'Conectar con Mercado Libre'}
       </a>
 
       <p className="mt-4 text-xs text-gray-400 text-center">

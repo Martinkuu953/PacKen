@@ -1,13 +1,23 @@
 import { timingSafeEqual } from 'node:crypto';
 import jwt from 'jsonwebtoken';
-import { getSupabase, pedirTokenPorCodigo, obtenerUsuarioML, guardarSellerYToken } from '../ml.js';
+import {
+  getSupabase,
+  pedirTokenPorCodigo,
+  obtenerUsuarioML,
+  conectarSeller,
+  RECHAZOS_CONEXION,
+} from '../ml.js';
 import { AUDIENCE_STATE, COOKIE_NONCE, baseUrl } from './conectar.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
-function nombreDesdeUsuarioML(usuarioML) {
-  return usuarioML.nickname || [usuarioML.first_name, usuarioML.last_name].filter(Boolean).join(' ') || `Seller ${usuarioML.id}`;
-}
+// Resultado que ve quien vuelve de ML, por cada rechazo de conectarSeller.
+// Las dos pantallas (/sellers y /conectar-ml) tienen un texto para cada uno.
+const RESULTADO_POR_RECHAZO = {
+  [RECHAZOS_CONEXION.OTRA_EMPRESA]: 'otra-empresa',
+  [RECHAZOS_CONEXION.OTRO_SELLER]: 'duplicado',
+  [RECHAZOS_CONEXION.OTRA_CUENTA]: 'otra-cuenta',
+};
 
 function leerCookie(req, nombre) {
   if (req.cookies?.[nombre]) return req.cookies[nombre];
@@ -65,7 +75,10 @@ export default async function callback(req, res) {
   let payload;
   try {
     payload = jwt.verify(state, JWT_SECRET, { audience: AUDIENCE_STATE, algorithms: ['HS256'] });
-    if (!payload.idempresa) throw new Error('state sin empresa');
+    // Un state sin seller es de antes de que el alta pasara a "Nuevo seller"
+    // (o de un flujo a medio terminar en ese deploy): se rechaza en vez de
+    // crear un seller suelto, sin lista.
+    if (!payload.idempresa || !payload.idseller) throw new Error('state sin empresa o seller');
   } catch {
     console.error('[PacKen] state inválido o vencido en /api/ml/callback');
     return res.redirect(302, volver('error'));
@@ -80,24 +93,26 @@ export default async function callback(req, res) {
     const redirectUri = `${baseUrl(req)}/api/ml/callback`;
     const tokenData = await pedirTokenPorCodigo(code, redirectUri);
     const usuarioML = await obtenerUsuarioML(tokenData.access_token);
-    const nombre = nombreDesdeUsuarioML(usuarioML);
 
-    const supabase = getSupabase();
-    await guardarSellerYToken(supabase, {
+    const { reconexion } = await conectarSeller(getSupabase(), {
+      idseller: payload.idseller,
       idempresa: payload.idempresa,
       idMercadoLibre: usuarioML.id,
-      nombre,
       accessToken: tokenData.access_token,
       refreshToken: tokenData.refresh_token,
       expiresIn: tokenData.expires_in,
     });
 
-    console.log(`[PacKen] Seller conectado vía OAuth: "${nombre}" (idmercadolibre=${usuarioML.id}, idempresa=${payload.idempresa})`);
+    console.log(
+      `[PacKen] Seller ${payload.idseller} ${reconexion ? 'reconectado' : 'conectado'} con ML ` +
+        `(cuenta "${usuarioML.nickname ?? '-'}", idmercadolibre=${usuarioML.id}, empresa ${payload.idempresa})`,
+    );
     return res.redirect(302, volver('ok'));
   } catch (err) {
-    if (err.message === 'SELLER_DE_OTRA_EMPRESA') {
-      console.warn(`[PacKen] OAuth rechazado: el seller ya pertenece a otra empresa (idempresa pedida=${payload.idempresa})`);
-      return res.redirect(302, volver('otra-empresa'));
+    const resultado = RESULTADO_POR_RECHAZO[err.message];
+    if (resultado) {
+      console.warn(`[PacKen] OAuth rechazado (${err.message}): seller ${payload.idseller}, empresa ${payload.idempresa}`);
+      return res.redirect(302, volver(resultado));
     }
     console.error('[PacKen] Error en callback de ML:', err.message);
     return res.redirect(302, volver('error'));

@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 import { getSupabase } from '../ml.js';
 import { autenticar, requiereRol } from '../auth.js';
 import { responderError } from '../errores.js';
-import { baseUrl, iniciarAutorizacion } from './conectar.js';
+import { baseUrl, buscarSellerDeEmpresa, iniciarAutorizacion } from './conectar.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -17,7 +17,13 @@ const JWT_SECRET = process.env.JWT_SECRET;
 // que arranca el flujo recién en el navegador del seller. Ahí se crea la
 // cookie, y el callback valida exactamente igual que siempre.
 //
-// Además, antes de ir a ML el seller ve qué empresa lo invita (la página
+// El link es de UN seller, que la empresa ya creó en "Nuevo seller" con su
+// nombre y su lista: al aceptar, la cuenta de ML se suma a esa fila. Por eso
+// no hace falta una tabla de invitaciones para que no se reuse: después de la
+// primera conexión el seller queda atado a esa cuenta (ver conectarSeller), y
+// el link ya solo sirve para que esa misma cuenta se reconecte.
+//
+// Antes de ir a ML el seller ve qué empresa lo invita (la página
 // /conectar-ml): autoriza sabiendo a quién le da acceso.
 
 // Audience propio, igual que el state del OAuth: un token de invitación no
@@ -33,12 +39,13 @@ const MOTIVOS = {
   invalida: 'Invitación inválida',
 };
 
-// Devuelve { empresa } si la invitación es válida, o { motivo } si no.
+// Devuelve { seller, empresa, conectado, vence } si la invitación es válida, o
+// { motivo } si no.
 //
-// En el token viaja el public_id de la empresa, nunca el id interno: el payload
-// de un JWT se lee con atob(), y este link termina en el WhatsApp de un
-// tercero. Se vuelve a buscar la empresa en la base para que una cuenta dada de
-// baja no siga sumando sellers con links viejos.
+// En el token viaja el public_id del seller, nunca un id interno: el payload de
+// un JWT se lee con atob(), y este link termina en el WhatsApp de un tercero.
+// Seller y empresa se vuelven a buscar en la base: un seller borrado, o una
+// empresa dada de baja, invalidan los links que ya se mandaron.
 async function leerInvitacion(supabase, token) {
   if (typeof token !== 'string' || !token) return { motivo: 'invalida' };
 
@@ -48,35 +55,50 @@ async function leerInvitacion(supabase, token) {
   } catch (err) {
     return { motivo: err.name === 'TokenExpiredError' ? 'vencida' : 'invalida' };
   }
+  if (!payload.sel) return { motivo: 'invalida' };
 
-  const { data: empresa, error } = await supabase
+  const { data: seller, error: errSeller } = await supabase
+    .from('seller')
+    .select('id, nombre, idempresa')
+    .eq('public_id', String(payload.sel))
+    .maybeSingle();
+  if (errSeller) throw new Error(errSeller.message);
+  if (!seller) return { motivo: 'invalida' };
+
+  const { data: empresa, error: errEmpresa } = await supabase
     .from('usuario')
     .select('id, nombre')
-    .eq('public_id', payload.emp)
+    .eq('id', seller.idempresa)
     .eq('rol', 'empresa')
     .maybeSingle();
-  if (error) throw new Error(error.message);
+  if (errEmpresa) throw new Error(errEmpresa.message);
   if (!empresa) return { motivo: 'invalida' };
 
-  return { empresa, vence: new Date(payload.exp * 1000).toISOString() };
+  const { data: conexion, error: errToken } = await supabase
+    .from('meli_token')
+    .select('id')
+    .eq('idseller', seller.id)
+    .maybeSingle();
+  if (errToken) throw new Error(errToken.message);
+
+  return {
+    seller,
+    empresa,
+    conectado: Boolean(conexion),
+    vence: new Date(payload.exp * 1000).toISOString(),
+  };
 }
 
-// POST /api/ml/invitacion — la empresa pide un link. Requiere sesión.
+// POST /api/ml/invitacion { sellerId } — la empresa pide el link de uno de sus
+// sellers. Requiere sesión.
 async function crear(req, res) {
   const usuario = await autenticar(req, res);
   if (!usuario) return;
   if (!requiereRol(res, usuario, 'empresa')) return;
 
-  // La sesión no trae el public_id (autenticar solo lee lo que hace falta para
-  // autorizar), así que se busca aparte.
-  const { data, error } = await getSupabase()
-    .from('usuario')
-    .select('public_id')
-    .eq('id', usuario.id)
-    .single();
-  if (error) throw new Error(error.message);
+  const seller = await buscarSellerDeEmpresa(getSupabase(), req.body?.sellerId, usuario.id);
 
-  const token = jwt.sign({ emp: data.public_id }, JWT_SECRET, {
+  const token = jwt.sign({ sel: seller.public_id }, JWT_SECRET, {
     expiresIn: `${VIGENCIA_HORAS}h`,
     audience: AUDIENCE_INVITACION,
     algorithm: 'HS256',
@@ -91,7 +113,7 @@ async function crear(req, res) {
 // GET /api/ml/invitacion?inv=... — pública: la abre el seller, que no tiene
 // cuenta en PacKen. Dos modos:
 //
-//   ?inv=X             → JSON con el nombre de la empresa, para que la página
+//   ?inv=X             → JSON con empresa y seller, para que la página
 //                        /conectar-ml le muestre quién lo invita.
 //   ?inv=X&autorizar=1 → arranca el OAuth en este navegador (cookie de nonce
 //                        incluida) y redirige a ML. Es una navegación, no un
@@ -99,20 +121,23 @@ async function crear(req, res) {
 //                        página y no como JSON.
 async function abrir(req, res) {
   const { inv, autorizar } = req.query ?? {};
-  const supabase = getSupabase();
-  const { empresa, vence, motivo } = await leerInvitacion(supabase, inv);
+  const { seller, empresa, conectado, vence, motivo } = await leerInvitacion(getSupabase(), inv);
 
   if (autorizar) {
     if (motivo) return res.redirect(302, `/conectar-ml?estado=${motivo}`);
-    const url = iniciarAutorizacion(req, res, { idempresa: empresa.id, via: 'invitacion' });
-    console.log(`[PacKen] Invitación ML abierta: empresa ${empresa.id} → redirigiendo a ML`);
+    const url = iniciarAutorizacion(req, res, {
+      idempresa: empresa.id,
+      idseller: seller.id,
+      via: 'invitacion',
+    });
+    console.log(`[PacKen] Invitación ML abierta: seller ${seller.id} (empresa ${empresa.id}) → redirigiendo a ML`);
     return res.redirect(302, url);
   }
 
   if (motivo) {
     return res.status(motivo === 'vencida' ? 410 : 400).json({ error: MOTIVOS[motivo], motivo });
   }
-  return res.json({ empresa: empresa.nombre, vence });
+  return res.json({ empresa: empresa.nombre, seller: seller.nombre, conectado, vence });
 }
 
 export default async function invitacion(req, res) {

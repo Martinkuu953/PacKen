@@ -327,77 +327,92 @@ export async function obtenerUsuarioML(accessToken) {
   return callMLAPI('/users/me', accessToken);
 }
 
-// Crea el seller (o actualiza su nombre/empresa si ya existía por otro
-// medio, ej. registrar-seller.mjs) y guarda su primer token.
-export async function guardarSellerYToken(
+// Motivos por los que una conexión con ML se rechaza. Viajan como mensaje del
+// error para que el callback los traduzca a la pantalla que corresponda.
+export const RECHAZOS_CONEXION = {
+  // La cuenta de ML ya es un seller de otra empresa. No se muda sola: antes se
+  // le cambiaba idempresa y la empresa original lo perdía (junto con el acceso
+  // a sus envíos). Eso lo tiene que resolver un administrador a mano.
+  OTRA_EMPRESA: 'SELLER_DE_OTRA_EMPRESA',
+  // La cuenta ya está conectada a OTRO seller de esta misma empresa: dos filas
+  // para la misma cuenta partirían sus paquetes y su facturación en dos.
+  OTRO_SELLER: 'CUENTA_EN_OTRO_SELLER',
+  // El seller ya estaba conectado y ahora autorizó una cuenta distinta (la
+  // típica: en el navegador había otra sesión de ML abierta). Se rechaza en vez
+  // de reemplazarla, porque sus paquetes son de la cuenta anterior.
+  OTRA_CUENTA: 'CUENTA_DISTINTA',
+  SIN_SELLER: 'SELLER_NO_ENCONTRADO',
+};
+
+const rechazo = (motivo) => new ErrorPublico(motivo, 409);
+
+// Conecta la cuenta de ML que acaba de autorizar a un seller que la empresa ya
+// creó desde "Nuevo seller". Es la única forma de conectar: el alta del seller
+// (nombre, lista de precios) es de la empresa, y el OAuth solo le suma la
+// cuenta de ML y los tokens. Por eso acá nunca se tocan nombre ni lista: antes
+// el seller nacía en el callback con el apodo de ML y sin lista, y una
+// reconexión pisaba el nombre que había puesto la empresa.
+//
+// `idseller` e `idempresa` salen del state firmado del OAuth, así que no hace
+// falta volver a validar que el seller sea de la empresa más que por las dudas.
+export async function conectarSeller(
   supabase,
-  { idempresa, idMercadoLibre, nombre, accessToken, refreshToken, expiresIn },
+  { idseller, idempresa, idMercadoLibre, accessToken, refreshToken, expiresIn },
 ) {
-  const { data: sellerExistente, error: selErr } = await supabase
+  const idMl = String(idMercadoLibre);
+
+  const { data: seller, error: selErr } = await supabase
     .from('seller')
-    .select('id, idempresa')
-    .eq('idmercadolibre', String(idMercadoLibre))
+    .select('id, idempresa, idmercadolibre')
+    .eq('id', idseller)
     .maybeSingle();
   if (selErr) throw new Error(selErr.message);
+  if (!seller || seller.idempresa !== idempresa) throw rechazo(RECHAZOS_CONEXION.SIN_SELLER);
 
-  // Un seller que ya es de otra empresa no se muda solo porque alguien
-  // completó el OAuth: antes se le cambiaba idempresa y la empresa original lo
-  // perdía (junto con el acceso a sus envíos). Eso lo tiene que resolver un
-  // administrador a mano.
-  if (sellerExistente?.idempresa != null && sellerExistente.idempresa !== idempresa) {
-    throw new ErrorPublico('SELLER_DE_OTRA_EMPRESA', 409);
-  }
-
-  let idSellerInterno;
-  if (sellerExistente) {
-    idSellerInterno = sellerExistente.id;
-    const { error } = await supabase
-      .from('seller')
-      .update({ nombre, idempresa })
-      .eq('id', idSellerInterno);
-    if (error) throw new Error(error.message);
-  } else {
-    const { data, error } = await supabase
-      .from('seller')
-      .insert({ idempresa, nombre, idmercadolibre: String(idMercadoLibre) })
-      .select('id')
-      .single();
-    if (error) throw new Error(error.message);
-    idSellerInterno = data.id;
-  }
-
-  const expiresAt = new Date(Date.now() + (expiresIn - 60) * 1000).toISOString();
   const { data: tokenExistente, error: tokErr } = await supabase
     .from('meli_token')
     .select('id')
-    .eq('idseller', idSellerInterno)
+    .eq('idseller', seller.id)
     .maybeSingle();
   if (tokErr) throw new Error(tokErr.message);
 
-  if (tokenExistente) {
-    const { error } = await supabase
-      .from('meli_token')
-      .update({
-        access_token: cifrarToken(accessToken),
-        refresh_token: cifrarToken(refreshToken),
-        expires_at: expiresAt,
-        fechaactualizacion: new Date().toISOString(),
-      })
-      .eq('id', tokenExistente.id);
-    if (error) throw new Error(error.message);
-  } else {
-    const { error } = await supabase
-      .from('meli_token')
-      .insert({
-        access_token: cifrarToken(accessToken),
-        refresh_token: cifrarToken(refreshToken),
-        expires_at: expiresAt,
-        idseller: idSellerInterno,
-      });
+  // Solo un seller que ya estuvo conectado tiene una cuenta "verificada". Un
+  // idmercadolibre cargado a mano (versiones viejas del formulario) no lo está:
+  // si estaba mal tipeado, el seller quedaría imposible de conectar. En ese
+  // caso manda la cuenta que acaba de autorizar ML.
+  if (tokenExistente && seller.idmercadolibre && String(seller.idmercadolibre) !== idMl) {
+    throw rechazo(RECHAZOS_CONEXION.OTRA_CUENTA);
+  }
+
+  // Sin .maybeSingle(): no hay índice único que garantice una sola fila, y con
+  // dos maybeSingle tira error en vez de devolverlas.
+  const { data: conEsaCuenta, error: dupErr } = await supabase
+    .from('seller')
+    .select('id, idempresa')
+    .eq('idmercadolibre', idMl);
+  if (dupErr) throw new Error(dupErr.message);
+  const otro = (conEsaCuenta ?? []).find((s) => s.id !== seller.id);
+  if (otro) {
+    throw rechazo(otro.idempresa === idempresa ? RECHAZOS_CONEXION.OTRO_SELLER : RECHAZOS_CONEXION.OTRA_EMPRESA);
+  }
+
+  if (String(seller.idmercadolibre ?? '') !== idMl) {
+    const { error } = await supabase.from('seller').update({ idmercadolibre: idMl }).eq('id', seller.id);
     if (error) throw new Error(error.message);
   }
 
-  return { idSellerInterno, yaExistia: Boolean(sellerExistente) };
+  const tokens = {
+    access_token: cifrarToken(accessToken),
+    refresh_token: cifrarToken(refreshToken),
+    expires_at: new Date(Date.now() + (expiresIn - 60) * 1000).toISOString(),
+    fechaactualizacion: new Date().toISOString(),
+  };
+  const { error: errTok } = tokenExistente
+    ? await supabase.from('meli_token').update(tokens).eq('id', tokenExistente.id)
+    : await supabase.from('meli_token').insert({ ...tokens, idseller: seller.id });
+  if (errTok) throw new Error(errTok.message);
+
+  return { reconexion: Boolean(tokenExistente) };
 }
 
 // ──────────────────────────────────────────────────────────────────────────

@@ -17,15 +17,43 @@ const ESTADOS_SELLER = [
   { campo: 'cancelados', label: 'Cancelados', color: 'text-gray-500' },
 ];
 
+// Si el seller tiene su cuenta de ML conectada (tokens), que es lo que hace
+// falta para leer sus envíos. El botón abre el panel para conectarlo o, si ya
+// lo está, para reconectarlo.
+const EstadoConexion = ({ seller, onConectar }) =>
+  seller.conectado ? (
+    <span className="inline-flex items-center gap-2 text-xs">
+      <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200 font-medium">
+        Conectado
+      </span>
+      <button type="button" onClick={onConectar} className="text-gray-400 hover:text-gray-700 underline">
+        Reconectar
+      </button>
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-2 text-xs">
+      <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium">
+        Sin conectar
+      </span>
+      <button
+        type="button"
+        onClick={onConectar}
+        className="px-2 py-0.5 rounded-lg bg-blue-100 text-blue-800 border border-blue-200 hover:bg-blue-200 font-medium"
+      >
+        Conectar
+      </button>
+    </span>
+  );
+
 const Sellers = () => {
   const [sellersData, setSellersData] = useState([]);
   const [montoTotal, setMontoTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busqueda, setBusqueda] = useState('');
-  const [conectando, setConectando] = useState(false);
   const [creando, setCreando] = useState(false);
-  const [invitando, setInvitando] = useState(false);
+  // Seller cuyo panel de conexión con ML está abierto (null = ninguno).
+  const [sellerAConectar, setSellerAConectar] = useState(null);
   const [sellerSeleccionado, setSellerSeleccionado] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const { recargarCatalogos } = useCatalogos();
@@ -82,17 +110,12 @@ const Sellers = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const conectarSeller = useCallback(() => {
-    setConectando(true);
-    setError('');
-    apiFetch('/api/ml/conectar')
-      .then((res) => {
-        window.location.href = res.url;
-      })
-      .catch((err) => {
-        setError(err.message);
-        setConectando(false);
-      });
+  // El botón está adentro de la fila, que al tocarla abre el detalle: sin el
+  // stopPropagation se abrirían los dos.
+  const abrirConexion = useCallback((seller) => (e) => {
+    e.stopPropagation();
+    setCreando(false);
+    setSellerAConectar(seller);
   }, []);
 
   const sellerEliminado = useCallback((sellerId) => {
@@ -120,35 +143,23 @@ const Sellers = () => {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => setCreando((prev) => !prev)}
+              onClick={() => {
+                setSellerAConectar(null);
+                setCreando((prev) => !prev);
+              }}
               className="text-sm px-3 py-1.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors duration-150 font-medium whitespace-nowrap"
             >
               Nuevo seller
-            </button>
-            <button
-              type="button"
-              onClick={() => setInvitando((prev) => !prev)}
-              className="text-sm px-3 py-1.5 bg-green-100 text-green-800 border border-green-200 rounded-lg hover:bg-green-200 transition-colors duration-150 font-medium whitespace-nowrap"
-            >
-              Invitar seller
-            </button>
-            <button
-              type="button"
-              onClick={conectarSeller}
-              disabled={conectando}
-              title="Conecta la cuenta de Mercado Libre que se loguee en este navegador"
-              className="text-sm px-3 py-1.5 bg-blue-100 text-blue-800 border border-blue-200 rounded-lg hover:bg-blue-200 transition-colors duration-150 font-medium whitespace-nowrap disabled:opacity-60"
-            >
-              {conectando ? 'Redirigiendo...' : 'Conectar con Mercado Libre'}
             </button>
           </div>
         </div>
 
         {creando && (
           <FormNuevoSeller
-            onCreado={() => {
+            onCreado={(seller) => {
               setCreando(false);
               recargar();
+              setSellerAConectar(seller);
             }}
             onCancelar={() => setCreando(false)}
           />
@@ -156,10 +167,12 @@ const Sellers = () => {
 
         {/* Al cerrar se recarga: el seller pudo haber aceptado mientras el
             panel estaba abierto, y así aparece sin tener que refrescar. */}
-        {invitando && (
+        {sellerAConectar && (
           <InvitarSeller
+            key={sellerAConectar.id}
+            seller={sellerAConectar}
             onCerrar={() => {
-              setInvitando(false);
+              setSellerAConectar(null);
               recargar();
             }}
           />
@@ -174,6 +187,18 @@ const Sellers = () => {
           <p className="mb-4 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-2">
             Esa cuenta de Mercado Libre ya está conectada a otra empresa en PacKen. Si es un error,
             contactá a soporte.
+          </p>
+        )}
+        {resultadoConexion === 'duplicado' && (
+          <p className="mb-4 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+            Esa cuenta de Mercado Libre ya está conectada a otro de tus sellers. No se conectó para no
+            partir sus paquetes y su facturación en dos.
+          </p>
+        )}
+        {resultadoConexion === 'otra-cuenta' && (
+          <p className="mb-4 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+            Se autorizó una cuenta de Mercado Libre distinta de la que este seller ya tenía conectada,
+            y no se reemplazó. Volvé a intentar con su cuenta (en incógnito, si tenés otra abierta).
           </p>
         )}
 
@@ -220,6 +245,9 @@ const Sellers = () => {
                     <p className="font-semibold text-gray-800">{seller.nombre}</p>
                     <p className="text-lg font-bold text-gray-800">{seller.totales}</p>
                   </div>
+                  <div className="mt-1">
+                    <EstadoConexion seller={seller} onConectar={abrirConexion(seller)} />
+                  </div>
                   <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                     {ESTADOS_SELLER.map((col) => (
                       <div key={col.campo} className="flex justify-between gap-2">
@@ -238,6 +266,7 @@ const Sellers = () => {
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Nombre</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">Mercado Libre</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Totales</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">En camino</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700">Entregados</th>
@@ -248,14 +277,14 @@ const Sellers = () => {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={6} className="py-6 px-4 text-center text-gray-500">
+                  <td colSpan={7} className="py-6 px-4 text-center text-gray-500">
                     Cargando sellers...
                   </td>
                 </tr>
               )}
               {!loading && sellersFiltrados.length === 0 && !error && (
                 <tr>
-                  <td colSpan={6} className="py-6 px-4 text-center text-gray-500">
+                  <td colSpan={7} className="py-6 px-4 text-center text-gray-500">
                     {busqueda.trim()
                       ? `Ningún seller coincide con "${busqueda.trim()}".`
                       : 'Todavía no tenés sellers cargados.'}
@@ -270,6 +299,9 @@ const Sellers = () => {
                     className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
                   >
                     <td className="py-3 px-4 font-medium text-gray-800">{seller.nombre}</td>
+                    <td className="py-3 px-4">
+                      <EstadoConexion seller={seller} onConectar={abrirConexion(seller)} />
+                    </td>
                     <td className="py-3 px-4 text-gray-600">{seller.totales}</td>
                     <td className="py-3 px-4 text-gray-600">{seller.enCamino}</td>
                     <td className="py-3 px-4 text-green-500 font-medium">{seller.entregados}</td>

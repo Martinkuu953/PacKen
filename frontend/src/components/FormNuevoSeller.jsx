@@ -4,7 +4,10 @@ import { apiFetch } from '../services/api';
 const INPUT = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-marca-oro';
 const LABEL = 'block text-[11px] font-semibold text-gray-500 uppercase mb-1';
 
-const VACIO = { nombre: '', idmercadolibre: '', listaId: '' };
+// Sin ID de Mercado Libre a propósito: un número tipeado a mano no prueba que
+// la cuenta sea del seller, y sin tokens tampoco sirve para leer sus envíos.
+// La cuenta la suma la conexión (InvitarSeller), verificada por ML.
+const VACIO = { nombre: '', listaId: '' };
 
 const FormNuevoSeller = ({ onCreado, onCancelar }) => {
   const [valores, setValores] = useState(VACIO);
@@ -41,9 +44,9 @@ const FormNuevoSeller = ({ onCreado, onCancelar }) => {
     setGuardando(true);
     setError('');
     try {
-      await apiFetch('/api/sellers', { method: 'POST', body: JSON.stringify(valores) });
+      const { seller } = await apiFetch('/api/sellers', { method: 'POST', body: JSON.stringify(valores) });
       setValores(VACIO);
-      onCreado();
+      onCreado(seller);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -61,20 +64,10 @@ const FormNuevoSeller = ({ onCreado, onCancelar }) => {
         </p>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className={LABEL} htmlFor="seller-nombre">Nombre</label>
           <input id="seller-nombre" className={INPUT} value={valores.nombre} onChange={set('nombre')} required />
-        </div>
-        <div>
-          <label className={LABEL} htmlFor="seller-ml">ID Mercado Libre</label>
-          <input
-            id="seller-ml"
-            className={INPUT}
-            value={valores.idmercadolibre}
-            onChange={set('idmercadolibre')}
-            placeholder="Opcional"
-          />
         </div>
         <div>
           <label className={LABEL} htmlFor="seller-lista">Lista de precios</label>
@@ -99,6 +92,11 @@ const FormNuevoSeller = ({ onCreado, onCancelar }) => {
           ))}
         </div>
       )}
+
+      <p className="mt-3 text-xs text-gray-500">
+        Después de crearlo lo conectás con Mercado Libre: por link al celular del seller, o desde esta
+        compu.
+      </p>
 
       <div className="mt-4 flex gap-2">
         <button
